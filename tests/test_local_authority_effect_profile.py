@@ -194,6 +194,7 @@ def setup(tmp_path):
         )},
     )
     flow = BoundedAuthorizationWorkflow(
+        allow_test_time=True,
         manifest=m,
         resolver=resolver,
         destination=LocalRefundDestination(tmp_path / "destination.json"),

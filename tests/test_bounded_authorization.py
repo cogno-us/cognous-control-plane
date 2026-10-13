@@ -342,6 +342,7 @@ def resolver_for(p, *, tier="T1", with_grant=True, delegated=False):
 def workflow(tmp_path, p, *, tier="T1", resolver=None):
     resolver = resolver or resolver_for(p, tier=tier)
     return BoundedAuthorizationWorkflow(
+        allow_test_time=True,
         manifest=manifest(),
         resolver=resolver,
         destination=LocalRefundDestination(tmp_path / "destination.json"),
@@ -656,6 +657,7 @@ def test_lost_ack_restart_reconciles_without_duplicate(tmp_path):
     assert observed.state == "applied"
 
     restarted = BoundedAuthorizationWorkflow(
+        allow_test_time=True,
         manifest=manifest(),
         resolver=r,
         destination=LocalRefundDestination(tmp_path / "destination.json"),
@@ -722,11 +724,13 @@ def test_concurrent_distinct_effects_respect_local_cumulative_cap(tmp_path):
     r1 = resolver_for(p1)
     r2 = resolver_for(p2)
     f1 = BoundedAuthorizationWorkflow(
+        allow_test_time=True,
         manifest=manifest(), resolver=r1, destination=flow.destination,
         records=BoundedRecordStore(tmp_path / "run1.json", "run-1"),
         observation_policy=ObservationPolicy(max_age_seconds=300, clock_tolerance_seconds=5),
     )
     f2 = BoundedAuthorizationWorkflow(
+        allow_test_time=True,
         manifest=manifest(), resolver=r2, destination=flow.destination,
         records=BoundedRecordStore(tmp_path / "run2.json", "run-2"),
         observation_policy=ObservationPolicy(max_age_seconds=300, clock_tolerance_seconds=5),
@@ -775,6 +779,7 @@ def observation_workflow(tmp_path, observation, *, policy=True, error=None):
         base,
         records,
         BoundedAuthorizationWorkflow(
+        allow_test_time=True,
             manifest=manifest(),
             resolver=resolver,
             destination=ObservationProxy(base, observation=observation, error=error),
@@ -1036,6 +1041,7 @@ def test_missing_observation_policy_blocks_initial_dispatch(tmp_path):
     resolver = resolver_for(p)
     destination = LocalRefundDestination(tmp_path / "destination.json")
     flow = BoundedAuthorizationWorkflow(
+        allow_test_time=True,
         manifest=manifest(),
         resolver=resolver,
         destination=destination,
@@ -1086,6 +1092,7 @@ def post_dispatch_fault_workflow(tmp_path, fault_observation=None, *, error=None
         error=error,
     )
     flow = BoundedAuthorizationWorkflow(
+        allow_test_time=True,
         manifest=manifest(),
         resolver=resolver,
         destination=destination,
@@ -1146,6 +1153,7 @@ def test_execute_rejects_invalid_post_dispatch_observation_without_replacing_eff
     records = BoundedRecordStore(tmp_path / "run.json", "post-dispatch")
     destination = PostDispatchObservationFault(base, observation=fault)
     flow = BoundedAuthorizationWorkflow(
+        allow_test_time=True,
         manifest=manifest(),
         resolver=resolver,
         destination=destination,
@@ -1198,6 +1206,7 @@ def test_execute_retains_unavailable_post_dispatch_observation_without_repeating
         error=OSError("post-dispatch observation unavailable"),
     )
     flow = BoundedAuthorizationWorkflow(
+        allow_test_time=True,
         manifest=manifest(),
         resolver=resolver,
         destination=destination,
