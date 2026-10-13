@@ -229,6 +229,22 @@ class TenantAuthorizationBinding(AuthorizationBinding):
     tenant_id: str = Field(min_length=1, max_length=128)
 
 
+class ResolutionInput(BaseModel):
+    """Non-authorizing, minimized evidence of one actual resolution read.
+
+    A digest identifies the full record without retaining its raw contents.
+    Missing records are explicit; an absent row means the input was not read.
+    """
+
+    input_type: Literal["manifest", "authority_context", "grant", "policy", "approval",
+                        "evidence", "role_mapping", "identity", "mandate", "conflict"]
+    input_id: str
+    expected: dict[str, str] = Field(default_factory=dict)
+    observed: dict[str, str] = Field(default_factory=dict)
+    record_commitment: str | None = None
+    missing: bool = False
+
+
 class RuntimeDecision(BaseModel):
     decision_id: str
     effect_id: str
@@ -236,6 +252,7 @@ class RuntimeDecision(BaseModel):
     reasons: list[str]
     decided_at: str
     binding: TenantAuthorizationBinding | AuthorizationBinding | None = None
+    resolution_inputs: list[ResolutionInput] = Field(default_factory=list)
 
 
 class EffectAttempt(BaseModel):
@@ -265,6 +282,7 @@ class EffectTimeRefusal(BaseModel):
     stage: Literal["effect_time_revalidation"] = "effect_time_revalidation"
     reasons: list[str]
     changed_inputs: list[RefusalInputVersion] = Field(default_factory=list)
+    resolution_inputs: list[ResolutionInput] = Field(default_factory=list)
 
 
 class EffectObservation(BaseModel):
@@ -617,7 +635,8 @@ class BoundedAuthorizationWorkflow:
     def decide(self, proposal: RuntimeProposal, *, now: datetime | None = None) -> RuntimeDecision:
         now = now or _now()
         frozen = proposal.model_copy(deep=True)
-        reasons, binding = self._resolve(frozen, now)
+        inputs: list[ResolutionInput] = []
+        reasons, binding = self._resolve(frozen, now, inputs=inputs)
         effect_id = self._effect_id(binding) if binding else commitment({
             "proposal": commitment(frozen.model_dump(mode="json", exclude_none=False)),
             "grant_id": None,
@@ -630,6 +649,7 @@ class BoundedAuthorizationWorkflow:
             reasons=reasons,
             decided_at=_iso(now),
             binding=binding if not reasons else None,
+            resolution_inputs=inputs,
         )
         self.records.append_decision(decision)
         return decision
@@ -654,7 +674,8 @@ class BoundedAuthorizationWorkflow:
             raise PermissionError("decision effect identity is invalid")
 
         frozen = proposal.model_copy(deep=True)
-        reasons, current = self._resolve(frozen, now)
+        inputs: list[ResolutionInput] = []
+        reasons, current = self._resolve(frozen, now, inputs=inputs)
         if reasons or current is None or current != persisted.binding:
             refusal_reasons = sorted(set(reasons))
             if not refusal_reasons and current != persisted.binding:
@@ -665,7 +686,8 @@ class BoundedAuthorizationWorkflow:
                 effect_id=persisted.effect_id,
                 recorded_at=_iso(now),
                 reasons=refusal_reasons,
-                changed_inputs=self._effect_time_changed_inputs(frozen, persisted.binding),
+                changed_inputs=self._effect_time_changed_inputs(inputs, persisted.binding),
+                resolution_inputs=inputs,
             ))
             raise PermissionError("authorization-critical inputs changed before effect")
         if adapter_id != current.adapter_id:
@@ -877,124 +899,36 @@ class BoundedAuthorizationWorkflow:
         return value
 
     def _effect_time_changed_inputs(
-        self,
-        proposal: RuntimeProposal,
-        binding: AuthorizationBinding,
+        self, inputs: list[ResolutionInput], binding: AuthorizationBinding,
     ) -> list[RefusalInputVersion]:
-        """Return only changed decision-critical projections, minimized to IDs/version-state."""
-
-        changed: list[RefusalInputVersion] = []
-        context = self.resolver.authority_context(proposal.authority_context_ref or "") or {}
-        grant = context.get("grant") or {}
-        status = self.resolver.grant_status(binding.grant_id)
-        expected = f"revision={binding.grant_revision};status=active"
-        observed = (
-            "missing"
-            if status is None
-            else f"revision={status.revision};status={status.status};version={status.version}"
-        )
-        if observed != expected and not (
-            status is not None
-            and status.revision == binding.grant_revision
-            and status.status == "active"
-        ):
+        """Project changed inputs from actual reads, without resolving them again."""
+        changed = []
+        for item in inputs:
+            if item.input_type not in {"grant", "policy", "approval", "evidence", "role_mapping"}:
+                continue
+            expected = dict(item.expected)
+            if item.input_type == "grant":
+                expected = {"revision": binding.grant_revision, "status": "active"}
+            elif item.input_type == "policy":
+                versions = {p["ref"]: p["version"] for p in binding.policy_versions}
+                expected = {"version": versions.get(item.input_id, "not_in_original_binding"), "status": "active"}
+            elif item.input_type == "role_mapping":
+                expected = {"version": binding.role_mapping_version, "digest": binding.role_mapping_digest}
+            elif item.input_type == "approval":
+                expected.update(grant_revision=binding.grant_revision, grant_id=binding.grant_id,
+                                proposal=binding.proposal_commitment,
+                                policies=commitment(binding.policy_versions))
+            if not expected:
+                continue
+            if not item.missing and all(item.observed.get(k) == v for k, v in expected.items()):
+                continue
             changed.append(RefusalInputVersion(
-                input_type="grant",
-                input_id=binding.grant_id,
-                expected_version=expected,
-                observed_version=observed,
+                input_type=item.input_type,
+                input_id=item.input_id,
+                expected_version=";".join(f"{k}={v}" for k, v in expected.items()),
+                observed_version=("missing" if item.missing else
+                                  ";".join(f"{k}={v}" for k, v in item.observed.items())),
             ))
-
-        for item in binding.policy_versions:
-            ref = str(item.get("ref", ""))
-            expected_version = f"version={item.get('version')};status=active"
-            current = self.resolver.policy_status(ref)
-            observed_version = (
-                "missing"
-                if current is None
-                else f"version={current.version};status={current.status}"
-            )
-            if current is None or current.version != item.get("version") or current.status != "active":
-                changed.append(RefusalInputVersion(
-                    input_type="policy",
-                    input_id=ref,
-                    expected_version=expected_version,
-                    observed_version=observed_version,
-                ))
-
-        proposal_commitment = binding.proposal_commitment
-        expected_policy_commitment = commitment(binding.policy_versions)
-        for ref in grant.get("approval_refs", []):
-            current = self.resolver.approval_status(ref)
-            expected_version = (
-                f"grant_revision={binding.grant_revision};status=active;"
-                f"proposal={proposal_commitment};policies={expected_policy_commitment}"
-            )
-            observed_version = (
-                "missing"
-                if current is None
-                else (
-                    f"grant_revision={current.grant_revision};status={current.status};"
-                    f"proposal={current.proposal_commitment};"
-                    f"policies={commitment(current.policy_versions)}"
-                )
-            )
-            if (
-                current is None
-                or current.grant_id != binding.grant_id
-                or current.grant_revision != binding.grant_revision
-                or current.status != "active"
-                or current.proposal_commitment != proposal_commitment
-                or commitment(current.policy_versions) != expected_policy_commitment
-            ):
-                changed.append(RefusalInputVersion(
-                    input_type="approval",
-                    input_id=str(ref),
-                    expected_version=expected_version,
-                    observed_version=observed_version,
-                ))
-
-        requirement = context.get("requirement") or {}
-        for obligation in requirement.get("evidence", []):
-            obligation_id = str(obligation.get("obligation_id", ""))
-            current = self.resolver.evidence_status(obligation_id)
-            expected_version = "state=current"
-            observed_version = (
-                "missing"
-                if current is None
-                else f"state={current.state};observed_at={current.observed_at}"
-            )
-            if obligation.get("required") and obligation.get("kind") == "authorization":
-                if current is None or current.state != "current":
-                    changed.append(RefusalInputVersion(
-                        input_type="evidence",
-                        input_id=obligation_id,
-                        expected_version=expected_version,
-                        observed_version=observed_version,
-                    ))
-
-        mapping = self.resolver.role_mapping(
-            str((context.get("institution") or {}).get("institution_id", ""))
-        )
-        mapping_observed = (
-            "missing"
-            if mapping is None
-            else f"version={mapping.version};digest={mapping.digest}"
-        )
-        if (
-            mapping is None
-            or mapping.version != binding.role_mapping_version
-            or mapping.digest != binding.role_mapping_digest
-        ):
-            changed.append(RefusalInputVersion(
-                input_type="role_mapping",
-                input_id=str((context.get("institution") or {}).get("institution_id", "")),
-                expected_version=(
-                    f"version={binding.role_mapping_version};digest={binding.role_mapping_digest}"
-                ),
-                observed_version=mapping_observed,
-            ))
-
         return changed
 
     def _effect_id(self, binding: AuthorizationBinding) -> str:
@@ -1039,9 +973,34 @@ class BoundedAuthorizationWorkflow:
             return None
         return canonical if canonical in required_roles else None
 
-    def _resolve(self, proposal: RuntimeProposal, now: datetime) -> tuple[list[str], AuthorizationBinding | None]:
+    def _resolve(
+        self, proposal: RuntimeProposal, now: datetime,
+        *, inputs: list[ResolutionInput] | None = None,
+    ) -> tuple[list[str], AuthorizationBinding | None]:
+        def capture(kind: str, ref: str, record: BaseModel | dict | None,
+                    expected: dict[str, str] | None = None) -> None:
+            if inputs is None:
+                return
+            data = record.model_dump(mode="json") if isinstance(record, BaseModel) else record
+            # Explicit scalar allowlist: no payload, identity chain, approver,
+            # mandate body, policy body, or evidence contents in diagnostics.
+            fields = ("revision", "status", "version", "state", "observed_at",
+                      "schema_version", "interface_status", "digest", "grant_revision")
+            observed = {key: str(data[key]) for key in fields if data is not None and key in data}
+            if kind == "approval" and data is not None:
+                observed["proposal"] = data["proposal_commitment"]
+                observed["policies"] = commitment(data["policy_versions"])
+                observed["grant_id"] = data["grant_id"]
+            inputs.append(ResolutionInput(
+                input_type=kind, input_id=ref, expected=expected or {}, observed=observed,
+                record_commitment=commitment(data) if data is not None else None,
+                missing=data is None,
+            ))
+
+        capture("manifest", proposal.manifest_id, self.manifest)
         reasons = self._manifest_mismatches(proposal, now)
         context = self.resolver.authority_context(proposal.authority_context_ref or "")
+        capture("authority_context", proposal.authority_context_ref or "", context)
         if context is None:
             return sorted(set(reasons + ["authority_context_missing"])), None
 
@@ -1075,6 +1034,7 @@ class BoundedAuthorizationWorkflow:
             reasons.append("consequence_tier_mismatch")
 
         mapping = self.resolver.role_mapping(institution_id or "")
+        capture("role_mapping", institution_id or "", mapping)
         if mapping is None:
             reasons.append("role_mapping_missing")
             mapping_version = ""
@@ -1111,6 +1071,7 @@ class BoundedAuthorizationWorkflow:
             return sorted(set(reasons + ["issued_grant_missing"])), None
 
         identity = self.resolver.identity_status(context["acting_identity"], context["principal"])
+        capture("identity", context["acting_identity"], identity)
         if (
             identity.identity != context["acting_identity"]
             or identity.principal != context["principal"]
@@ -1123,6 +1084,7 @@ class BoundedAuthorizationWorkflow:
             reasons.append("identity_status_stale_or_future")
 
         mandate = self.resolver.issuer_mandate(grant["issuer"], grant["issuer_role"])
+        capture("mandate", grant["issuance_record_ref"], mandate)
         if (
             mandate.issuer != grant["issuer"]
             or mandate.issuer_role != grant["issuer_role"]
@@ -1136,6 +1098,7 @@ class BoundedAuthorizationWorkflow:
             reasons.append("issuer_mandate_stale_or_future")
 
         status = self.resolver.grant_status(grant["grant_id"])
+        capture("grant", grant["grant_id"], status, {"revision": grant["revision"], "status": "active"})
         if status is None:
             reasons.append("grant_not_active")
         else:
@@ -1177,6 +1140,7 @@ class BoundedAuthorizationWorkflow:
             reasons.append("delegation_chain_missing")
 
         conflict = self.resolver.conflict_status(requirement["requirement_id"])
+        capture("conflict", requirement["requirement_id"], conflict)
         if conflict is None:
             reasons.append("authority_conflict_unresolved")
         else:
@@ -1194,8 +1158,9 @@ class BoundedAuthorizationWorkflow:
         policy_versions = grant.get("policy_versions", [])
         for item in policy_versions:
             current = self.resolver.policy_status(item["ref"])
+            capture("policy", item["ref"], current, {"version": item["version"], "status": "active"})
             if current is None:
-                reasons.append("policy_stale_or_changed")
+                reasons.extend(["policy_stale_or_changed", "policy_missing"])
                 continue
             if current.ref != item["ref"] or not self._same_institution(current, context):
                 reasons.append("policy_binding_mismatch")
@@ -1203,6 +1168,12 @@ class BoundedAuthorizationWorkflow:
                 reasons.append("policy_tenant_mismatch")
             if current.status != "active" or current.version != item["version"]:
                 reasons.append("policy_stale_or_changed")
+            if current.status == "superseded":
+                reasons.append("policy_superseded")
+            elif current.status != "active":
+                reasons.append("policy_status_unknown")
+            if current.version != item["version"]:
+                reasons.append("policy_version_changed")
             if not self._fresh(current.observed_at, now, self.status_max_age_seconds):
                 reasons.append("policy_status_stale_or_future")
 
@@ -1211,6 +1182,11 @@ class BoundedAuthorizationWorkflow:
             matches: list[ApprovalStatus] = []
             for ref in grant.get("approval_refs", []):
                 approval = self.resolver.approval_status(ref)
+                capture("approval", ref, approval, {
+                    "grant_revision": grant["revision"], "status": "active",
+                    "proposal": proposal_commitment, "policies": commitment(policy_versions),
+                    "grant_id": grant["grant_id"],
+                })
                 if approval is None:
                     continue
                 if approval.approval_ref != ref or not self._same_institution(approval, context):
@@ -1240,6 +1216,8 @@ class BoundedAuthorizationWorkflow:
 
         for obligation in requirement.get("evidence", []):
             current = self.resolver.evidence_status(obligation["obligation_id"])
+            capture("evidence", obligation["obligation_id"], current,
+                    {"state": "current"} if obligation["required"] and obligation["kind"] == "authorization" else {})
             if current is not None and (
                 current.obligation_id != obligation["obligation_id"]
                 or current.source_ref != obligation["source_ref"]
