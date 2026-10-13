@@ -339,7 +339,7 @@ def _materialize_under_handoff(
 ) -> LocalExecutionClaim:
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("claim issuance time must be timezone-aware")
-    now = now.astimezone(timezone.utc)
+    now = workflow._evaluation_time(now)
 
     persisted = workflow.records.decision(decision.decision_id)
     if persisted is None or persisted != decision:
@@ -355,7 +355,9 @@ def _materialize_under_handoff(
 
     frozen = proposal.model_copy(deep=True)
     with handoff(proposal.authority_context_ref or ""):
-        reasons, current = workflow._resolve(frozen, now)
+        inputs = []
+        reasons, current = workflow._resolve(frozen, now, inputs=inputs)
+        reasons = workflow._record_check(inputs, now, reasons, "claim")
         if reasons or current is None or current != decision.binding:
             raise PermissionError("authorization-critical inputs changed before claim issuance")
 

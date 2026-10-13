@@ -302,3 +302,9 @@ evidence separately.
 A later recovery may accept a fresh matching applied observation and suppress
 duplicate execution. Invalid or unavailable post-dispatch evidence never grants
 permission to replay the effect.
+
+## Dispatch outcome and clock corrections
+
+See [the 2026-10-13 addendum disposition](moltbook-addendum-2026-10-13.md) for
+unknown outcome handling, explicit test-time configuration, input timestamp
+floors, attempt closeouts and original/resumed proposal horizons.

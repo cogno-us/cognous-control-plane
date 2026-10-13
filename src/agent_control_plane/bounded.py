@@ -5,6 +5,7 @@ import copy
 import hashlib
 import json
 import os
+import re
 import threading
 import tempfile
 import sys
@@ -229,6 +230,29 @@ class TenantAuthorizationBinding(AuthorizationBinding):
     tenant_id: str = Field(min_length=1, max_length=128)
 
 
+class DefinitiveDestinationRejection(RuntimeError):
+    """Trusted adapter assertion of non-acceptance, never an inferred network error.
+
+    Use only when the adapter can prove no dispatch or definitive provider
+    rejection. Unknown/possibly accepted outcomes must use ordinary exceptions.
+    """
+
+    def __init__(self, reason_code: str):
+        if not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", reason_code):
+            raise ValueError("definitive rejection requires a bounded reason code")
+        self.reason_code = reason_code
+        super().__init__(reason_code)
+
+
+class OperationHorizon(BaseModel):
+    """Validity values supplied with one proposal, not a new grant of authority."""
+
+    source: Literal["runtime_proposal"] = "runtime_proposal"
+    proposal_commitment: str
+    not_before: str | None = None
+    expires_at: str | None = None
+
+
 class ResolutionInput(BaseModel):
     """Non-authorizing, minimized evidence of one actual resolution read.
 
@@ -243,6 +267,7 @@ class ResolutionInput(BaseModel):
     observed: dict[str, str] = Field(default_factory=dict)
     record_commitment: str | None = None
     missing: bool = False
+    previous_observed_at: str | None = None
 
 
 class RuntimeDecision(BaseModel):
@@ -251,6 +276,8 @@ class RuntimeDecision(BaseModel):
     result: Literal["authorized", "hold", "deny"]
     reasons: list[str]
     decided_at: str
+    time_source: Literal["unrecorded", "control_plane", "test_override"] = "unrecorded"
+    operation_horizon: OperationHorizon | None = None
     binding: TenantAuthorizationBinding | AuthorizationBinding | None = None
     resolution_inputs: list[ResolutionInput] = Field(default_factory=list)
 
@@ -260,6 +287,7 @@ class EffectAttempt(BaseModel):
     effect_id: str
     decision_id: str
     started_at: str
+    time_source: Literal["unrecorded", "control_plane", "test_override"] = "unrecorded"
     status: Literal["attempted", "acknowledged", "unknown", "failed", "partial"]
     acknowledgement: dict = Field(default_factory=dict)
     error: str | None = None
@@ -279,6 +307,9 @@ class EffectTimeRefusal(BaseModel):
     decision_id: str
     effect_id: str
     recorded_at: str
+    time_source: Literal["unrecorded", "control_plane", "test_override"] = "unrecorded"
+    original_operation_horizon: OperationHorizon | None = None
+    operation_horizon: OperationHorizon | None = None
     stage: Literal["effect_time_revalidation"] = "effect_time_revalidation"
     reasons: list[str]
     changed_inputs: list[RefusalInputVersion] = Field(default_factory=list)
@@ -312,8 +343,33 @@ class ReconciliationResult(BaseModel):
     observation_clock_tolerance_seconds: int | None = None
 
 
+class ResolutionCheck(BaseModel):
+    """Durable read-time checkpoint; no authority or independent custody claim."""
+
+    check_id: str
+    stage: Literal["decision", "effect", "claim"]
+    evaluated_at: str
+    time_source: Literal["control_plane", "test_override"]
+    inputs: list[ResolutionInput]
+    reasons: list[str]
+
+
+class AttemptCloseout(BaseModel):
+    """Append-only observation linked to an original uncertain or failed attempt."""
+
+    attempt_id: str
+    effect_id: str
+    original_status: str
+    observed_state: Literal["applied", "partial"]
+    observed_at: str
+    reconciled_at: str
+
+
 class BoundedRunRecord(BaseModel):
     run_id: str
+    input_time_floors: dict[str, str] = Field(default_factory=dict)
+    resolution_checks: list[ResolutionCheck] = Field(default_factory=list)
+    closeouts: list[AttemptCloseout] = Field(default_factory=list)
     decisions: list[RuntimeDecision] = Field(default_factory=list)
     refusals: list[EffectTimeRefusal] = Field(default_factory=list)
     attempts: list[EffectAttempt] = Field(default_factory=list)
@@ -400,6 +456,64 @@ class BoundedRecordStore:
 
     def append_reconciliation(self, value: ReconciliationResult) -> None:
         self._append("reconciliations", value)
+
+    def record_resolution_check(
+        self, *, inputs: list[ResolutionInput], now: datetime,
+        stage: Literal["decision", "effect", "claim"],
+        time_source: Literal["control_plane", "test_override"],
+        reasons: list[str], tolerance_seconds: int,
+    ) -> list[str]:
+        """Compare and advance local per-input time floors in one transaction."""
+        with self._transaction():
+            document = self._read_document()
+            floors = document.setdefault("input_time_floors", {})
+            result = list(reasons)
+            for item in inputs:
+                stamp = item.observed.get("observed_at")
+                if not stamp:
+                    continue
+                observed = _parse(stamp)
+                key = commitment([item.input_type, item.input_id])
+                previous = floors.get(key)
+                item.previous_observed_at = previous
+                if previous is not None and observed < _parse(previous):
+                    result.append("input_observation_time_regressed")
+                # Invalid future timestamps cannot poison the durable floor.
+                elif observed <= now + timedelta(seconds=tolerance_seconds):
+                    floors[key] = _iso(observed)
+            result = sorted(set(result))
+            check = ResolutionCheck(
+                check_id=str(uuid.uuid4()), stage=stage, evaluated_at=_iso(now),
+                time_source=time_source, inputs=inputs, reasons=result,
+            )
+            document.setdefault("resolution_checks", []).append(check.model_dump(mode="json"))
+            BoundedRunRecord.model_validate(document)
+            self._write(document)
+            return result
+
+    def close_uncertain_attempts(self, reconciliation: ReconciliationResult) -> None:
+        """Retain contrary/later accepted observations without rewriting attempts."""
+        observation = reconciliation.observation
+        if not reconciliation.observation_accepted or observation is None or observation.state not in {"applied", "partial"}:
+            return
+        with self._transaction():
+            document = self._read_document()
+            latest = {item["attempt_id"]: item for item in document.get("attempts", [])
+                      if item["effect_id"] == reconciliation.effect_id}
+            closeouts = document.setdefault("closeouts", [])
+            for attempt_id, attempt in latest.items():
+                if attempt["status"] not in {"attempted", "unknown", "failed"}:
+                    continue
+                if any(c["attempt_id"] == attempt_id and c["observed_state"] == observation.state for c in closeouts):
+                    continue
+                closeouts.append(AttemptCloseout(
+                    attempt_id=attempt_id, effect_id=reconciliation.effect_id,
+                    original_status=attempt["status"], observed_state=observation.state,
+                    observed_at=observation.observed_at,
+                    reconciled_at=reconciliation.reconciled_at,
+                ).model_dump(mode="json"))
+            BoundedRunRecord.model_validate(document)
+            self._write(document)
 
     def _append(self, field: str, value: BaseModel) -> None:
         with self._transaction():
@@ -561,7 +675,7 @@ class LocalRefundDestination:
                 return {"duplicate": True, "effect": copy.deepcopy(state["effects"][effect_id])}
             used = int(state["grant_effect_counts"].get(grant_id, 0))
             if used >= max_effects:
-                raise RuntimeError("cumulative grant max_effects exhausted")
+                raise DefinitiveDestinationRejection("cumulative_grant_max_effects_exhausted")
             effect = {
                 "effect_id": effect_id,
                 "grant_id": grant_id,
@@ -620,7 +734,9 @@ class BoundedAuthorizationWorkflow:
         approval_max_age_seconds: int = 60,
         clock_tolerance_seconds: int = 5,
         observation_policy: ObservationPolicy | None = None,
+        allow_test_time: bool = False,
     ):
+        self.allow_test_time = allow_test_time
         self.manifest = copy.deepcopy(manifest)
         self.resolver = resolver
         self.destination = destination
@@ -632,11 +748,37 @@ class BoundedAuthorizationWorkflow:
         self.clock_tolerance_seconds = clock_tolerance_seconds
         self.observation_policy = observation_policy.model_copy(deep=True) if observation_policy else None
 
+    @property
+    def time_source(self) -> Literal["control_plane", "test_override"]:
+        """Identify the configured clock trust boundary in retained records."""
+        return "test_override" if self.allow_test_time else "control_plane"
+
+    def _evaluation_time(self, supplied: datetime | None) -> datetime:
+        value = (supplied or _now()) if self.allow_test_time else _now()
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("evaluation time must be timezone-aware")
+        return value.astimezone(timezone.utc)
+
+    @staticmethod
+    def _horizon(proposal: RuntimeProposal) -> OperationHorizon:
+        return OperationHorizon(
+            proposal_commitment=commitment(proposal.model_dump(mode="json", exclude_none=False)),
+            not_before=proposal.not_before, expires_at=proposal.expires_at,
+        )
+
+    def _record_check(self, inputs: list[ResolutionInput], now: datetime,
+                      reasons: list[str], stage: Literal["decision", "effect", "claim"]) -> list[str]:
+        return self.records.record_resolution_check(
+            inputs=inputs, now=now, reasons=reasons, stage=stage,
+            time_source=self.time_source, tolerance_seconds=self.clock_tolerance_seconds,
+        )
+
     def decide(self, proposal: RuntimeProposal, *, now: datetime | None = None) -> RuntimeDecision:
-        now = now or _now()
+        now = self._evaluation_time(now)
         frozen = proposal.model_copy(deep=True)
         inputs: list[ResolutionInput] = []
         reasons, binding = self._resolve(frozen, now, inputs=inputs)
+        reasons = self._record_check(inputs, now, reasons, "decision")
         effect_id = self._effect_id(binding) if binding else commitment({
             "proposal": commitment(frozen.model_dump(mode="json", exclude_none=False)),
             "grant_id": None,
@@ -648,6 +790,7 @@ class BoundedAuthorizationWorkflow:
             result="authorized" if not reasons else "hold",
             reasons=reasons,
             decided_at=_iso(now),
+            time_source=self.time_source, operation_horizon=self._horizon(frozen),
             binding=binding if not reasons else None,
             resolution_inputs=inputs,
         )
@@ -664,7 +807,7 @@ class BoundedAuthorizationWorkflow:
         lose_ack: bool = False,
         partial: bool = False,
     ) -> tuple[EffectAttempt, EffectObservation | None]:
-        now = now or _now()
+        now = self._evaluation_time(now)
         persisted = self.records.decision(decision.decision_id)
         if persisted is None or persisted != decision:
             raise PermissionError("decision is not the immutable persisted decision")
@@ -676,6 +819,7 @@ class BoundedAuthorizationWorkflow:
         frozen = proposal.model_copy(deep=True)
         inputs: list[ResolutionInput] = []
         reasons, current = self._resolve(frozen, now, inputs=inputs)
+        reasons = self._record_check(inputs, now, reasons, "effect")
         if reasons or current is None or current != persisted.binding:
             refusal_reasons = sorted(set(reasons))
             if not refusal_reasons and current != persisted.binding:
@@ -685,6 +829,9 @@ class BoundedAuthorizationWorkflow:
                 decision_id=persisted.decision_id,
                 effect_id=persisted.effect_id,
                 recorded_at=_iso(now),
+                time_source=self.time_source,
+                original_operation_horizon=persisted.operation_horizon,
+                operation_horizon=self._horizon(frozen),
                 reasons=refusal_reasons,
                 changed_inputs=self._effect_time_changed_inputs(inputs, persisted.binding),
                 resolution_inputs=inputs,
@@ -706,6 +853,7 @@ class BoundedAuthorizationWorkflow:
                 effect_id=effect_id,
                 decision_id=persisted.decision_id,
                 started_at=_iso(now),
+                time_source=self.time_source,
                 status="acknowledged",
                 acknowledgement={"reconciled_existing": True},
             )
@@ -717,6 +865,7 @@ class BoundedAuthorizationWorkflow:
                 effect_id=effect_id,
                 decision_id=persisted.decision_id,
                 started_at=_iso(now),
+                time_source=self.time_source,
                 status="partial",
                 acknowledgement={"reconciled_existing": True},
             )
@@ -734,6 +883,7 @@ class BoundedAuthorizationWorkflow:
             effect_id=effect_id,
             decision_id=persisted.decision_id,
             started_at=_iso(now),
+            time_source=self.time_source,
             status="attempted",
         )
         self.records.append_attempt(attempt)
@@ -754,12 +904,13 @@ class BoundedAuthorizationWorkflow:
             )
             attempt.status = "partial" if partial else "acknowledged"
             attempt.acknowledgement = ack
-        except TimeoutError as exc:
-            attempt.status = "unknown"
-            attempt.error = str(exc)
-        except Exception as exc:
+        except DefinitiveDestinationRejection as exc:
             attempt.status = "failed"
-            attempt.error = str(exc)
+            attempt.error = exc.reason_code
+        except Exception as exc:
+            # Exception classes do not prove that the provider did not accept.
+            attempt.status = "unknown"
+            attempt.error = "destination_outcome_unknown:" + type(exc).__name__
 
         self.records.append_attempt(attempt)
         post = self._observe_and_reconcile(effect_id, now=now)
@@ -810,6 +961,8 @@ class BoundedAuthorizationWorkflow:
         now: datetime | None,
         reasons: list[str],
     ) -> datetime | None:
+        if not self.allow_test_time:
+            return self._evaluation_time(None)
         if now is None:
             reasons.append("evaluation_time_missing")
             return None
@@ -896,6 +1049,7 @@ class BoundedAuthorizationWorkflow:
             observation_clock_tolerance_seconds=policy.clock_tolerance_seconds if policy else None,
         )
         self.records.append_reconciliation(value)
+        self.records.close_uncertain_attempts(value)
         return value
 
     def _effect_time_changed_inputs(
