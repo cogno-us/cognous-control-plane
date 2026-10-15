@@ -32,3 +32,6 @@ jobs:
 
       - name: Run tests
         run: pytest
+
+      - name: Authorization control removal probes
+        run: python tools/adversarial_mutations.py
