@@ -42,3 +42,9 @@
 - BitRep verification and Index chain inclusion are not execution grants.
 - No production credentials, remote refunds, public-chain writes, scheduler, fleet
   coordinator, distributed budget service, or exactly-once guarantee is added.
+
+## Runtime authority candidate
+
+Add the opt-in runtime-authority/0.1 profile for issue #32: durable resolution
+journaling, governed freshness, authenticated criteria, required-input and purpose
+binding, and versioned refusal reporting. Historical selection remains unchanged.

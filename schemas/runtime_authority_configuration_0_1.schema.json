@@ -1,0 +1,79 @@
+{
+  "$defs": {
+    "ActionClass": {
+      "additionalProperties": false,
+      "description": "Host-governed action classification, outside the grant write path.",
+      "properties": {
+        "class_id": {
+          "minLength": 1,
+          "title": "Class Id",
+          "type": "string"
+        },
+        "irreversible": {
+          "default": true,
+          "title": "Irreversible",
+          "type": "boolean"
+        },
+        "max_status_age_seconds": {
+          "default": 60,
+          "minimum": 0,
+          "title": "Max Status Age Seconds",
+          "type": "integer"
+        },
+        "on_unreadable": {
+          "default": "refuse",
+          "enum": [
+            "refuse",
+            "bounded_tolerance"
+          ],
+          "title": "On Unreadable",
+          "type": "string"
+        }
+      },
+      "required": [
+        "class_id"
+      ],
+      "title": "ActionClass",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Opt-in runtime-authority/0.1; historical consumers cannot assert conformance.",
+  "properties": {
+    "version": {
+      "const": "runtime-authority/0.1",
+      "default": "runtime-authority/0.1",
+      "title": "Version",
+      "type": "string"
+    },
+    "catalogue_version": {
+      "title": "Catalogue Version",
+      "type": "string"
+    },
+    "actions": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ActionClass"
+      },
+      "title": "Actions",
+      "type": "object"
+    },
+    "producer_keys": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Producer Keys",
+      "type": "object"
+    },
+    "allow_synthetic_resolver": {
+      "default": false,
+      "title": "Allow Synthetic Resolver",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "catalogue_version",
+    "actions"
+  ],
+  "title": "RuntimeAuthorityProfile",
+  "type": "object"
+}

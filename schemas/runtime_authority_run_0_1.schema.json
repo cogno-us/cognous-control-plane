@@ -1,0 +1,1256 @@
+{
+  "$defs": {
+    "AttemptCloseout": {
+      "description": "Append-only observation linked to an original uncertain or failed attempt.",
+      "properties": {
+        "attempt_id": {
+          "title": "Attempt Id",
+          "type": "string"
+        },
+        "effect_id": {
+          "title": "Effect Id",
+          "type": "string"
+        },
+        "original_status": {
+          "title": "Original Status",
+          "type": "string"
+        },
+        "observed_state": {
+          "enum": [
+            "applied",
+            "partial"
+          ],
+          "title": "Observed State",
+          "type": "string"
+        },
+        "observed_at": {
+          "title": "Observed At",
+          "type": "string"
+        },
+        "reconciled_at": {
+          "title": "Reconciled At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "attempt_id",
+        "effect_id",
+        "original_status",
+        "observed_state",
+        "observed_at",
+        "reconciled_at"
+      ],
+      "title": "AttemptCloseout",
+      "type": "object"
+    },
+    "AuthorizationBinding": {
+      "properties": {
+        "runtime_authority": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Runtime Authority"
+        },
+        "proposal_commitment": {
+          "title": "Proposal Commitment",
+          "type": "string"
+        },
+        "manifest_id": {
+          "title": "Manifest Id",
+          "type": "string"
+        },
+        "manifest_version": {
+          "title": "Manifest Version",
+          "type": "string"
+        },
+        "manifest_digest": {
+          "title": "Manifest Digest",
+          "type": "string"
+        },
+        "actor": {
+          "title": "Actor",
+          "type": "string"
+        },
+        "principal": {
+          "title": "Principal",
+          "type": "string"
+        },
+        "action_id": {
+          "title": "Action Id",
+          "type": "string"
+        },
+        "adapter_id": {
+          "title": "Adapter Id",
+          "type": "string"
+        },
+        "target": {
+          "title": "Target",
+          "type": "string"
+        },
+        "payload_commitment": {
+          "title": "Payload Commitment",
+          "type": "string"
+        },
+        "requested_permissions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Requested Permissions",
+          "type": "array"
+        },
+        "amount": {
+          "title": "Amount",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        },
+        "effects": {
+          "title": "Effects",
+          "type": "integer"
+        },
+        "authority_context_id": {
+          "title": "Authority Context Id",
+          "type": "string"
+        },
+        "authority_context_version": {
+          "title": "Authority Context Version",
+          "type": "string"
+        },
+        "authority_context_status": {
+          "title": "Authority Context Status",
+          "type": "string"
+        },
+        "requirement_id": {
+          "title": "Requirement Id",
+          "type": "string"
+        },
+        "requirement_commitment": {
+          "title": "Requirement Commitment",
+          "type": "string"
+        },
+        "grant_id": {
+          "title": "Grant Id",
+          "type": "string"
+        },
+        "grant_revision": {
+          "title": "Grant Revision",
+          "type": "string"
+        },
+        "policy_versions": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Policy Versions",
+          "type": "array"
+        },
+        "role_mapping_version": {
+          "title": "Role Mapping Version",
+          "type": "string"
+        },
+        "role_mapping_digest": {
+          "title": "Role Mapping Digest",
+          "type": "string"
+        },
+        "effective_max_effects": {
+          "title": "Effective Max Effects",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "proposal_commitment",
+        "manifest_id",
+        "manifest_version",
+        "manifest_digest",
+        "actor",
+        "principal",
+        "action_id",
+        "adapter_id",
+        "target",
+        "payload_commitment",
+        "requested_permissions",
+        "amount",
+        "unit",
+        "effects",
+        "authority_context_id",
+        "authority_context_version",
+        "authority_context_status",
+        "requirement_id",
+        "requirement_commitment",
+        "grant_id",
+        "grant_revision",
+        "policy_versions",
+        "role_mapping_version",
+        "role_mapping_digest",
+        "effective_max_effects"
+      ],
+      "title": "AuthorizationBinding",
+      "type": "object"
+    },
+    "CheckEvent": {
+      "description": "Append-only local resolution journal; no external commit assertion.",
+      "properties": {
+        "check_id": {
+          "title": "Check Id",
+          "type": "string"
+        },
+        "phase": {
+          "enum": [
+            "opened",
+            "input",
+            "completed",
+            "interrupted"
+          ],
+          "title": "Phase",
+          "type": "string"
+        },
+        "stage": {
+          "enum": [
+            "decision",
+            "effect",
+            "claim"
+          ],
+          "title": "Stage",
+          "type": "string"
+        },
+        "recorded_at": {
+          "title": "Recorded At",
+          "type": "string"
+        },
+        "owner": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Owner",
+          "type": "object"
+        },
+        "proposal_commitment": {
+          "title": "Proposal Commitment",
+          "type": "string"
+        },
+        "decision_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Decision Id"
+        },
+        "effect_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effect Id"
+        },
+        "action_class": {
+          "additionalProperties": true,
+          "title": "Action Class",
+          "type": "object"
+        },
+        "input": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResolutionInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "reason_vocabulary_version": {
+          "default": "runtime-authority-reasons/0.1",
+          "title": "Reason Vocabulary Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "check_id",
+        "phase",
+        "stage",
+        "recorded_at",
+        "owner",
+        "proposal_commitment"
+      ],
+      "title": "CheckEvent",
+      "type": "object"
+    },
+    "EffectAttempt": {
+      "properties": {
+        "attempt_id": {
+          "title": "Attempt Id",
+          "type": "string"
+        },
+        "effect_id": {
+          "title": "Effect Id",
+          "type": "string"
+        },
+        "decision_id": {
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "started_at": {
+          "title": "Started At",
+          "type": "string"
+        },
+        "time_source": {
+          "default": "unrecorded",
+          "enum": [
+            "unrecorded",
+            "control_plane",
+            "test_override"
+          ],
+          "title": "Time Source",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "attempted",
+            "acknowledged",
+            "unknown",
+            "failed",
+            "partial"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "acknowledgement": {
+          "additionalProperties": true,
+          "title": "Acknowledgement",
+          "type": "object"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "required": [
+        "attempt_id",
+        "effect_id",
+        "decision_id",
+        "started_at",
+        "status"
+      ],
+      "title": "EffectAttempt",
+      "type": "object"
+    },
+    "EffectObservation": {
+      "properties": {
+        "effect_id": {
+          "title": "Effect Id",
+          "type": "string"
+        },
+        "observed_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observed At"
+        },
+        "state": {
+          "enum": [
+            "absent",
+            "applied",
+            "partial",
+            "unknown"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "destination_state": {
+          "additionalProperties": true,
+          "title": "Destination State",
+          "type": "object"
+        }
+      },
+      "required": [
+        "effect_id",
+        "state"
+      ],
+      "title": "EffectObservation",
+      "type": "object"
+    },
+    "EffectTimeRefusal": {
+      "properties": {
+        "reason_vocabulary_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason Vocabulary Version"
+        },
+        "reopen_conditions": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Reopen Conditions",
+          "type": "array"
+        },
+        "refusal_id": {
+          "title": "Refusal Id",
+          "type": "string"
+        },
+        "decision_id": {
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "effect_id": {
+          "title": "Effect Id",
+          "type": "string"
+        },
+        "recorded_at": {
+          "title": "Recorded At",
+          "type": "string"
+        },
+        "time_source": {
+          "default": "unrecorded",
+          "enum": [
+            "unrecorded",
+            "control_plane",
+            "test_override"
+          ],
+          "title": "Time Source",
+          "type": "string"
+        },
+        "original_operation_horizon": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OperationHorizon"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "operation_horizon": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OperationHorizon"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "stage": {
+          "const": "effect_time_revalidation",
+          "default": "effect_time_revalidation",
+          "title": "Stage",
+          "type": "string"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "changed_inputs": {
+          "items": {
+            "$ref": "#/$defs/RefusalInputVersion"
+          },
+          "title": "Changed Inputs",
+          "type": "array"
+        },
+        "resolution_inputs": {
+          "items": {
+            "$ref": "#/$defs/ResolutionInput"
+          },
+          "title": "Resolution Inputs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "refusal_id",
+        "decision_id",
+        "effect_id",
+        "recorded_at",
+        "reasons"
+      ],
+      "title": "EffectTimeRefusal",
+      "type": "object"
+    },
+    "OperationHorizon": {
+      "description": "Validity values supplied with one proposal, not a new grant of authority.",
+      "properties": {
+        "source": {
+          "const": "runtime_proposal",
+          "default": "runtime_proposal",
+          "title": "Source",
+          "type": "string"
+        },
+        "proposal_commitment": {
+          "title": "Proposal Commitment",
+          "type": "string"
+        },
+        "not_before": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Not Before"
+        },
+        "expires_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expires At"
+        }
+      },
+      "required": [
+        "proposal_commitment"
+      ],
+      "title": "OperationHorizon",
+      "type": "object"
+    },
+    "ReconciliationResult": {
+      "properties": {
+        "effect_id": {
+          "title": "Effect Id",
+          "type": "string"
+        },
+        "reconciled_at": {
+          "title": "Reconciled At",
+          "type": "string"
+        },
+        "result": {
+          "enum": [
+            "applied",
+            "observed_absent",
+            "safe_to_retry",
+            "hold"
+          ],
+          "title": "Result",
+          "type": "string"
+        },
+        "observation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EffectObservation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "observation_accepted": {
+          "default": false,
+          "title": "Observation Accepted",
+          "type": "boolean"
+        },
+        "retry_eligible": {
+          "default": false,
+          "title": "Retry Eligible",
+          "type": "boolean"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "evaluation_time": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evaluation Time"
+        },
+        "observation_max_age_seconds": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observation Max Age Seconds"
+        },
+        "observation_clock_tolerance_seconds": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observation Clock Tolerance Seconds"
+        }
+      },
+      "required": [
+        "effect_id",
+        "reconciled_at",
+        "result"
+      ],
+      "title": "ReconciliationResult",
+      "type": "object"
+    },
+    "RefusalInputVersion": {
+      "description": "Minimized effect-time input attribution; never contains raw proposal payload.",
+      "properties": {
+        "input_type": {
+          "enum": [
+            "grant",
+            "policy",
+            "approval",
+            "evidence",
+            "role_mapping"
+          ],
+          "title": "Input Type",
+          "type": "string"
+        },
+        "input_id": {
+          "title": "Input Id",
+          "type": "string"
+        },
+        "expected_version": {
+          "title": "Expected Version",
+          "type": "string"
+        },
+        "observed_version": {
+          "title": "Observed Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "input_type",
+        "input_id",
+        "expected_version",
+        "observed_version"
+      ],
+      "title": "RefusalInputVersion",
+      "type": "object"
+    },
+    "ResolutionCheck": {
+      "description": "Durable read-time checkpoint; no authority or independent custody claim.",
+      "properties": {
+        "check_id": {
+          "title": "Check Id",
+          "type": "string"
+        },
+        "stage": {
+          "enum": [
+            "decision",
+            "effect",
+            "claim"
+          ],
+          "title": "Stage",
+          "type": "string"
+        },
+        "evaluated_at": {
+          "title": "Evaluated At",
+          "type": "string"
+        },
+        "time_source": {
+          "enum": [
+            "control_plane",
+            "test_override"
+          ],
+          "title": "Time Source",
+          "type": "string"
+        },
+        "inputs": {
+          "items": {
+            "$ref": "#/$defs/ResolutionInput"
+          },
+          "title": "Inputs",
+          "type": "array"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        }
+      },
+      "required": [
+        "check_id",
+        "stage",
+        "evaluated_at",
+        "time_source",
+        "inputs",
+        "reasons"
+      ],
+      "title": "ResolutionCheck",
+      "type": "object"
+    },
+    "ResolutionInput": {
+      "description": "Non-authorizing, minimized evidence of one actual resolution read.\n\nA digest identifies the full record without retaining its raw contents.\nMissing records are explicit; an absent row means the input was not read.",
+      "properties": {
+        "input_type": {
+          "enum": [
+            "manifest",
+            "authority_context",
+            "grant",
+            "policy",
+            "approval",
+            "evidence",
+            "role_mapping",
+            "identity",
+            "mandate",
+            "conflict",
+            "purpose"
+          ],
+          "title": "Input Type",
+          "type": "string"
+        },
+        "input_id": {
+          "title": "Input Id",
+          "type": "string"
+        },
+        "expected": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Expected",
+          "type": "object"
+        },
+        "observed": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Observed",
+          "type": "object"
+        },
+        "record_commitment": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Record Commitment"
+        },
+        "missing": {
+          "default": false,
+          "title": "Missing",
+          "type": "boolean"
+        },
+        "previous_observed_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Previous Observed At"
+        },
+        "read_state": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Read State"
+        }
+      },
+      "required": [
+        "input_type",
+        "input_id"
+      ],
+      "title": "ResolutionInput",
+      "type": "object"
+    },
+    "RuntimeDecision": {
+      "properties": {
+        "reason_vocabulary_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason Vocabulary Version"
+        },
+        "reopen_conditions": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Reopen Conditions",
+          "type": "array"
+        },
+        "decision_id": {
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "effect_id": {
+          "title": "Effect Id",
+          "type": "string"
+        },
+        "result": {
+          "enum": [
+            "authorized",
+            "hold",
+            "deny"
+          ],
+          "title": "Result",
+          "type": "string"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "decided_at": {
+          "title": "Decided At",
+          "type": "string"
+        },
+        "time_source": {
+          "default": "unrecorded",
+          "enum": [
+            "unrecorded",
+            "control_plane",
+            "test_override"
+          ],
+          "title": "Time Source",
+          "type": "string"
+        },
+        "operation_horizon": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OperationHorizon"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "binding": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TenantAuthorizationBinding"
+            },
+            {
+              "$ref": "#/$defs/AuthorizationBinding"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Binding"
+        },
+        "resolution_inputs": {
+          "items": {
+            "$ref": "#/$defs/ResolutionInput"
+          },
+          "title": "Resolution Inputs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "decision_id",
+        "effect_id",
+        "result",
+        "reasons",
+        "decided_at"
+      ],
+      "title": "RuntimeDecision",
+      "type": "object"
+    },
+    "TenantAuthorizationBinding": {
+      "description": "Tenant-aware bounded-authorization-effect/0.2 binding.",
+      "properties": {
+        "runtime_authority": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Runtime Authority"
+        },
+        "proposal_commitment": {
+          "title": "Proposal Commitment",
+          "type": "string"
+        },
+        "manifest_id": {
+          "title": "Manifest Id",
+          "type": "string"
+        },
+        "manifest_version": {
+          "title": "Manifest Version",
+          "type": "string"
+        },
+        "manifest_digest": {
+          "title": "Manifest Digest",
+          "type": "string"
+        },
+        "actor": {
+          "title": "Actor",
+          "type": "string"
+        },
+        "principal": {
+          "title": "Principal",
+          "type": "string"
+        },
+        "action_id": {
+          "title": "Action Id",
+          "type": "string"
+        },
+        "adapter_id": {
+          "title": "Adapter Id",
+          "type": "string"
+        },
+        "target": {
+          "title": "Target",
+          "type": "string"
+        },
+        "payload_commitment": {
+          "title": "Payload Commitment",
+          "type": "string"
+        },
+        "requested_permissions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Requested Permissions",
+          "type": "array"
+        },
+        "amount": {
+          "title": "Amount",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        },
+        "effects": {
+          "title": "Effects",
+          "type": "integer"
+        },
+        "authority_context_id": {
+          "title": "Authority Context Id",
+          "type": "string"
+        },
+        "authority_context_version": {
+          "title": "Authority Context Version",
+          "type": "string"
+        },
+        "authority_context_status": {
+          "title": "Authority Context Status",
+          "type": "string"
+        },
+        "requirement_id": {
+          "title": "Requirement Id",
+          "type": "string"
+        },
+        "requirement_commitment": {
+          "title": "Requirement Commitment",
+          "type": "string"
+        },
+        "grant_id": {
+          "title": "Grant Id",
+          "type": "string"
+        },
+        "grant_revision": {
+          "title": "Grant Revision",
+          "type": "string"
+        },
+        "policy_versions": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Policy Versions",
+          "type": "array"
+        },
+        "role_mapping_version": {
+          "title": "Role Mapping Version",
+          "type": "string"
+        },
+        "role_mapping_digest": {
+          "title": "Role Mapping Digest",
+          "type": "string"
+        },
+        "effective_max_effects": {
+          "title": "Effective Max Effects",
+          "type": "integer"
+        },
+        "generation": {
+          "const": "bounded-authorization-effect/0.2",
+          "default": "bounded-authorization-effect/0.2",
+          "title": "Generation",
+          "type": "string"
+        },
+        "tenant_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Tenant Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "proposal_commitment",
+        "manifest_id",
+        "manifest_version",
+        "manifest_digest",
+        "actor",
+        "principal",
+        "action_id",
+        "adapter_id",
+        "target",
+        "payload_commitment",
+        "requested_permissions",
+        "amount",
+        "unit",
+        "effects",
+        "authority_context_id",
+        "authority_context_version",
+        "authority_context_status",
+        "requirement_id",
+        "requirement_commitment",
+        "grant_id",
+        "grant_revision",
+        "policy_versions",
+        "role_mapping_version",
+        "role_mapping_digest",
+        "effective_max_effects",
+        "tenant_id"
+      ],
+      "title": "TenantAuthorizationBinding",
+      "type": "object"
+    },
+    "VocabularyChange": {
+      "additionalProperties": false,
+      "description": "An adopted registry transition, not a rewrite of historical rows.",
+      "properties": {
+        "change_id": {
+          "title": "Change Id",
+          "type": "string"
+        },
+        "previous_version": {
+          "title": "Previous Version",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        },
+        "registry_digest": {
+          "title": "Registry Digest",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "addition",
+            "retirement",
+            "rename",
+            "split"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "previous_codes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Previous Codes",
+          "type": "array"
+        },
+        "codes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Codes",
+          "type": "array"
+        },
+        "acknowledged_by": {
+          "minLength": 1,
+          "title": "Acknowledged By",
+          "type": "string"
+        },
+        "acknowledged_at": {
+          "title": "Acknowledged At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "change_id",
+        "previous_version",
+        "version",
+        "registry_digest",
+        "kind",
+        "previous_codes",
+        "codes",
+        "acknowledged_by",
+        "acknowledged_at"
+      ],
+      "title": "VocabularyChange",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "vocabulary_changes": {
+      "items": {
+        "$ref": "#/$defs/VocabularyChange"
+      },
+      "title": "Vocabulary Changes",
+      "type": "array"
+    },
+    "check_events": {
+      "items": {
+        "$ref": "#/$defs/CheckEvent"
+      },
+      "title": "Check Events",
+      "type": "array"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "input_time_floors": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Input Time Floors",
+      "type": "object"
+    },
+    "resolution_checks": {
+      "items": {
+        "$ref": "#/$defs/ResolutionCheck"
+      },
+      "title": "Resolution Checks",
+      "type": "array"
+    },
+    "closeouts": {
+      "items": {
+        "$ref": "#/$defs/AttemptCloseout"
+      },
+      "title": "Closeouts",
+      "type": "array"
+    },
+    "decisions": {
+      "items": {
+        "$ref": "#/$defs/RuntimeDecision"
+      },
+      "title": "Decisions",
+      "type": "array"
+    },
+    "refusals": {
+      "items": {
+        "$ref": "#/$defs/EffectTimeRefusal"
+      },
+      "title": "Refusals",
+      "type": "array"
+    },
+    "attempts": {
+      "items": {
+        "$ref": "#/$defs/EffectAttempt"
+      },
+      "title": "Attempts",
+      "type": "array"
+    },
+    "observations": {
+      "items": {
+        "$ref": "#/$defs/EffectObservation"
+      },
+      "title": "Observations",
+      "type": "array"
+    },
+    "reconciliations": {
+      "items": {
+        "$ref": "#/$defs/ReconciliationResult"
+      },
+      "title": "Reconciliations",
+      "type": "array"
+    }
+  },
+  "required": [
+    "run_id"
+  ],
+  "title": "BoundedRunRecord",
+  "type": "object",
+  "description": "Opt-in runtime-authority/0.1; historical consumers cannot assert conformance."
+}
