@@ -73,7 +73,7 @@ class RuntimeProposal(BaseModel):
     payload: dict
     payload_commitment: str
     requested_permissions: list[str] = Field(default_factory=list)
-    amount: float = Field(default=0, ge=0)
+    amount: float = Field(default=0, ge=0, allow_inf_nan=False)
     unit: str = ""
     effects: int = Field(default=1, ge=0)
     authority_context_ref: str | None = None
@@ -663,13 +663,14 @@ class LocalRefundDestination:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
-        if not self.path.exists():
-            self._write({"effects": {}, "grant_effect_counts": {}})
+        with self._transaction():
+            if not self.path.exists():
+                self._write({"effects": {}, "grant_effect_counts": {}})
 
     def apply(self, *, effect_id: str, grant_id: str, max_effects: int, target: str,
               amount: float, unit: str, payload: dict, lose_ack: bool = False,
               partial: bool = False) -> dict:
-        with self._lock:
+        with self._transaction():
             state = self._load()
             if effect_id in state["effects"]:
                 return {"duplicate": True, "effect": copy.deepcopy(state["effects"][effect_id])}
@@ -693,7 +694,7 @@ class LocalRefundDestination:
             return {"duplicate": False, "effect": copy.deepcopy(effect)}
 
     def observe(self, effect_id: str) -> EffectObservation:
-        with self._lock:
+        with self._transaction():
             effect = self._load()["effects"].get(effect_id)
             if effect is None:
                 return EffectObservation(effect_id=effect_id, observed_at=_iso(_now()), state="absent")
@@ -706,16 +707,42 @@ class LocalRefundDestination:
             )
 
     def snapshot(self) -> dict:
-        with self._lock:
+        with self._transaction():
             return copy.deepcopy(self._load())
 
     def _load(self) -> dict:
         return json.loads(self.path.read_text(encoding="utf-8"))
 
+    @contextmanager
+    def _transaction(self):
+        """Serialize initialization, reads and writes across cooperating processes."""
+        if fcntl is None:
+            raise RuntimeError("inter-process destination locking unavailable")
+        with self._lock:
+            with self.path.with_name(self.path.name + ".lock").open("a+b") as lock:
+                fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+
     def _write(self, state: dict) -> None:
-        tmp = self.path.with_suffix(self.path.suffix + ".tmp")
-        tmp.write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
-        os.replace(tmp, self.path)
+        """Persist before acknowledging; caller holds the destination transaction."""
+        directory_fd = os.open(self.path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        temporary = None
+        try:
+            fd, temporary = tempfile.mkstemp(prefix=self.path.name + ".", dir=self.path.parent)
+            with os.fdopen(fd, "w", encoding="utf-8") as stream:
+                json.dump(state, stream, indent=2, sort_keys=True, allow_nan=False)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, self.path)
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+            if temporary is not None:
+                try: os.unlink(temporary)
+                except FileNotFoundError: pass
 
 
 class BoundedAuthorizationWorkflow:
@@ -1290,8 +1317,11 @@ class BoundedAuthorizationWorkflow:
             reasons.append("grant_scope_mismatch")
 
         delegation = grant.get("delegation", {})
-        if delegation.get("parent_grant_id") is not None and not identity.chain:
-            reasons.append("delegation_chain_missing")
+        if delegation.get("parent_grant_id") is not None:
+            # No ancestor revocation walk or shared ancestor budget exists in this profile.
+            reasons.append("delegation_profile_unsupported")
+            if not identity.chain:
+                reasons.append("delegation_chain_missing")
 
         conflict = self.resolver.conflict_status(requirement["requirement_id"])
         capture("conflict", requirement["requirement_id"], conflict)
@@ -1365,7 +1395,7 @@ class BoundedAuthorizationWorkflow:
                     reasons.append("approval_operation_binding_mismatch")
                 if approval.policy_versions != policy_versions:
                     reasons.append("approval_policy_binding_mismatch")
-                if req.get("independent_of_actor") and approval.approver == proposal.actor:
+                if req.get("independent_of_actor") and approval.approver in {proposal.actor, proposal.principal, *identity.chain}:
                     reasons.append("approval_independence_violation")
 
         for obligation in requirement.get("evidence", []):
@@ -1385,12 +1415,11 @@ class BoundedAuthorizationWorkflow:
                     reasons.append("required_evidence_not_current")
                 elif not self._fresh(current.observed_at, now, int(obligation["max_age_seconds"])):
                     reasons.append("required_evidence_stale_or_future")
-            elif current is not None:
-                if not self._fresh(current.observed_at, now, int(obligation["max_age_seconds"])):
-                    if obligation.get("unknown_behavior") == "hold_effect":
-                        reasons.append("context_unknown_requires_hold")
             elif obligation.get("unknown_behavior") == "hold_effect":
-                reasons.append("context_unknown_requires_hold")
+                if current is None or current.state != "current" or not self._fresh(
+                    current.observed_at, now, int(obligation["max_age_seconds"])
+                ):
+                    reasons.append("context_unknown_requires_hold")
 
         if reasons:
             return sorted(set(reasons)), None
