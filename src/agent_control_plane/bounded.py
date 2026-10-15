@@ -1364,7 +1364,13 @@ class BoundedAuthorizationWorkflow:
                     candidate = cached(grant_id)
                 except Exception:
                     candidate = None
-                if candidate is not None and candidate.status == "active":
+                known_denial = (candidate is not None and any(
+                    item.input_type == "grant" and item.input_id == grant_id
+                    and item.observed.get("revision") == candidate.revision
+                    and item.observed.get("status") in {"revoked", "suspended"}
+                    for check in self.records.load().resolution_checks for item in check.inputs
+                ))
+                if candidate is not None and candidate.status == "active" and not known_denial:
                     status = candidate
                     inputs.read_states[("grant", grant_id)] = "cached_positive"
             if status is None and failed:

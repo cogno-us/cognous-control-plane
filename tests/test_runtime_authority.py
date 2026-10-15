@@ -180,3 +180,11 @@ def test_reason_disappearance_requires_exposure_and_keeps_unknown_versions():
     assert report['total_refusals']==1 and report['unversioned_rows']==1
     assert any(x['code']=='old' and x['disappeared'] and x['share']==0 for x in report['series'])
     assert not any(x['disappeared'] for x in refusal_trends(prior,[],previous_exposure=10,current_exposure=0)['series'])
+
+def test_recorded_denial_cannot_be_overridden_by_later_outage_cache(tmp_path):
+    p,r,f,c=setup_flow(tmp_path,reversible=True)
+    cached=next(iter(r.statuses.values())).model_copy(deep=True)
+    next(iter(r.statuses.values())).status='revoked'
+    held(f,p,'grant_revoked')
+    r.grant_status=lambda ref:None;r.cached_grant_status=lambda ref:cached
+    held(f,p,'status_unreadable')
