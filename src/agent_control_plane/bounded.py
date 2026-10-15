@@ -22,6 +22,8 @@ from typing import Iterator, Literal, Protocol
 
 from pydantic import BaseModel, Field
 
+from .runtime_authority import RuntimeAuthorityProfile, VOCABULARY_VERSION, reopen_conditions
+
 MANIFEST_VERSION = "1.1"
 AUTHORITY_CONTEXT_VERSION = "0.1.0"
 AUTHORITY_CONTEXT_STATUS = "proposed_pending_governor_review"
@@ -108,6 +110,7 @@ class GrantStatus(BaseModel):
 
 
 class ApprovalStatus(BaseModel):
+    runtime_authority_commitment: str | None = Field(default=None, exclude_if=lambda v: v is None)
     approval_ref: str
     role_id: str
     approver: str
@@ -123,6 +126,7 @@ class ApprovalStatus(BaseModel):
 
 
 class EvidenceStatus(BaseModel):
+    validation_record: dict | None = Field(default=None, exclude_if=lambda v: v is None)
     obligation_id: str
     state: Literal["current", "stale", "unknown"]
     observed_at: str
@@ -196,6 +200,7 @@ class Resolver(Protocol):
 
 
 class AuthorizationBinding(BaseModel):
+    runtime_authority: dict | None = Field(default=None, exclude_if=lambda v: v is None)
     proposal_commitment: str
     manifest_id: str
     manifest_version: str
@@ -261,16 +266,19 @@ class ResolutionInput(BaseModel):
     """
 
     input_type: Literal["manifest", "authority_context", "grant", "policy", "approval",
-                        "evidence", "role_mapping", "identity", "mandate", "conflict"]
+                        "evidence", "role_mapping", "identity", "mandate", "conflict", "purpose"]
     input_id: str
     expected: dict[str, str] = Field(default_factory=dict)
     observed: dict[str, str] = Field(default_factory=dict)
     record_commitment: str | None = None
     missing: bool = False
     previous_observed_at: str | None = None
+    read_state: str | None = Field(default=None, exclude_if=lambda v: v is None)
 
 
 class RuntimeDecision(BaseModel):
+    reason_vocabulary_version: str | None = Field(default=None, exclude_if=lambda v: v is None)
+    reopen_conditions: list[dict] = Field(default_factory=list, exclude_if=lambda v: not v)
     decision_id: str
     effect_id: str
     result: Literal["authorized", "hold", "deny"]
@@ -303,6 +311,8 @@ class RefusalInputVersion(BaseModel):
 
 
 class EffectTimeRefusal(BaseModel):
+    reason_vocabulary_version: str | None = Field(default=None, exclude_if=lambda v: v is None)
+    reopen_conditions: list[dict] = Field(default_factory=list, exclude_if=lambda v: not v)
     refusal_id: str
     decision_id: str
     effect_id: str
@@ -365,7 +375,50 @@ class AttemptCloseout(BaseModel):
     reconciled_at: str
 
 
+class CheckEvent(BaseModel):
+    """Append-only local resolution journal; no external commit assertion."""
+    check_id: str
+    phase: Literal["opened", "input", "completed", "interrupted"]
+    stage: Literal["decision", "effect", "claim"]
+    recorded_at: str
+    owner: dict[str, str]
+    proposal_commitment: str
+    decision_id: str | None = None
+    effect_id: str | None = None
+    action_class: dict = Field(default_factory=dict)
+    input: ResolutionInput | None = None
+    reasons: list[str] = Field(default_factory=list)
+    reason_vocabulary_version: str = "runtime-authority-reasons/0.1"
+
+
+def _process_owner() -> dict[str, str]:
+    """Diagnostic identity only; liveness is enforced by a kernel file lease."""
+    return {"pid": str(os.getpid()), "token": str(uuid.uuid4())}
+
+
+class _ResolverReadFailure(Exception):
+    pass
+
+
+class _JournalInputs(list):
+    def __init__(self, values, on_input):
+        super().__init__(values)
+        self.records = {}
+        self.read_states = {}
+        self.on_input = on_input
+
+    def append(self, item):
+        item.read_state = item.read_state or self.read_states.get((item.input_type, item.input_id))
+        self.on_input(item)  # persist before exposing the completed read
+        super().append(item)
+
+
+from .reason_vocabulary import VocabularyChange
+
+
 class BoundedRunRecord(BaseModel):
+    vocabulary_changes: list[VocabularyChange] = Field(default_factory=list, exclude_if=lambda v: not v)
+    check_events: list[CheckEvent] = Field(default_factory=list, exclude_if=lambda v: not v)
     run_id: str
     input_time_floors: dict[str, str] = Field(default_factory=dict)
     resolution_checks: list[ResolutionCheck] = Field(default_factory=list)
@@ -523,6 +576,83 @@ class BoundedRecordStore:
             document.setdefault(field, []).append(value.model_dump(mode="json"))
             BoundedRunRecord.model_validate(document)
             self._write(document)
+
+    def _check_lease_path(self, check_id: str) -> Path:
+        if not re.fullmatch(r"[A-Za-z0-9-]{1,64}", check_id):
+            raise ValueError("invalid check identity")
+        return self.path.with_name(self.path.name + ".check-" + check_id + ".lock")
+
+    @contextmanager
+    def check_lease(self, check_id: str):
+        """Hold a stable per-check kernel lease; process death releases it."""
+        fd = os.open(self._check_lease_path(check_id), os.O_CREAT | os.O_RDWR | os.O_CLOEXEC, 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            yield
+        finally:
+            os.close(fd)
+
+    def _check_is_live(self, check_id: str) -> bool:
+        fd = os.open(self._check_lease_path(check_id), os.O_CREAT | os.O_RDWR | os.O_CLOEXEC, 0o600)
+        try:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return False
+            except BlockingIOError:
+                return True
+        finally:
+            os.close(fd)
+
+    def append_vocabulary_change(self, event: VocabularyChange) -> None:
+        """Persist a governed change without reinterpreting existing refusal rows."""
+        _parse(event.acknowledged_at)
+        if event.version == event.previous_version or (event.kind == "split" and len(event.codes) < 2):
+            raise ValueError("invalid vocabulary transition")
+        with self._transaction():
+            document = self._read_document()
+            changes = document.setdefault("vocabulary_changes", [])
+            if any(x["change_id"] == event.change_id for x in changes):
+                raise ValueError("vocabulary change already recorded")
+            changes.append(event.model_dump(mode="json"))
+            BoundedRunRecord.model_validate(document)
+            self._write(document)
+
+    def append_check_event(self, event: CheckEvent) -> None:
+        """Atomically enforce journal opening, ownership and terminality."""
+        with self._transaction():
+            document = self._read_document()
+            events = document.setdefault("check_events", [])
+            previous = [x for x in events if x["check_id"] == event.check_id]
+            if event.phase == "opened":
+                if previous:
+                    raise ValueError("check already opened")
+            elif not previous or previous[0]["phase"] != "opened":
+                raise ValueError("check opening missing")
+            elif any(x["phase"] in {"completed", "interrupted"} for x in previous):
+                raise ValueError("check already closed")
+            elif event.owner != previous[0]["owner"]:
+                raise ValueError("check owner mismatch")
+            events.append(event.model_dump(mode="json"))
+            BoundedRunRecord.model_validate(document)
+            self._write(document)
+
+    def recover_interrupted_checks(self) -> int:
+        """Close only checks whose recorded local process identity is gone."""
+        recovered = 0
+        with self._transaction():
+            document = self._read_document()
+            events = document.get("check_events", [])
+            closed = {x["check_id"] for x in events if x["phase"] in {"completed", "interrupted"}}
+            for opening in list(events):
+                if opening["phase"] != "opened" or opening["check_id"] in closed or self._check_is_live(opening["check_id"]):
+                    continue
+                end = dict(opening, phase="interrupted", recorded_at=_iso(_now()), reasons=["check_interrupted"])
+                events.append(end)
+                recovered += 1
+            if recovered:
+                BoundedRunRecord.model_validate(document)
+                self._write(document)
+        return recovered
 
     def _write(self, document: dict) -> None:
         """Replace the JSON document; caller must hold the transaction lock."""
@@ -762,8 +892,14 @@ class BoundedAuthorizationWorkflow:
         clock_tolerance_seconds: int = 5,
         observation_policy: ObservationPolicy | None = None,
         allow_test_time: bool = False,
+        runtime_authority_profile=None,
     ):
         self.allow_test_time = allow_test_time
+        self.runtime_authority_profile = (RuntimeAuthorityProfile.model_validate(runtime_authority_profile).snapshot()
+                                          if runtime_authority_profile is not None else None)
+        if (self.runtime_authority_profile and self.runtime_authority_profile.allow_synthetic_resolver
+                and not allow_test_time):
+            raise ValueError("synthetic authority profile requires explicit test clock")
         self.manifest = copy.deepcopy(manifest)
         self.resolver = resolver
         self.destination = destination
@@ -804,7 +940,7 @@ class BoundedAuthorizationWorkflow:
         now = self._evaluation_time(now)
         frozen = proposal.model_copy(deep=True)
         inputs: list[ResolutionInput] = []
-        reasons, binding = self._resolve(frozen, now, inputs=inputs)
+        reasons, binding = self._resolve(frozen, now, inputs=inputs, **({"stage":"decision"} if self.runtime_authority_profile else {}))
         reasons = self._record_check(inputs, now, reasons, "decision")
         effect_id = self._effect_id(binding) if binding else commitment({
             "proposal": commitment(frozen.model_dump(mode="json", exclude_none=False)),
@@ -818,6 +954,8 @@ class BoundedAuthorizationWorkflow:
             reasons=reasons,
             decided_at=_iso(now),
             time_source=self.time_source, operation_horizon=self._horizon(frozen),
+            reason_vocabulary_version=(VOCABULARY_VERSION if self.runtime_authority_profile else None),
+            reopen_conditions=(reopen_conditions(reasons, inputs) if self.runtime_authority_profile else []),
             binding=binding if not reasons else None,
             resolution_inputs=inputs,
         )
@@ -845,7 +983,7 @@ class BoundedAuthorizationWorkflow:
 
         frozen = proposal.model_copy(deep=True)
         inputs: list[ResolutionInput] = []
-        reasons, current = self._resolve(frozen, now, inputs=inputs)
+        reasons, current = self._resolve(frozen, now, inputs=inputs, **({"stage":"effect", "decision":persisted} if self.runtime_authority_profile else {}))
         reasons = self._record_check(inputs, now, reasons, "effect")
         if reasons or current is None or current != persisted.binding:
             refusal_reasons = sorted(set(reasons))
@@ -859,11 +997,16 @@ class BoundedAuthorizationWorkflow:
                 time_source=self.time_source,
                 original_operation_horizon=persisted.operation_horizon,
                 operation_horizon=self._horizon(frozen),
+                reason_vocabulary_version=(VOCABULARY_VERSION if self.runtime_authority_profile else None),
+                reopen_conditions=(reopen_conditions(refusal_reasons, inputs) if self.runtime_authority_profile else []),
                 reasons=refusal_reasons,
                 changed_inputs=self._effect_time_changed_inputs(inputs, persisted.binding),
                 resolution_inputs=inputs,
             ))
             raise PermissionError("authorization-critical inputs changed before effect")
+        if current.runtime_authority and current.runtime_authority.get("expected_effective_grant_digest"):
+            if getattr(self.destination, "runtime_authority_capability", None) != "sqlite-effective-grant/0.1":
+                raise PermissionError("atomic_authority_capability_unavailable")
         if adapter_id != current.adapter_id:
             raise PermissionError("adapter substitution detected")
 
@@ -928,6 +1071,9 @@ class BoundedAuthorizationWorkflow:
                 payload=copy.deepcopy(frozen.payload),
                 lose_ack=lose_ack,
                 partial=partial,
+                **({"expected_effective_grant_digest": current.runtime_authority["expected_effective_grant_digest"],
+                    "effective_grant_derivation_version": current.runtime_authority["effective_grant_derivation_version"]}
+                   if current.runtime_authority and current.runtime_authority.get("expected_effective_grant_digest") else {}),
             )
             attempt.status = "partial" if partial else "acknowledged"
             attempt.acknowledgement = ack
@@ -1154,7 +1300,92 @@ class BoundedAuthorizationWorkflow:
             return None
         return canonical if canonical in required_roles else None
 
-    def _resolve(
+    def _resolve(self, proposal, now, *, inputs=None, stage="decision", decision=None):
+        if self.runtime_authority_profile is None:
+            return self._resolve_inputs(proposal, now, inputs=inputs)
+        check_id = str(uuid.uuid4())
+        with self.records.check_lease(check_id):
+            return self._resolve_journal(proposal, now, inputs=inputs, stage=stage,
+                                         decision=decision, check_id=check_id)
+
+    def _resolve_journal(self, proposal, now, *, inputs, stage, decision, check_id):
+        """Opt-in write-ahead recording, with no shared per-call mutable state."""
+        profile = self.runtime_authority_profile
+        if profile is None:
+            return self._resolve_inputs(proposal, now, inputs=inputs)
+        action_class = profile.actions.get(proposal.action_id)
+        event = CheckEvent(
+            check_id=check_id, phase="opened", stage=stage, recorded_at=_iso(now),
+            owner=_process_owner(), proposal_commitment=commitment(proposal.model_dump(mode="json")),
+            decision_id=decision.decision_id if decision else None,
+            effect_id=decision.effect_id if decision else None,
+            action_class=action_class.model_dump() if action_class else {},
+        )
+        self.records.append_check_event(event)
+        def retain(item):
+            self.records.append_check_event(event.model_copy(update={"phase":"input", "input":item}))
+        reads = _JournalInputs([], retain)
+        try:
+            if action_class is None:
+                reasons, binding = ["action_class_unknown"], None
+            elif action_class.irreversible and action_class.on_unreadable != "refuse":
+                reasons, binding = ["action_class_invalid"], None
+            elif not getattr(self.resolver, "authenticated", False) and not profile.allow_synthetic_resolver:
+                reasons, binding = ["resolver_not_authenticated"], None
+            else:
+                reasons, binding = self._resolve_inputs(proposal, now, inputs=reads)
+        except _ResolverReadFailure:
+            reasons, binding = ["status_unreadable"], None
+        except (ValueError, KeyError, TypeError, AttributeError):
+            # Malformed trusted-source data is not authority; raw error text is never exported.
+            reasons, binding = ["resolution_record_invalid"], None
+        finally:
+            if inputs is not None:
+                inputs.extend(reads)
+        self.records.append_check_event(event.model_copy(update={"phase":"completed", "reasons":reasons}))
+        return reasons, binding
+
+    def _read_grant(self, inputs, grant_id, action_id):
+        """Only governed reversible classes may use a trusted cached positive."""
+        if self.runtime_authority_profile is None:
+            return self.resolver.grant_status(grant_id)
+        failed = False
+        try:
+            status = self.resolver.grant_status(grant_id)
+        except Exception:
+            status, failed = None, True
+        if status is None:
+            inputs.append(ResolutionInput(input_type="grant", input_id=grant_id,
+                                          missing=True, read_state="unreadable"))
+            cl = self.runtime_authority_profile.actions[action_id]
+            cached = getattr(self.resolver, "cached_grant_status", None)
+            if not cl.irreversible and cl.on_unreadable == "bounded_tolerance" and cached:
+                try:
+                    candidate = cached(grant_id)
+                except Exception:
+                    candidate = None
+                if candidate is not None and candidate.status == "active":
+                    status = candidate
+                    inputs.read_states[("grant", grant_id)] = "cached_positive"
+            if status is None and failed:
+                raise _ResolverReadFailure()
+        inputs.records[("grant", grant_id)] = copy.deepcopy(status)
+        return status
+
+    def _read_input(self, inputs, kind, ref, method, *args):
+        """Wrap resolver exceptions and preserve an actual missing-read diagnostic."""
+        if self.runtime_authority_profile is None:
+            return method(*args)
+        try:
+            value = method(*args)
+        except Exception:
+            inputs.append(ResolutionInput(input_type=kind, input_id=ref, missing=True,
+                                          read_state="unreadable"))
+            raise _ResolverReadFailure() from None
+        inputs.records[(kind, ref)] = copy.deepcopy(value)
+        return value
+
+    def _resolve_inputs(
         self, proposal: RuntimeProposal, now: datetime,
         *, inputs: list[ResolutionInput] | None = None,
     ) -> tuple[list[str], AuthorizationBinding | None]:
@@ -1166,7 +1397,8 @@ class BoundedAuthorizationWorkflow:
             # Explicit scalar allowlist: no payload, identity chain, approver,
             # mandate body, policy body, or evidence contents in diagnostics.
             fields = ("revision", "status", "version", "state", "observed_at",
-                      "schema_version", "interface_status", "digest", "grant_revision")
+                      "schema_version", "interface_status", "digest", "grant_revision",
+                      "runtime_authority_commitment", "epoch", "epoch_capability")
             observed = {key: str(data[key]) for key in fields if data is not None and key in data}
             if kind == "approval" and data is not None:
                 observed["proposal"] = data["proposal_commitment"]
@@ -1180,7 +1412,7 @@ class BoundedAuthorizationWorkflow:
 
         capture("manifest", proposal.manifest_id, self.manifest)
         reasons = self._manifest_mismatches(proposal, now)
-        context = self.resolver.authority_context(proposal.authority_context_ref or "")
+        context = self._read_input(inputs, "authority_context", proposal.authority_context_ref or "", self.resolver.authority_context, proposal.authority_context_ref or "")
         capture("authority_context", proposal.authority_context_ref or "", context)
         if context is None:
             return sorted(set(reasons + ["authority_context_missing"])), None
@@ -1214,7 +1446,7 @@ class BoundedAuthorizationWorkflow:
         if context.get("requirement", {}).get("consequence", {}).get("tier") != declared_auth.get("consequence_tier"):
             reasons.append("consequence_tier_mismatch")
 
-        mapping = self.resolver.role_mapping(institution_id or "")
+        mapping = self._read_input(inputs, "role_mapping", institution_id or "", self.resolver.role_mapping, institution_id or "")
         capture("role_mapping", institution_id or "", mapping)
         if mapping is None:
             reasons.append("role_mapping_missing")
@@ -1251,7 +1483,7 @@ class BoundedAuthorizationWorkflow:
         if not grant:
             return sorted(set(reasons + ["issued_grant_missing"])), None
 
-        identity = self.resolver.identity_status(context["acting_identity"], context["principal"])
+        identity = self._read_input(inputs, "identity", context["acting_identity"], self.resolver.identity_status, context["acting_identity"], context["principal"])
         capture("identity", context["acting_identity"], identity)
         if (
             identity.identity != context["acting_identity"]
@@ -1264,7 +1496,7 @@ class BoundedAuthorizationWorkflow:
         if not self._fresh(identity.observed_at, now, self.identity_max_age_seconds):
             reasons.append("identity_status_stale_or_future")
 
-        mandate = self.resolver.issuer_mandate(grant["issuer"], grant["issuer_role"])
+        mandate = self._read_input(inputs, "mandate", grant["issuance_record_ref"], self.resolver.issuer_mandate, grant["issuer"], grant["issuer_role"])
         capture("mandate", grant["issuance_record_ref"], mandate)
         if (
             mandate.issuer != grant["issuer"]
@@ -1278,10 +1510,10 @@ class BoundedAuthorizationWorkflow:
         if not self._fresh(mandate.observed_at, now, self.mandate_max_age_seconds):
             reasons.append("issuer_mandate_stale_or_future")
 
-        status = self.resolver.grant_status(grant["grant_id"])
+        status = self._read_grant(inputs, grant["grant_id"], proposal.action_id)
         capture("grant", grant["grant_id"], status, {"revision": grant["revision"], "status": "active"})
         if status is None:
-            reasons.append("grant_not_active")
+            reasons.append("status_unreadable" if self.runtime_authority_profile else "grant_not_active")
         else:
             if (
                 status.grant_id != grant["grant_id"]
@@ -1293,10 +1525,12 @@ class BoundedAuthorizationWorkflow:
             if tenant_aware and status.tenant_id != tenant_id:
                 reasons.append("grant_tenant_mismatch")
             if status.status != "active":
-                reasons.append("grant_not_active")
+                reasons.append(("grant_revoked" if status.status == "revoked" else "grant_" + status.status)
+                               if self.runtime_authority_profile else "grant_not_active")
             if status.revision != grant["revision"]:
                 reasons.append("grant_revision_stale")
-            if not self._fresh(status.observed_at, now, self.status_max_age_seconds):
+            if not self._fresh(status.observed_at, now, (self.runtime_authority_profile.actions[proposal.action_id].max_status_age_seconds
+                    if self.runtime_authority_profile else self.status_max_age_seconds)):
                 reasons.append("grant_status_stale_or_future")
 
         requirement = context["requirement"]
@@ -1306,7 +1540,7 @@ class BoundedAuthorizationWorkflow:
             reasons.append("grant_identity_mismatch")
         if tenant_aware and grant.get("tenant_id") != tenant_id:
             reasons.append("grant_tenant_mismatch")
-        if _parse(grant["not_before"]) > now or _parse(grant["expires_at"]) <= now:
+        if not grant.get("expires_at") or _parse(grant["not_before"]) > now or _parse(grant["expires_at"]) <= now:
             reasons.append("grant_outside_validity")
 
         requirement_permission = self._matching_permission(requirement, proposal)
@@ -1323,7 +1557,7 @@ class BoundedAuthorizationWorkflow:
             if not identity.chain:
                 reasons.append("delegation_chain_missing")
 
-        conflict = self.resolver.conflict_status(requirement["requirement_id"])
+        conflict = self._read_input(inputs, "conflict", requirement["requirement_id"], self.resolver.conflict_status, requirement["requirement_id"])
         capture("conflict", requirement["requirement_id"], conflict)
         if conflict is None:
             reasons.append("authority_conflict_unresolved")
@@ -1341,7 +1575,7 @@ class BoundedAuthorizationWorkflow:
 
         policy_versions = grant.get("policy_versions", [])
         for item in policy_versions:
-            current = self.resolver.policy_status(item["ref"])
+            current = self._read_input(inputs, "policy", item["ref"], self.resolver.policy_status, item["ref"])
             capture("policy", item["ref"], current, {"version": item["version"], "status": "active"})
             if current is None:
                 reasons.extend(["policy_stale_or_changed", "policy_missing"])
@@ -1365,7 +1599,7 @@ class BoundedAuthorizationWorkflow:
         for req in requirement.get("approvals", []):
             matches: list[ApprovalStatus] = []
             for ref in grant.get("approval_refs", []):
-                approval = self.resolver.approval_status(ref)
+                approval = self._read_input(inputs, "approval", ref, self.resolver.approval_status, ref)
                 capture("approval", ref, approval, {
                     "grant_revision": grant["revision"], "status": "active",
                     "proposal": proposal_commitment, "policies": commitment(policy_versions),
@@ -1399,7 +1633,7 @@ class BoundedAuthorizationWorkflow:
                     reasons.append("approval_independence_violation")
 
         for obligation in requirement.get("evidence", []):
-            current = self.resolver.evidence_status(obligation["obligation_id"])
+            current = self._read_input(inputs, "evidence", obligation["obligation_id"], self.resolver.evidence_status, obligation["obligation_id"])
             capture("evidence", obligation["obligation_id"], current,
                     {"state": "current"} if obligation["required"] and obligation["kind"] == "authorization" else {})
             if current is not None and (
@@ -1421,6 +1655,12 @@ class BoundedAuthorizationWorkflow:
                 ):
                     reasons.append("context_unknown_requires_hold")
 
+        extension = None
+        if self.runtime_authority_profile:
+            from .runtime_authority import validate_extensions
+            extra_reasons, extension = validate_extensions(
+                self.runtime_authority_profile, proposal, context, inputs, self.resolver, now, capture)
+            reasons.extend(extra_reasons)
         if reasons:
             return sorted(set(reasons)), None
 
@@ -1434,6 +1674,7 @@ class BoundedAuthorizationWorkflow:
         binding_extra = {"tenant_id": tenant_id} if tenant_aware else {}
         return [], binding_type(
             **binding_extra,
+            runtime_authority=extension,
             proposal_commitment=proposal_commitment,
             manifest_id=proposal.manifest_id,
             manifest_version=proposal.manifest_version,

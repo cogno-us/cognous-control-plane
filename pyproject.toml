@@ -10,13 +10,16 @@ readme = "README.md"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.11"
 dependencies = [
-    "pydantic>=2.0",
+    "pydantic>=2.12",
 ]
 
 [project.optional-dependencies]
+runtime-authority = ["cryptography>=43"]
 dev = [
     "pytest>=7.0",
     "pytest-cov",
+    "pytest-asyncio>=0.23",
+    "cryptography>=43",
     "pytest-asyncio>=0.23",
 ]
 
