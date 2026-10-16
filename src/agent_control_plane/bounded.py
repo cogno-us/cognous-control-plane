@@ -1430,6 +1430,10 @@ class BoundedAuthorizationWorkflow:
         tenant_aware = isinstance(proposal, TenantRuntimeProposal)
         if tenant_aware and context.get("tenant_id") != tenant_id:
             reasons.append("tenant_context_mismatch")
+        # A historical 0.1 proposal carries no tenant, so it cannot establish
+        # tenant equality; tenant-bearing authority state must fail closed.
+        if not tenant_aware and context.get("tenant_id") is not None:
+            reasons.append("tenant_proposal_required")
 
         if context.get("schema_version") != AUTHORITY_CONTEXT_VERSION:
             reasons.append("authority_context_version_mismatch")
@@ -1530,6 +1534,8 @@ class BoundedAuthorizationWorkflow:
                 reasons.append("grant_status_binding_mismatch")
             if tenant_aware and status.tenant_id != tenant_id:
                 reasons.append("grant_tenant_mismatch")
+            if not tenant_aware and status.tenant_id is not None:
+                reasons.append("tenant_proposal_required")
             if status.status != "active":
                 reasons.append(("grant_revoked" if status.status == "revoked" else "grant_" + status.status)
                                if self.runtime_authority_profile else "grant_not_active")
@@ -1546,6 +1552,8 @@ class BoundedAuthorizationWorkflow:
             reasons.append("grant_identity_mismatch")
         if tenant_aware and grant.get("tenant_id") != tenant_id:
             reasons.append("grant_tenant_mismatch")
+        if not tenant_aware and grant.get("tenant_id") is not None:
+            reasons.append("tenant_proposal_required")
         if not grant.get("expires_at") or _parse(grant["not_before"]) > now or _parse(grant["expires_at"]) <= now:
             reasons.append("grant_outside_validity")
 
@@ -1590,6 +1598,8 @@ class BoundedAuthorizationWorkflow:
                 reasons.append("policy_binding_mismatch")
             if tenant_aware and current.tenant_id != tenant_id:
                 reasons.append("policy_tenant_mismatch")
+            if not tenant_aware and current.tenant_id is not None:
+                reasons.append("tenant_proposal_required")
             if current.status != "active" or current.version != item["version"]:
                 reasons.append("policy_stale_or_changed")
             if current.status == "superseded":
@@ -1618,6 +1628,9 @@ class BoundedAuthorizationWorkflow:
                     continue
                 if tenant_aware and approval.tenant_id != tenant_id:
                     reasons.append("approval_tenant_mismatch")
+                    continue
+                if not tenant_aware and approval.tenant_id is not None:
+                    reasons.append("tenant_proposal_required")
                     continue
                 if approval.role_id == req["role_id"]:
                     matches.append(approval)
