@@ -1,6 +1,6 @@
 # Local authority/effect execution-claim profile
 
-Status: **implemented proposal on Worker 21 branch; opt-in; not hub-selected**.
+Status: **implemented proposal on Control Plane `main` (originally developed on the Worker 21 branch); opt-in; not hub-selected**.
 
 Profile: `urn:cognous:profiles:local-authority-effect:0.1.0-proposed`.
 
@@ -37,6 +37,31 @@ The claim binds:
 - budget ID and maximum effects;
 - not-before and expiry;
 - profile version and complete claim commitment.
+
+### Authorization inputs the claim does not bind
+
+Bounded resolution treats more inputs as authorization-critical than the claim
+carries. The claim's `authority_state_commitment` covers only grant ID,
+revision and status, requirement commitment, approvals, policies and evidence.
+The claim does **not** bind, and the claim schema gives the executor no way to
+invalidate it on a change to:
+
+- acting identity authentication and delegation validity (identity status);
+- issuer mandate validity;
+- role mapping version and digest (present in `AuthorizationBinding`, absent
+  from the claim);
+- authority conflict status;
+- runtime-authority purpose/epoch state, when a grant carries `purpose_ref`;
+- other runtime-authority extension inputs (required-input set, evidence
+  criteria, effective-grant digest);
+- evidence tenant: evidence projections carry no `tenant_id`.
+
+These inputs are checked once at the final resolve inside the handoff. After
+`provision()` returns, a revocation or change of any of them is not visible to a
+participating executor that validates only the claim. An integration that needs
+those inputs to invalidate a provisioned claim must route their writers through
+the same authoritative store or re-resolve before consumption; this profile
+does not do so.
 
 The optional `decision_input_commitment` and
 `decision_input_profile_version` fields are opaque compatibility hooks for the

@@ -66,8 +66,20 @@ action.
 making audits unreliable.
 
 **Mitigation**: the `PolicyGate` is stateless and deterministic.  The
-`deterministic_fingerprint` field provides a verifiable hash of the inputs
-so that any re-evaluation of the same inputs produces the same fingerprint.
+`deterministic_fingerprint` field is a hash of the evaluated inputs, so
+re-evaluating the same inputs with the same gate produces the same
+fingerprint.
+
+**Limit**: the legacy record validator (`validate-run` / `validate-replay`)
+does not recompute fingerprints.  It only checks that a decision's
+`trace_id` resolves to a trace in the same record and that the two stored
+`deterministic_fingerprint` values are equal.  It does not check that the
+trace's action or final result matches the decision, and it does not
+require a `BlockedAction` for every `block` decision.  Anyone able to edit
+unsigned run or replay JSON can therefore produce internally consistent but
+contradictory authorization history that still validates.  A fingerprint is
+only checkable by re-running the gate against the original inputs; a valid
+validation report is not evidence of authentic provenance.
 
 ---
 

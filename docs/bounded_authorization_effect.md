@@ -185,6 +185,23 @@ explicitly:
 - conflict responses bind requirement ID, declared precedence references, institution and domain;
 - evidence responses bind obligation ID, declared source_ref, institution and domain.
 
+Tenant binding (bounded-authorization-effect/0.2). For a `TenantRuntimeProposal`,
+the Authority Context, issued grant, grant status, approval and policy responses
+must carry the proposal's exact `tenant_id`. A historical 0.1 `RuntimeProposal`
+cannot establish tenant equality, so it holds with `tenant_proposal_required`
+when any of those inputs carries a `tenant_id`; 0.1 behaviour is unchanged when
+no tenant is involved.
+
+Evidence status is **not** tenant-bound. `EvidenceStatus` has no `tenant_id`
+field and the gate checks evidence only for obligation ID, source_ref,
+institution, authority domain, state and freshness. If tenants share an
+institution/domain and reuse obligation or source identifiers, one tenant's
+current evidence can satisfy another tenant's obligation. Tenant separation for
+evidence therefore relies on the trusted resolver returning only the evaluating
+tenant's evidence. The opt-in runtime-authority profile's signed evidence
+statements do include `tenant_id` and are compared with the Authority Context
+tenant; unsigned evidence on the default path is not.
+
 Grant, policy, conflict, identity, mandate and approval observations use explicit maximum
 ages. Required evidence uses its Authority Context max_age_seconds. All observed_at values
 are rejected when they exceed the configured future clock tolerance. Synthetic tests inject
