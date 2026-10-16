@@ -388,6 +388,106 @@
     "tenant_context_mismatch": {
       "reason_kind": "typed_only",
       "description": "tenant context mismatch"
+    },
+    "adapter_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "adapter mismatch"
+    },
+    "amount_exceeded": {
+      "reason_kind": "typed_only",
+      "description": "amount exceeded"
+    },
+    "amount_unit_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "amount unit mismatch"
+    },
+    "authority_context_missing": {
+      "reason_kind": "typed_only",
+      "description": "authority context missing"
+    },
+    "authority_profile_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "authority profile mismatch"
+    },
+    "effect_count_exceeded": {
+      "reason_kind": "typed_only",
+      "description": "effect count exceeded"
+    },
+    "forbidden_payload_field": {
+      "reason_kind": "typed_only",
+      "description": "forbidden payload field"
+    },
+    "input_observation_time_regressed": {
+      "reason_kind": "typed_only",
+      "description": "input observation time regressed"
+    },
+    "issued_grant_missing": {
+      "reason_kind": "typed_only",
+      "description": "issued grant missing"
+    },
+    "manifest_digest_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "manifest digest mismatch"
+    },
+    "manifest_id_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "manifest id mismatch"
+    },
+    "manifest_version_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "manifest version mismatch"
+    },
+    "missing_payload_policy": {
+      "reason_kind": "typed_only",
+      "description": "missing payload policy"
+    },
+    "missing_requested_permission": {
+      "reason_kind": "typed_only",
+      "description": "missing requested permission"
+    },
+    "missing_required_payload_field": {
+      "reason_kind": "typed_only",
+      "description": "missing required payload field"
+    },
+    "observation_unavailable": {
+      "reason_kind": "typed_only",
+      "description": "observation unavailable; emitted as observation_unavailable:<exception type name>"
+    },
+    "payload_commitment_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "payload commitment mismatch"
+    },
+    "proposal_expired": {
+      "reason_kind": "typed_only",
+      "description": "proposal expired"
+    },
+    "proposal_not_yet_valid": {
+      "reason_kind": "typed_only",
+      "description": "proposal not yet valid"
+    },
+    "target_out_of_scope": {
+      "reason_kind": "typed_only",
+      "description": "target out of scope"
+    },
+    "tenant_proposal_required": {
+      "reason_kind": "typed_only",
+      "description": "tenant-bearing authority state requires a tenant-aware proposal"
+    },
+    "undeclared_payload_field": {
+      "reason_kind": "typed_only",
+      "description": "undeclared payload field"
+    },
+    "unknown_action": {
+      "reason_kind": "typed_only",
+      "description": "unknown action"
+    },
+    "unsupported_manifest_version": {
+      "reason_kind": "typed_only",
+      "description": "unsupported manifest version"
+    },
+    "runtime_authority_profile_missing": {
+      "reason_kind": "typed_only",
+      "description": "runtime authority profile missing"
     }
   }
 }

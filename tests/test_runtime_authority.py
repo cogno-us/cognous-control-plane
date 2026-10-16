@@ -188,3 +188,106 @@ def test_recorded_denial_cannot_be_overridden_by_later_outage_cache(tmp_path):
     held(f,p,'grant_revoked')
     r.grant_status=lambda ref:None;r.cached_grant_status=lambda ref:cached
     held(f,p,'status_unreadable')
+
+
+# ---------------------------------------------------------------------------
+# Reason registry completeness (csf_b8d4416255cdcf1f3ed44095)
+# ---------------------------------------------------------------------------
+import ast
+import json
+import typing
+from pathlib import Path
+
+_REPO = Path(__file__).resolve().parents[1]
+_REASON_SOURCES = ("bounded.py", "runtime_authority.py")
+_REASON_NAMES = {"reasons", "mismatches", "result", "refusal_reasons"}
+# Non-literal values that are known to carry reasons produced elsewhere in the
+# scanned sources (and therefore already enumerated by this walk).
+_DELEGATED = {"extra_reasons", "validate_evidence(status, criterion, profile, context)"}
+
+
+def _reason_literals(node, grant_states):
+    """Yield (code, lineno) for a reason-carrying expression; fail on unknown shapes."""
+    if isinstance(node, (ast.List, ast.Tuple)):
+        for item in node.elts:
+            yield from _reason_literals(item, grant_states)
+    elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+        yield node.value, node.lineno
+    elif isinstance(node, ast.IfExp):
+        yield from _reason_literals(node.body, grant_states)
+        yield from _reason_literals(node.orelse, grant_states)
+    elif (isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add)
+          and isinstance(node.left, ast.Constant) and node.left.value == "grant_"
+          and ast.unparse(node.right) == "status.status"):
+        for state in grant_states:
+            if state != "active":
+                yield "grant_" + state, node.lineno
+    elif isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        if not (isinstance(node.left, ast.Name) and node.left.id in _REASON_NAMES):
+            yield from _reason_literals(node.left, grant_states)
+        yield from _reason_literals(node.right, grant_states)
+    elif isinstance(node, ast.JoinedStr):
+        prefix = node.values[0]
+        assert isinstance(prefix, ast.Constant) and prefix.value.endswith(":"), ast.unparse(node)
+        yield prefix.value[:-1], node.lineno
+    elif isinstance(node, ast.Call) and ast.unparse(node.func) in {"sorted", "set", "list"}:
+        for arg in node.args:
+            yield from _reason_literals(arg, grant_states)
+    elif ast.unparse(node) in _DELEGATED or (isinstance(node, ast.Name) and node.id in _REASON_NAMES):
+        return
+    else:
+        raise AssertionError(f"unrecognised reason expression at line {node.lineno}: {ast.unparse(node)}")
+
+
+def _emitted_reason_codes():
+    from agent_control_plane.bounded import GrantStatus
+    grant_states = typing.get_args(GrantStatus.model_fields["status"].annotation)
+    assert grant_states
+    found = {}
+    for name in _REASON_SOURCES:
+        tree = ast.parse((_REPO / "src" / "agent_control_plane" / name).read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            values = []
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and node.func.attr in {"append", "extend"}
+                    and isinstance(node.func.value, ast.Name) and node.func.value.id in _REASON_NAMES):
+                values = list(node.args)
+            elif isinstance(node, ast.Call):
+                values = [k.value for k in node.keywords if k.arg == "reasons"]
+            elif isinstance(node, ast.Assign):
+                targets = [n.id for t in node.targets for n in ast.walk(t) if isinstance(n, ast.Name)]
+                if set(targets) & _REASON_NAMES:
+                    value = node.value
+                    if isinstance(value, ast.Tuple) and len(targets) == 2:
+                        value = value.elts[0]
+                    if isinstance(value, (ast.List, ast.BinOp)) or (
+                            isinstance(value, ast.Call) and ast.unparse(value.func) == "sorted"):
+                        values = [value]
+            elif isinstance(node, ast.Return) and node.value is not None:
+                # Reason-returning helpers return either sorted(...) or a
+                # (reasons, binding/extension) tuple whose first item is a list.
+                value = node.value.elts[0] if isinstance(node.value, ast.Tuple) and node.value.elts else node.value
+                if isinstance(value, ast.List) or (
+                        isinstance(value, ast.Call) and ast.unparse(value.func) == "sorted"):
+                    values = [value]
+            elif isinstance(node, ast.FunctionDef) and node.name == "validate_evidence":
+                values = [r.value for r in ast.walk(node)
+                          if isinstance(r, ast.Return) and isinstance(r.value, ast.List)]
+            for value in values:
+                for code, line in _reason_literals(value, grant_states):
+                    found.setdefault(code, f"{name}:{line}")
+    return found
+
+
+def test_every_emitted_reason_code_is_in_the_versioned_registry():
+    registry = json.loads((_REPO / "schemas" / "runtime_authority_reasons_0_1.json").read_text(encoding="utf-8"))
+    assert registry["version"] == "runtime-authority-reasons/0.1"
+    emitted = _emitted_reason_codes()
+    # Guard the walk itself: representative codes from every emission shape.
+    for sample in ("adapter_mismatch", "authority_context_missing", "grant_suspended",
+                   "check_interrupted", "authorization_binding_changed", "evidence_unsigned",
+                   "observation_unavailable", "input_observation_time_regressed",
+                   "tenant_proposal_required", "purpose_closed", "status_unreadable"):
+        assert sample in emitted, sample
+    missing = {code: where for code, where in emitted.items() if code not in registry["codes"]}
+    assert not missing, f"emitted reason codes absent from registry: {missing}"
