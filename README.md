@@ -23,11 +23,11 @@
 
 A Python reference implementation for bounded agent authorization, effect-time revalidation and persistent runtime records. It connects declared actions, independently resolved authority, execution attempts and reconciliation without treating an earlier decision as a permanent credential.
 
-**Implementation status:** this README describes merged public reference work. Component acceptance, selection in the hub and execution of a qualification are separate facts. The selected revision for this component is `248d899634d9db3518e831bc7ab568a48733f825`; the [hub lock](https://github.com/cogno-us/cognous-open-control-stack/blob/5737267d94d2b445735c95e8480a31de73a2abe8/component-lock.json) is the source of that integration choice.
+**Implementation status:** public reference work. The [current component lock](https://github.com/cogno-us/cognous-open-control-stack/blob/main/component-lock.json) defines the selected integration; a component merge does not automatically change that selection or approve deployment.
 
-## Current selection versus historical qualification
+## Selection and example
 
-**As of 2026-10-10, the hub selects Control Plane revision `d3dadee70bd319812b207389ab1e0f6efe511916`.** This is distinct from this repository's accepted source main `577aedb505e4f8135ea9973f0ab9a9dbc5cbb22d`. Check the [current component lock](https://github.com/cogno-us/cognous-open-control-stack/blob/main/component-lock.json) and [release status](https://github.com/cogno-us/cognous-open-control-stack/blob/main/docs/release-status.md) rather than extrapolating from an archived README citation. The earlier `248d8996...` selected revision and `5737267d...` hub link below describe the **historical qualification checkpoint** and are preserved for traceability.
+Use the [current component lock](https://github.com/cogno-us/cognous-open-control-stack/blob/main/component-lock.json) for integration selection and the [central test hub](https://github.com/cogno-us/cognous-stack-qualification/blob/main/results/readme-commentary/index.md) for revision-specific qualification commentary. Source acceptance, selection and deployment approval remain separate decisions.
 
 **Example:** A valid synthetic refund decision can be followed by approval withdrawal before effect dispatch. Effect-time revalidation must then refuse the changed request; an earlier permit is not a reusable capability. If the destination might have committed an earlier attempt but the acknowledgment was lost, keep the original effect/attempt identity as `unknown` and reconcile it. Missing observation is not safe retry authorization. Neither case establishes authenticated institutional adoption or external payment settlement.
 
@@ -66,11 +66,11 @@ acp validate-run examples/sample_run_record.json
 python examples/policy_config_demo.py
 ```
 
-## Evidence and supported scope
+## Scope and compatibility
 
-The selected persistence repair is `248d899634d9db3518e831bc7ab568a48733f825`. The accepted hub generation includes the repair and compatible consumers. Twenty upstream persistence qualification cases ran in each release repetition; historical record-loss results at the older pin remain preserved, not rewritten.
+The persistence contract covers cooperating local Linux writers. Historical persistence qualification commentary is retained in the central test hub.
 
-The accepted [hub persistence-generation evidence](https://github.com/cogno-us/cognous-open-control-stack/blob/5737267d94d2b445735c95e8480a31de73a2abe8/examples/control-plane-store-adoption/qualification-summary.json) records 915 Python tests in each of two repetitions, 35 matrix entries satisfying their gates and 120 separate mocked OpenShell tests. Those are aggregate hub results, not a per-component test count or a claim of production readiness. Optional behavioral layers receive static checks only. The [support ledger](https://github.com/cogno-us/cognous-open-control-stack/blob/main/docs/release-status.md) separates implementation, execution and adoption.
+Test results, run commentary and historical qualification records are maintained in the [central test hub](https://github.com/cogno-us/cognous-stack-qualification/blob/main/results/readme-commentary/index.md). Read them against their recorded source revisions; source selection and deployment approval are separate decisions.
 
 ## Limitations and deployment decisions
 
@@ -146,3 +146,7 @@ execution authority.
 ## Repository locations
 
 See the [repository rename map and compatibility notes](https://github.com/cogno-us/cognous-open-control-stack/blob/main/docs/repository-renames.md) for current component URLs. Existing package names, schema identifiers and retained producer identities are unchanged.
+
+<!-- Retained anchors for existing documentation links. -->
+<a id="current-selection-versus-historical-qualification"></a>
+<a id="evidence-and-supported-scope"></a>
