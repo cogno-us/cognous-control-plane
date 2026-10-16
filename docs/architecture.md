@@ -115,7 +115,9 @@ identifiers, policy decisions, and fingerprints while removing selected fields.
 
 `execute_with_control()` is an optional adapter pattern that records an action,
 evaluates it through the policy gate, and only executes a caller-supplied
-adapter after an `"allow"` result.
+adapter after an `"allow"` result. It keeps no durable record of execution
+attempts or failures; the returned `ToolExecutionResult` is the only record (see
+[Concepts](concepts.md#tooladapter-and-toolexecutionresult)).
 
 ### Optional utilities
 

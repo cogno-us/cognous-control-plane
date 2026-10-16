@@ -191,6 +191,16 @@ returns `"allow"`. The returned **ToolExecutionResult** records the `action_id`,
 `run_id`, whether execution was attempted, the adapter result payload, and any
 error message.
 
+The `ToolExecutionResult` is returned to the caller only. `execute_with_control()`
+keeps no durable record of the attempt or its outcome: `RunRecord` and
+`ReplayBundle` have no field for tool attempts or results. A successful call adds
+only a reliance entry, not the result. A failed attempt (including an adapter
+that commits an effect and then raises, or a lost acknowledgement) leaves no
+trace in the exported record, so the record cannot show whether an effect may
+have happened or support a safe retry decision. Callers that need that history
+must persist the returned result themselves; `BoundedAuthorizationWorkflow`
+records effect attempts and reconciliation durably.
+
 ---
 
 ## SignedReplayBundle
@@ -200,6 +210,20 @@ and signing metadata.
 
 It supports optional integrity verification for exported bundles. It does not
 provide production key management or claim to be a complete security boundary.
+
+The HMAC covers only the canonical JSON of `replay_bundle`. The wrapper fields
+`signed_bundle_id`, `signed_at` and `signature_algorithm` are not signed: they
+can be changed without invalidating the signature, so a relabelled or
+backdated export still verifies. Treat them as unauthenticated metadata.
+
+The `acp sign-replay` and `acp verify-signed-replay` commands take the shared
+secret as a `--secret` command-line argument. Command-line arguments are
+visible to other local users and processes through the process listing (for
+example `ps` or `/proc/<pid>/cmdline`) and may be retained in shell history or
+command telemetry. Anyone who learns the secret can forge signatures. Use these
+commands only with throwaway secrets on hosts you control, or call
+`sign_replay_bundle()` / `verify_signed_replay_bundle()` from Python with a
+secret obtained from a protected source.
 
 ---
 

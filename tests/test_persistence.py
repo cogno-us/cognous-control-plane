@@ -64,3 +64,39 @@ def test_load_replay_bundle_missing_file_raises(tmp_path: Path) -> None:
 
     with pytest.raises(FileNotFoundError, match="Replay bundle not found"):
         adapter.load_replay_bundle("missing-bundle")
+
+
+@pytest.mark.parametrize("unsafe_id", ["../escaped", "../../escaped", "nested/escaped", "<absolute>", ""])
+def test_run_record_ids_cannot_escape_store_root(tmp_path: Path, unsafe_id: str) -> None:
+    record, _ = _build_run_record_and_bundle()
+    store = tmp_path / "store"
+    adapter = FileSystemPersistenceAdapter(store)
+    outside = tmp_path / "escaped.json"
+    outside.write_text("{}", encoding="utf-8")
+    if unsafe_id == "<absolute>":
+        unsafe_id = str(tmp_path / "escaped")
+
+    with pytest.raises(ValueError, match="Unsafe record identifier"):
+        adapter.save_run_record(record.model_copy(update={"run_id": unsafe_id}))
+    with pytest.raises(ValueError, match="Unsafe record identifier"):
+        adapter.load_run_record(unsafe_id)
+    assert outside.read_text(encoding="utf-8") == "{}"
+    assert not (store / "escaped.json").exists()
+
+
+@pytest.mark.parametrize("unsafe_id", ["../escaped", "../../escaped", "nested/escaped", "<absolute>", ""])
+def test_replay_bundle_ids_cannot_escape_store_root(tmp_path: Path, unsafe_id: str) -> None:
+    _, bundle = _build_run_record_and_bundle()
+    store = tmp_path / "store"
+    adapter = FileSystemPersistenceAdapter(store)
+    outside = tmp_path / "escaped.json"
+    outside.write_text("{}", encoding="utf-8")
+    if unsafe_id == "<absolute>":
+        unsafe_id = str(tmp_path / "escaped")
+
+    with pytest.raises(ValueError, match="Unsafe record identifier"):
+        adapter.save_replay_bundle(bundle.model_copy(update={"replay_bundle_id": unsafe_id}))
+    with pytest.raises(ValueError, match="Unsafe record identifier"):
+        adapter.load_replay_bundle(unsafe_id)
+    assert outside.read_text(encoding="utf-8") == "{}"
+    assert not (store / "escaped.json").exists()

@@ -11,6 +11,7 @@ import pytest
 
 from agent_control_plane.bounded import (
     ApprovalStatus,
+    AuthorizationBinding,
     BoundedAuthorizationWorkflow,
     BoundedRecordStore,
     ConflictStatus,
@@ -1406,3 +1407,41 @@ def test_tenant_path_conflicting_operation_substitution_is_denied(tmp_path, fiel
     with pytest.raises(PermissionError, match="authorization-critical inputs changed"):
         flow.execute(changed, decision, adapter_id=p.adapter_id, now=NOW)
     assert flow.destination.snapshot()["effects"] == {}
+
+
+@pytest.mark.parametrize(
+    "tenant_bearing",
+    ["all", "context", "grant", "grant_status", "approval", "policy"],
+)
+def test_v01_proposal_against_tenant_bearing_authority_holds(tmp_path, tenant_bearing):
+    """A tenantless 0.1 proposal cannot consume tenant-scoped authority state."""
+    p = proposal()
+    r = resolver_for(p) if tenant_bearing != "all" else tenant_resolver_for(p)
+    grant = r.contexts[PROFILE]["grant"]
+    if tenant_bearing == "context":
+        r.contexts[PROFILE]["tenant_id"] = TENANT
+    elif tenant_bearing == "grant":
+        grant["tenant_id"] = TENANT
+    elif tenant_bearing == "grant_status":
+        r.statuses[grant["grant_id"]].tenant_id = TENANT
+    elif tenant_bearing == "approval":
+        r.approvals[grant["approval_refs"][0]].tenant_id = TENANT
+    elif tenant_bearing == "policy":
+        r.policies[POLICY_REF].tenant_id = TENANT
+
+    flow = workflow(tmp_path, p, resolver=r)
+    decision = flow.decide(p, now=NOW)
+    assert decision.result == "hold"
+    assert "tenant_proposal_required" in decision.reasons
+    assert decision.binding is None
+    with pytest.raises(PermissionError):
+        flow.execute(p, decision, adapter_id=p.adapter_id, now=NOW)
+    assert flow.destination.snapshot()["effects"] == {}
+
+
+def test_v01_proposal_without_tenant_state_keeps_historical_binding(tmp_path):
+    p = proposal()
+    decision = workflow(tmp_path, p).decide(p, now=NOW)
+    assert decision.result == "authorized", decision.reasons
+    assert type(decision.binding) is AuthorizationBinding
+    assert "tenant_id" not in decision.binding.model_dump(mode="json")

@@ -337,3 +337,12 @@ def test_provisioning_occurs_inside_trusted_authority_handoff(tmp_path):
     assert observed["lock_owned"] is True
     assert observed["claim"] == claim
     assert claim.claim_id == "handoff-claim"
+
+
+@pytest.mark.parametrize("bad_amount", [float("nan"), float("inf"), float("-inf")])
+def test_non_finite_claim_amount_returns_false_without_raising(tmp_path, bad_amount):
+    proposal, _, flow, decision = setup(tmp_path)
+    claim = materialize_local_execution_claim(flow, proposal, decision, now=NOW)
+    raw = claim.model_dump(mode="json", exclude_none=False)
+    raw["amount"] = bad_amount
+    assert verify_local_execution_claim(raw) is False

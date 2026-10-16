@@ -24,6 +24,15 @@ The compatibility adapter receives a Cognous `RuntimeProposal` plus an
 explicit `tenant_id`. It sends only the bounded tool name, tool call identity,
 proposal payload and supplied snapshot to AGT `pre_tool_call`.
 
+Limit: the `tool_name` sent to AGT is supplied by the caller of
+`MicrosoftAgtPreToolCallAdapter.evaluate`. The adapter does not check it
+against the proposal's `action_id`, `adapter_id` or the manifest tool mapping.
+A caller can therefore pair a benign tool name (evaluated by AGT) with a
+different proposal (evaluated by Cognous), and AGT's tool-specific rules then
+apply to the wrong tool identity. Until the adapter binds the two, the
+integration must derive `tool_name` from the same trusted manifest entry as the
+proposal before calling the adapter.
+
 Cognous remains authoritative for:
 - exact tenant;
 - action ID and adapter ID;
@@ -65,15 +74,21 @@ AGT telemetry/evidence is source-attributed evidence about the AGT decision.
 It is not proof of Cognous authority, destination execution, observation or
 independent verification.
 
-## Tenant limitation pending W1
+## Tenant input
 
-At W0 baseline `74a3f1e7d7c872ad1b61fd9f857ac5fa517615f5`, the implementation
-`RuntimeProposal` has not yet incorporated the frozen C1/C2 tenant-aware 0.2
-producer field; W1 owns that producer change. W5 therefore accepts tenant as an
-explicit required compatibility input and passes it unchanged into the
-independent Cognous authority evaluator. This profile must be re-bound to the
-accepted W1 `RuntimeProposal.tenant_id` field once that producer generation is
-merged; it must not infer or default tenant.
+At W0 baseline `74a3f1e7d7c872ad1b61fd9f857ac5fa517615f5`, `RuntimeProposal`
+had no tenant field, so W5 accepted tenant as an explicit required
+compatibility input. The tenant-aware 0.2 producer type now exists as
+`TenantRuntimeProposal` (with `tenant_id`) in
+`agent_control_plane.bounded`; the historical 0.1 `RuntimeProposal` remains
+tenantless.
+
+This adapter has not been re-bound to `TenantRuntimeProposal.tenant_id`. It
+still requires the explicit `tenant_id` argument, passes it unchanged to AGT
+and to the independent Cognous authority evaluator, and does not itself
+compare it with a `tenant_id` carried on the proposal. It must not infer or
+default tenant; tenant equality with the proposal is left to the authority
+evaluator the host supplies.
 
 ## Qualification
 

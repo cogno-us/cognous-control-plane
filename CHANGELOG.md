@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Fixed — F5b security repairs
+- A historical 0.1 `RuntimeProposal` now holds with `tenant_proposal_required` when the Authority Context, grant, grant status, approval or policy carries a `tenant_id`; tenantless 0.1 behaviour is unchanged.
+- `FileSystemPersistenceAdapter` rejects run and replay-bundle identifiers whose resolved path leaves the store directory.
+- `LocalExecutionClaim.amount` rejects NaN and infinity, so `verify_local_execution_claim` returns `False` instead of raising.
+- `runtime-authority-reasons/0.1` now registers every reason code the workflow emits (24 previously unregistered codes plus the new `tenant_proposal_required`); a test enforces registry completeness against source.
+- Documentation states the limits of legacy record validation, replay-bundle HMAC coverage, `--secret` argv exposure, AGT tool-name binding, evidence tenant binding, local-claim invalidation inputs and legacy tool-execution failure retention.
+
 ### Fixed — reconciliation observation validation
 - Reconciliation validates observation effect identity and temporal validity before accepting applied or absent state.
 - Explicit ObservationPolicy and timezone-aware evaluation time are required; missing, stale, malformed, timezone-free, excessive-future, unknown and unavailable observations fail closed.
