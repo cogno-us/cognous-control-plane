@@ -94,7 +94,7 @@ class LocalExecutionClaim(BaseModel):
     target: str
     payload_commitment: str
     requested_permissions: list[str]
-    amount: float
+    amount: float = Field(allow_inf_nan=False)
     unit: str
     effects: int
     authority_context_id: str
