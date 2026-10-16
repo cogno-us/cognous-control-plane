@@ -43,26 +43,42 @@ class FileSystemPersistenceAdapter:
         return self.root / "replay_bundles"
 
     def save_run_record(self, record: RunRecord) -> str:
-        path = self._runs_dir / f"{record.run_id}.json"
+        path = self._record_path(self._runs_dir, record.run_id)
         self._write_model(path, record)
         return str(path)
 
     def load_run_record(self, run_id: str) -> RunRecord:
-        path = self._runs_dir / f"{run_id}.json"
+        path = self._record_path(self._runs_dir, run_id)
         return self._load_model(path, RunRecord, f"Run record not found: {run_id}")
 
     def save_replay_bundle(self, bundle: ReplayBundle) -> str:
-        path = self._replay_bundles_dir / f"{bundle.replay_bundle_id}.json"
+        path = self._record_path(self._replay_bundles_dir, bundle.replay_bundle_id)
         self._write_model(path, bundle)
         return str(path)
 
     def load_replay_bundle(self, bundle_id: str) -> ReplayBundle:
-        path = self._replay_bundles_dir / f"{bundle_id}.json"
+        path = self._record_path(self._replay_bundles_dir, bundle_id)
         return self._load_model(
             path,
             ReplayBundle,
             f"Replay bundle not found: {bundle_id}",
         )
+
+    @staticmethod
+    def _record_path(directory: Path, record_id: str) -> Path:
+        """Return ``directory/<record_id>.json``, refusing paths outside ``directory``.
+
+        Identifiers containing path separators, parent references or absolute
+        paths would otherwise read or write JSON outside the store root.
+        """
+        path = directory / f"{record_id}.json"
+        if (
+            not record_id
+            or "\x00" in record_id
+            or path.resolve().parent != directory.resolve()
+        ):
+            raise ValueError(f"Unsafe record identifier: {record_id!r}")
+        return path
 
     def _write_model(self, path: Path, model: BaseModel) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
