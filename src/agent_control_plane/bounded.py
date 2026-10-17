@@ -23,6 +23,7 @@ from typing import Iterator, Literal, Protocol
 from pydantic import BaseModel, Field
 
 from .runtime_authority import RuntimeAuthorityProfile, VOCABULARY_VERSION, reopen_conditions
+from .rule_revision import RuleRevision, RuleRevisionProfile, RuleRevisionRefusal, resolve_rule, rule_identity
 
 MANIFEST_VERSION = "1.1"
 AUTHORITY_CONTEXT_VERSION = "0.1.0"
@@ -138,6 +139,7 @@ class EvidenceStatus(BaseModel):
 class PolicyStatus(BaseModel):
     ref: str
     version: str
+    digest: str | None = Field(default=None, exclude_if=lambda v: v is None)  # opt-in rule-revision/0.1 content pin
     status: Literal["active", "superseded", "unknown"]
     observed_at: str
     institution_id: str
@@ -278,6 +280,7 @@ class ResolutionInput(BaseModel):
 
 class RuntimeDecision(BaseModel):
     reason_vocabulary_version: str | None = Field(default=None, exclude_if=lambda v: v is None)
+    rule_identity: dict | None = Field(default=None, exclude_if=lambda v: v is None)
     reopen_conditions: list[dict] = Field(default_factory=list, exclude_if=lambda v: not v)
     decision_id: str
     effect_id: str
@@ -312,6 +315,7 @@ class RefusalInputVersion(BaseModel):
 
 class EffectTimeRefusal(BaseModel):
     reason_vocabulary_version: str | None = Field(default=None, exclude_if=lambda v: v is None)
+    rule_identity: dict | None = Field(default=None, exclude_if=lambda v: v is None)
     reopen_conditions: list[dict] = Field(default_factory=list, exclude_if=lambda v: not v)
     refusal_id: str
     decision_id: str
@@ -418,6 +422,8 @@ from .reason_vocabulary import VocabularyChange
 
 class BoundedRunRecord(BaseModel):
     vocabulary_changes: list[VocabularyChange] = Field(default_factory=list, exclude_if=lambda v: not v)
+    rule_revisions: list[RuleRevision] = Field(default_factory=list, exclude_if=lambda v: not v)
+    rule_revision_refusals: list[RuleRevisionRefusal] = Field(default_factory=list, exclude_if=lambda v: not v)
     check_events: list[CheckEvent] = Field(default_factory=list, exclude_if=lambda v: not v)
     run_id: str
     input_time_floors: dict[str, str] = Field(default_factory=dict)
@@ -893,8 +899,11 @@ class BoundedAuthorizationWorkflow:
         observation_policy: ObservationPolicy | None = None,
         allow_test_time: bool = False,
         runtime_authority_profile=None,
+        rule_revision_profile=None,
     ):
         self.allow_test_time = allow_test_time
+        self.rule_revision_profile = (RuleRevisionProfile.model_validate(rule_revision_profile)
+                                      if rule_revision_profile is not None else None)
         self.runtime_authority_profile = (RuntimeAuthorityProfile.model_validate(runtime_authority_profile).snapshot()
                                           if runtime_authority_profile is not None else None)
         if (self.runtime_authority_profile and self.runtime_authority_profile.allow_synthetic_resolver
@@ -921,6 +930,13 @@ class BoundedAuthorizationWorkflow:
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("evaluation time must be timezone-aware")
         return value.astimezone(timezone.utc)
+
+    def _rule_identity(self, inputs) -> dict | None:
+        """Digests (not only versions) of the rules a row relied on; None unless rule-revision/0.1 is configured."""
+        if self.rule_revision_profile is None:
+            return None
+        digests = {x.input_id: x.observed.get("digest") for x in inputs if x.input_type == "policy"}
+        return rule_identity(self.rule_revision_profile, self.records.load().rule_revisions, digests)
 
     @staticmethod
     def _horizon(proposal: RuntimeProposal) -> OperationHorizon:
@@ -955,6 +971,7 @@ class BoundedAuthorizationWorkflow:
             decided_at=_iso(now),
             time_source=self.time_source, operation_horizon=self._horizon(frozen),
             reason_vocabulary_version=(VOCABULARY_VERSION if self.runtime_authority_profile else None),
+            rule_identity=self._rule_identity(inputs),
             reopen_conditions=(reopen_conditions(reasons, inputs) if self.runtime_authority_profile else []),
             binding=binding if not reasons else None,
             resolution_inputs=inputs,
@@ -998,6 +1015,7 @@ class BoundedAuthorizationWorkflow:
                 original_operation_horizon=persisted.operation_horizon,
                 operation_horizon=self._horizon(frozen),
                 reason_vocabulary_version=(VOCABULARY_VERSION if self.runtime_authority_profile else None),
+                rule_identity=self._rule_identity(inputs),
                 reopen_conditions=(reopen_conditions(refusal_reasons, inputs) if self.runtime_authority_profile else []),
                 reasons=refusal_reasons,
                 changed_inputs=self._effect_time_changed_inputs(inputs, persisted.binding),
@@ -1610,6 +1628,10 @@ class BoundedAuthorizationWorkflow:
                 reasons.append("policy_version_changed")
             if not self._fresh(current.observed_at, now, self.status_max_age_seconds):
                 reasons.append("policy_status_stale_or_future")
+            if self.rule_revision_profile is not None:  # opt-in: an unadopted policy digest resolves unknown
+                if resolve_rule(self.rule_revision_profile, self.records.load().rule_revisions,
+                                item["ref"], current.digest)["state"] != "adopted":
+                    reasons.append("policy_status_unknown")
 
         proposal_commitment = commitment(proposal.model_dump(mode="json", exclude_none=False))
         for req in requirement.get("approvals", []):
