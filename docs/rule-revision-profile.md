@@ -1,0 +1,39 @@
+# rule-revision/0.1 (opt-in)
+
+One record shape, `RuleRevision`, modelled on `VocabularyChange`, covers four rule kinds: `reason_registry`, `policy`,
+`gate_implementation`, `merge_equivalence_rule`. Nothing is active unless a `RuleRevisionProfile` is passed to
+`BoundedAuthorizationWorkflow(rule_revision_profile=...)`. The pinned default path and the reason registry version
+(`runtime-authority-reasons/0.1`, 121 codes: 120 `typed_only`, 1 `recomputable`) are unchanged.
+
+## Row
+`rule_ref`, `from_digest` (None on an adoption row), `to_digest`, `reviser`, `signer`, `authority_ref`, `reason`, `supersedes`,
+`recorded_at`, plus `revision_id` and `rule_kind` (needed to reference a row and to cover four kinds) and an optional
+`declared_arity` (reason registry rows only). Rows are appended, never edited.
+
+## Rules
+- A digest is adopted only by a row whose `signer` is in `RuleRevisionProfile.signers` and differs from the `reviser`. Otherwise the
+  rule resolves to `unknown` and the policy input holds with the existing code `policy_status_unknown`. The signer set is
+  configured. The owner default (the owner signs until a second signer exists) is a configuration choice, not code.
+- Self-signed and unconfigured-signer attempts are refused and kept as `rule_revision_refusals` rows. Unsigned rows are kept but never count.
+- `from_digest` must equal the currently adopted digest (or the superseded row's `from_digest` when `supersedes` is set).
+- `PolicyStatus.digest` (optional) carries the policy content digest. Decision and refusal rows carry `rule_identity`: per rule the digest,
+  state, findings and `verified_through` (`none`, `revision_row_present`, `signer_independent_and_configured`,
+  `digest_matches_signed_revision`), the level at which verification stopped. Findings are `no_signed_revision`,
+  `unsigned_revision_row`, `self_signed_revision_row`, `signer_not_configured`, `digest_mismatch_with_adopted`, `observed_digest_absent`.
+- `refusal_trends(..., vocabulary_changes=, rule_revisions=)` flags rows whose version predates that version's adoption row and sets
+  `tainted_for_trend` on pre-split counts and on counts of rows predating adoption. Without those arguments the output is unchanged.
+  A version with no adoption row (the pinned default) is not flagged.
+- Arity: declared at signing (`declared_arity`) and measured (`measured_arity`: distinct operand shapes per code over a period, "as of T").
+  Both are kept; `arity_flags` flags `measured_exceeds_declared` and `arity_undeclared`.
+- Recomputability is derived per row (`derive_recomputability`: operands retained or not). `reason_kind` stays the declared expectation;
+  `recomputability_flags` marks disagreements (`declared_overclaim` is the integrity-relevant direction).
+
+## Limits
+This moves trust to the revision signer; it does not remove it. All of it is a join over rows in the record store, and a holder of the
+store's HMAC key can rewrite rows, so it gives visibility to an honest reader, not tamper evidence. An outside-held digest is a separate control.
+Host rules (registry, gate implementation, merge rule) are checked from `RuleRevisionProfile.host_digests`, which the host computes; the
+workflow does not compute them.
+
+## Proposed ODES contract delta (not made here)
+Optional members on decision and refusal rows: `rule_identity` (object: `rules` map of ref to `{digest, state, verified_through, findings}`,
+and `unknown` list). A `rule_revision` record and `rule_revision_refusal` record shape as above. Proposed only; ODES is untouched.
