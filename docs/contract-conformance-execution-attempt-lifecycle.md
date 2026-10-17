@@ -1,7 +1,8 @@
 # Contract conformance: execution-attempt lifecycle (producer)
 
 - Contract: `execution-attempt-lifecycle`, version `0.1.0-draft` (not frozen; any ODES change may break).
-- Source: `cogno-us/open-decision-evidence-standard` at commit `d1e17fa155140f371050aff4b61da0f2cc84f44a`.
+- Source: `cogno-us/open-decision-evidence-standard` at commit `a9db024c6f346f741a9963552e559476fdfc4189`.
+- Refreshed 2026-10-17 (P4): the vendored copy moved from ODES d1e17fa1 to a9db024c (still `0.1.0-draft`, schema digest changed). The suite is unchanged apart from the commit literal; all 21 tests pass against the new fixtures and rules.
 - Role: producer. This repo is the Control Plane bounded workflow (`src/agent_control_plane/bounded.py`).
 - Vendored copy: `tests/contracts/execution-attempt-lifecycle/` (README, schema, `validate.py`, fixtures, `CONTRACT.json` digests).
 - Suite: `tests/test_contract_lifecycle_conformance.py`. Test-only; no product code changed.
