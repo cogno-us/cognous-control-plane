@@ -76,7 +76,7 @@ def test_vendored_contract_identity():
     assert meta["contract_version"] == CONTRACT_VERSION
     assert meta["role"] == "producer"
     assert meta["conformance_level"] == "P"
-    assert meta["odes_commit"] == "d1e17fa155140f371050aff4b61da0f2cc84f44a"
+    assert meta["odes_commit"] == "a9db024c6f346f741a9963552e559476fdfc4189"
     assert VALIDATOR.CONTRACT == CONTRACT_ID and VALIDATOR.CONTRACT_VERSION == CONTRACT_VERSION
 
 
