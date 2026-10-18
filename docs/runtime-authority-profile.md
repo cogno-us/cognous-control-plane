@@ -61,7 +61,8 @@ means HOLD. Reopen predicates invite full reevaluation, never direct retry.
 
 Install the `runtime-authority` extra for Ed25519 verification. `minimum_count`
 requires a strict integer; `exact_members` compares distinct members to the
-approved manifest and rejects duplicates or unrelated members. EvidenceStatus's
+approved manifest and rejects duplicates or unrelated members. An approved member
+set that is empty does not pass (`evidence_criterion_unmet`). EvidenceStatus's
 `validation_record` wraps exactly `statement` and hexadecimal `signature`.
 The canonical signed statement contains version `validation-record/0.1`, producer,
 obligation, subject digest, observation time, institution/domain/tenant and values.

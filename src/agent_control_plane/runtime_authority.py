@@ -232,7 +232,8 @@ def validate_evidence(status, criterion: EvidenceCriterion, profile: RuntimeAuth
             return ["evidence_criterion_unmet"]
     else:
         members = values.get("validated_members")
-        if (not isinstance(members, list) or any(not isinstance(x, str) for x in members)
+        if (not criterion.members  # an approved empty member set approves nothing: it is not a pass
+                or not isinstance(members, list) or any(not isinstance(x, str) for x in members)
                 or len(members) != len(set(members)) or len(criterion.members) != len(set(criterion.members))
                 or set(members) != set(criterion.members)):
             return ["evidence_criterion_unmet"]
