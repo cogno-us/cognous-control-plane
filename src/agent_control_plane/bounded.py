@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 
 from .runtime_authority import (RuntimeAuthorityProfile, VOCABULARY_VERSION_0_2, reopen_conditions,
                                 vocabulary_for)
+from .atomic_write import open_private_lock
 from .strict_json import dumps_bytes, strict_loads
 from .time_instant import TIME_INSTANT_NAIVE, InstantError, parse_instant
 from .rule_revision import RuleRevision, RuleRevisionProfile, RuleRevisionRefusal, resolve_rule, rule_identity
@@ -564,7 +565,7 @@ class BoundedRecordStore:
         with self._lock:
             # No persistent descriptor survives between transactions.
             # Lock the stable sidecar inode, never the atomically replaced data inode.
-            fd = os.open(self._lock_path, os.O_CREAT | os.O_RDWR | os.O_CLOEXEC, 0o600)
+            fd = open_private_lock(self._lock_path)
             try:
                 fcntl.flock(fd, fcntl.LOCK_EX)
                 yield
@@ -681,7 +682,7 @@ class BoundedRecordStore:
         Legacy (``acquire_timeout`` None): a blocking flock with no timeout. freshness/0.1 passes its acquisition deadline:
         the lease is then taken non-blocking and ``CheckLeaseUnavailable`` is raised when the deadline passes.
         """
-        fd = os.open(self._check_lease_path(check_id), os.O_CREAT | os.O_RDWR | os.O_CLOEXEC, 0o600)
+        fd = open_private_lock(self._check_lease_path(check_id))
         try:
             if acquire_timeout is None:
                 fcntl.flock(fd, fcntl.LOCK_EX)
@@ -692,7 +693,7 @@ class BoundedRecordStore:
             os.close(fd)
 
     def _check_is_live(self, check_id: str) -> bool:
-        fd = os.open(self._check_lease_path(check_id), os.O_CREAT | os.O_RDWR | os.O_CLOEXEC, 0o600)
+        fd = open_private_lock(self._check_lease_path(check_id))
         try:
             try:
                 fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -1204,12 +1205,15 @@ class LocalRefundDestination:
         if fcntl is None:
             raise RuntimeError("inter-process destination locking unavailable")
         with self._lock:
-            with self.path.with_name(self.path.name + ".lock").open("a+b") as lock:
-                fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+            lock_fd = open_private_lock(self.path.with_name(self.path.name + ".lock"))
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_EX)
                 try:
                     yield
                 finally:
-                    fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+                    fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            finally:
+                os.close(lock_fd)
 
     def _write(self, state: dict) -> None:
         """Persist before acknowledging; caller holds the destination transaction."""

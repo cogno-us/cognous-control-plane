@@ -15,6 +15,32 @@ def make_private_dir(path: Path) -> None:
     path.mkdir(mode=PRIVATE_DIR_MODE, parents=True, exist_ok=True)
 
 
+def open_private_lock(path: Path) -> int:
+    """Open (creating if needed) a lock file for read/write and return the descriptor; its mode is narrowed to 0600.
+
+    A lock file that already existed with a broader mode is narrowed through the open descriptor (a file this process cannot
+    chmod raises ``PermissionError``: the lock is not used).
+    """
+    fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_CLOEXEC, PRIVATE_FILE_MODE)
+    try:
+        if os.fstat(fd).st_mode & 0o077:
+            os.fchmod(fd, PRIVATE_FILE_MODE)
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd
+
+
+def narrow_dir_mode(path: Path) -> None:
+    """Narrow an existing directory to 0700 through a descriptor opened without following a final symlink."""
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        if os.fstat(fd).st_mode & 0o077:
+            os.fchmod(fd, PRIVATE_DIR_MODE)
+    finally:
+        os.close(fd)
+
+
 def write_bytes_atomic(path: Path, data: bytes, *, overwrite: bool = True) -> None:
     """Write ``data`` to ``path`` through a temporary file in the same directory, mode 0600, fsynced.
 

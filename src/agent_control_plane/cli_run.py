@@ -49,6 +49,7 @@ from agent_control_plane.models import (
     PolicyDecision,
     RunRecord,
 )
+from agent_control_plane.atomic_write import narrow_dir_mode
 from agent_control_plane.time_instant import TIME_INSTANT_NAIVE, InstantError, parse_instant
 from agent_control_plane.strict_json import (
     INPUT_DUPLICATE_MEMBER,
@@ -207,7 +208,7 @@ def _prepare_output_dir(path: Path, label: str, seen: tuple[int, int] | None) ->
     _refuse_symlink_components(path)
     if seen is None:
         try:
-            os.mkdir(path)
+            os.mkdir(path, 0o700)
         except FileExistsError:
             raise InvalidInput(f"{label}: appeared after validation; refusing to reuse it") from None
         return
@@ -215,6 +216,10 @@ def _prepare_output_dir(path: Path, label: str, seen: tuple[int, int] | None) ->
         raise InvalidInput(f"{label}: directory changed after validation")
     if any(path.iterdir()):
         raise InvalidInput(f"{label}: directory is not empty")
+    try:
+        narrow_dir_mode(path)  # a pre-existing empty directory with a broader mode becomes 0700
+    except OSError as exc:
+        raise InvalidInput(f"{label}: cannot make the directory private ({type(exc).__name__})") from exc
 
 
 def _inside(child: Path, parent: Path) -> bool:
