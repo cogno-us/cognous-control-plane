@@ -16,6 +16,8 @@ Limits (read before relying on it):
 from __future__ import annotations
 
 from datetime import datetime
+
+from .time_instant import parse_instant
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -75,8 +77,8 @@ class RuleRevisionProfile(BaseModel):
 
 
 def _t(value: str) -> datetime:
-    dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    return dt
+    """Strict instant in UTC (ODES time semantics section 1); a naive time is refused, never kept naive."""
+    return parse_instant(value)
 
 
 def _row(x) -> dict:

@@ -35,6 +35,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from .time_instant import parse_instant
+
 PROFILE_ID = "dedupe-ttl/0.1"
 #: A destination declares this (and ``dedupe_ttl_seconds``) when it stores our id and dedupes on it inside a TTL.
 DESTINATION_CAPABILITY = "dedupe-ttl/0.1"
@@ -99,8 +101,7 @@ def dedupe_mode(destination, profile: DedupeProfile) -> DedupeMode:
 
 
 def _t(value: str) -> datetime:
-    dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+    return parse_instant(value)
 
 
 def _iso(value: datetime) -> str:
@@ -156,7 +157,7 @@ def applied_under_other_effect(document: dict, operation_ids: list[str], effect_
 
 def classify(document: dict, profile: DedupeProfile, mode: DedupeMode, now: datetime) -> list[dict]:
     """State of every unresolved attempt at ``now``. Pure. ``state`` is one of ``unknown_until_horizon``,
-    ``horizon_passed_awaiting_escalation``, ``escalation_due`` (deadline passed, no row yet) or ``escalated``."""
+    ``horizon_passed_awaiting_escalation``, ``escalation_due`` (strictly after the deadline, no row yet) or ``escalated``."""
     escalated = {x["effect_id"] for x in document.get("dedupe_escalations", [])}
     out = []
     for effect, info in sorted(unresolved_effects(document).items()):
@@ -164,7 +165,8 @@ def classify(document: dict, profile: DedupeProfile, mode: DedupeMode, now: date
         horizon = first + timedelta(seconds=profile.provider_horizon_seconds)
         deadline = first + timedelta(seconds=profile.escalation_deadline_seconds)
         expires = first + timedelta(seconds=profile.dedupe_ttl_seconds)
-        state = ("escalated" if effect in escalated else "escalation_due" if now >= deadline
+        # The escalation deadline is inclusive (ODES time semantics section 3): due only strictly after it.
+        state = ("escalated" if effect in escalated else "escalation_due" if now > deadline
                  else "horizon_passed_awaiting_escalation" if now >= horizon else "unknown_until_horizon")
         out.append({"effect_id": effect, "operation_id": info["operation_id"], "state": state, "mode": mode,
                     "in_progress": info["in_progress"], "first_attempt_at": _iso(first), "provider_horizon_at": _iso(horizon),

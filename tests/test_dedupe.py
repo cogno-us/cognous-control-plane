@@ -113,17 +113,21 @@ def test_unknown_attempt_waits_for_the_horizon_then_escalates_inside_the_key_ttl
     d = f.decide(p, now=NOW)
     attempt, observation = go(f, p, d)
     assert attempt.status == "unknown" and observation.state == "absent"
-    states = {s: [x["state"] for x in f.dedupe_report(now=at(s))] for s in (60, 119, 120, 299, 300)}
+    states = {s: [x["state"] for x in f.dedupe_report(now=at(s))] for s in (60, 119, 120, 299, 300, 301)}
+    # The escalation deadline is inclusive (ODES time semantics section 3): at exactly 300 s it is still open, due only after it.
     assert states == {60: ["unknown_until_horizon"], 119: ["unknown_until_horizon"], 120: ["horizon_passed_awaiting_escalation"],
-                      299: ["horizon_passed_awaiting_escalation"], 300: ["escalation_due"]}
-    assert f.escalation_pass(now=at(299)) == [] and "dedupe_escalations" not in run_document(f)
-    (row,) = f.escalation_pass(now=at(300))
+                      299: ["horizon_passed_awaiting_escalation"], 300: ["horizon_passed_awaiting_escalation"],
+                      301: ["escalation_due"]}
+    assert f.escalation_pass(now=at(299)) == [] and f.escalation_pass(now=at(300)) == []
+    assert "dedupe_escalations" not in run_document(f)
+    (row,) = f.escalation_pass(now=at(301))
     assert row.fired_inside_key_ttl and row.reasons == ["attempt_unresolved_past_horizon"] and row.mode == mode
     assert row.effect_id == d.effect_id and row.operation_id == OPERATION and row.in_progress is False
     assert row.key_expires_at == at(600).isoformat() and row.escalation_deadline_at == at(300).isoformat()
     assert row.same_key_safe_until == (at(600).isoformat() if capability else None)
-    assert f.escalation_pass(now=at(301)) == [], "once per effect"
-    assert [x["state"] for x in f.dedupe_report(now=at(301))] == ["escalated"]
+    assert row.fired_at == at(301).isoformat()
+    assert f.escalation_pass(now=at(302)) == [], "once per effect"
+    assert [x["state"] for x in f.dedupe_report(now=at(302))] == ["escalated"]
     # the attempt stays unknown: nothing flipped it, nothing retried it
     latest = {a.attempt_id: a for a in f.records.load().attempts}
     assert [a.status for a in latest.values()] == ["unknown"] and f.destination.snapshot()["effects"] == {}
@@ -139,7 +143,7 @@ def test_mode_follows_the_destination_that_dispatches_not_the_workflows_own(tmp_
     other = SilentDestination(tmp_path / "other.json", capability=True)
     assert [x["mode"] for x in f.dedupe_report(now=at(1))] == ["none"]
     assert [x["mode"] for x in f.dedupe_report(now=at(1), destination=other)] == ["destination_ttl"]
-    (row,) = f.escalation_pass(now=at(300), destination=other)
+    (row,) = f.escalation_pass(now=at(301), destination=other)
     assert row.mode == "destination_ttl" and row.same_key_safe_until == at(600).isoformat()
 
 
@@ -228,7 +232,7 @@ def test_a_second_pass_cannot_append_a_second_escalation_for_the_same_effect(tmp
     p, r, f, c = flow(tmp_path, monkeypatch, destination=SilentDestination)
     d = f.decide(p, now=NOW)
     go(f, p, d)
-    (row,) = f.escalation_pass(now=at(300))
+    (row,) = f.escalation_pass(now=at(301))
     assert f.records.append_escalations(lambda document: [row]) == [], "the store itself keeps one row per effect"
     assert len(run_document(f)["dedupe_escalations"]) == 1
 
