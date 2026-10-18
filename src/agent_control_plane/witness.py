@@ -42,6 +42,7 @@ from typing import Any, Protocol
 
 from pydantic import BaseModel
 
+from .atomic_write import open_private_lock
 from .bounded import commitment
 from .strict_json import decode_utf8, strict_loads
 
@@ -184,7 +185,7 @@ class LocalFileWitness:
 
     def publish(self, digest: dict) -> dict:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        lock = os.open(self.path.with_name(self.path.name + ".lock"), os.O_CREAT | os.O_RDWR | os.O_CLOEXEC, 0o600)
+        lock = open_private_lock(self.path.with_name(self.path.name + ".lock"))
         try:
             fcntl.flock(lock, fcntl.LOCK_EX)
             defects = check_witness_chain(self.history() + [digest])
