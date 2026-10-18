@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import uuid
 from pathlib import Path
 from typing import Literal
@@ -11,6 +10,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from agent_control_plane.frame import create_frame
 from agent_control_plane.models import AuthorityRecord, Frame
+from agent_control_plane.strict_json import strict_loads
 
 
 class PolicyConfig(BaseModel):
@@ -28,10 +28,10 @@ def load_policy_config(path: str | Path) -> PolicyConfig:
 
     config_path = Path(path)
     try:
-        raw = json.loads(config_path.read_text(encoding="utf-8"))
+        raw = strict_loads(config_path.read_bytes())
     except FileNotFoundError:
         raise
-    except json.JSONDecodeError as exc:
+    except (ValueError, RecursionError) as exc:  # includes json.JSONDecodeError and the strict refusals
         raise ValueError(f"Failed to parse policy config JSON: {exc}") from exc
 
     try:
