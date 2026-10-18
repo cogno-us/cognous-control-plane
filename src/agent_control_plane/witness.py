@@ -1,8 +1,8 @@
 """Opt-in outside-held digest (witness-digest/0.1): the verifier side and a local witness interface.
 
-A ledger head digest can be held by someone other than the holder of the record-store key. A reader who holds that digest can
-then tell that a row covered by it was dropped or rewritten afterwards, even if the record set was re-signed (HMAC) or
-re-sealed (signature) by the key holder. Nothing here runs unless a host calls it: the default path, the stored record and every
+A ledger head digest can be held by someone other than whoever can write the record store (a plain JSON file; it has no keyed
+integrity check). A reader who holds that digest can then tell that a row covered by it was dropped or rewritten afterwards, even
+if the record set was re-sealed or re-signed (for example a replay bundle HMAC) by the writer. Nothing here runs unless a host calls it: the default path, the stored record and every
 commitment are unchanged, and no profile or contract is touched.
 
 What is built here:
@@ -27,7 +27,7 @@ Limits (read before relying on it):
 * Only list-valued ledgers are covered. Top-level scalars and mutable dictionaries (for example ``input_time_floors``, which
   advances by design) are not append-only and are not covered.
 * A local file witness is held on the same machine as the store in tests. For the control to work, the real witness must be held
-  somewhere the key holder cannot write. The owner default for that location is a signed tag in the hub repository. Publishing
+  somewhere the store writer cannot write. The owner default for that location is a signed tag in the hub repository. Publishing
   there is a deployment step the owner must trigger; this module makes no network call, creates no tag and writes only the path
   it is given.
 """
@@ -166,7 +166,7 @@ class LocalFileWitness:
     """Append-only JSON-lines witness on the local filesystem, for tests and local use only.
 
     It is held where the process that writes the store can usually write too, so by itself it gives no protection against that
-    process; it exists to exercise the verifier and to be replaced by a location the key holder cannot write.
+    process; it exists to exercise the verifier and to be replaced by a location the store writer cannot write.
     """
 
     def __init__(self, path: str | Path):

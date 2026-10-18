@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Fixed — age-extension base, store-integrity wording, 2x age (F1, review R1 findings 2, 3, 5)
+- Age-extension limits are measured from the host profile's class bound, not the base the stored row records about itself; a row whose recorded base differs from the class bound is `age_extension_invalid` (fail closed). Only affects freshness/0.1 (opt-in); rows written by `record_age_extension` are unchanged.
+- Docs and docstrings no longer mention an HMAC key protecting the record store: there is none. The store is a plain JSON file under a same-host lock; `signer`/`reviser` are asserted names unless a keyed proof is configured (none is built). No code path changed for this item.
+- Status age at dispatch can reach twice the class bound under freshness/0.1 (deadline anchored at opening). Documented in `freshness.py` and pinned by a test; not tightened.
+
 ### Fixed — `acp run` strict input parsing (F1)
 - Input files are parsed fail-closed: duplicate object members (`input_json_duplicate_member`), `NaN`/`Infinity`/`-Infinity` (`input_json_non_finite_number`) and non-UTF-8 bytes (`input_not_utf8`) are refused with exit 2 and the stable code in the message. Before, duplicates silently resolved to the last value. Records for valid inputs are unchanged (examples diffed before/after, 11 files equal after normalising uuids, timestamps and paths). Other CLI entry points are not changed.
 

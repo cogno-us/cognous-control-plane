@@ -576,6 +576,73 @@ def test_extension_window_bounds_its_use(tmp_path, clock):
     assert d.result == "hold" and not any(x.startswith("age_extension_") for x in d.reasons), "outside its window: not applied"
 
 
+def _rewrite_extension_row(f, **fields):
+    """Hand-edit the stored extension row, as anyone who can write the store file can."""
+    doc = document(f)
+    doc["age_extensions"][0].update(fields)
+    f.records.path.write_text(json.dumps(doc), encoding="utf-8")
+
+
+def test_extension_limit_is_measured_from_the_trusted_class_base_not_the_rows_own_base(tmp_path, clock):
+    """R1 finding 2. A row rewritten to claim a higher base (from=900, to=1000) passes the limit arithmetic on its own numbers
+    (100 <= 300) although the class bound is 60; the host's class bound is what counts."""
+    p, r, f, c = setup_flow(tmp_path)
+    enable(r, f, c, max_age_extension_seconds=300)
+    authority(f, r)
+    request(f)
+    stale_grant(r, 700)
+    assert f.decide(p, now=NOW).result == "hold"
+    _rewrite_extension_row(f, from_max_age_seconds=900, to_max_age_seconds=1000)
+    d = f.decide(p, now=NOW)
+    assert d.result == "hold" and "age_extension_invalid" in d.reasons, d.reasons
+    _rewrite_extension_row(f, from_max_age_seconds=60, to_max_age_seconds=1000)  # honest base, oversized
+    d = f.decide(p, now=NOW)
+    assert d.result == "hold" and "age_extension_exceeds_limit" in d.reasons, d.reasons
+
+
+def test_rewritten_base_cannot_launder_an_oversized_extension_even_when_base_matches_the_limit(tmp_path, clock):
+    from agent_control_plane.freshness import extension_defects
+
+    row = dict(class_id="x", from_max_age_seconds=700, to_max_age_seconds=1000, not_before=NOW.isoformat(),
+               expires_at=(NOW + timedelta(hours=1)).isoformat(), outage_ref="o", requested_by=OTHER, signer=SIGNER)
+    profile = RuleRevisionProfile(signers=[SIGNER])
+    assert extension_defects(profile, row, max_extension_seconds=300) == []          # untrusted base: passes on its own numbers
+    assert extension_defects(profile, row, max_extension_seconds=300, base_seconds=60) == ["age_extension_invalid"]
+
+
+def test_status_age_at_dispatch_can_reach_twice_the_bound(tmp_path, clock):
+    """R1 finding 5, documented and pinned (not tightened). The deadline is opened_at + bound, not observed_at + bound, so a
+    status that was at the bound when read can be dispatched up to the bound later: its age at dispatch is up to 2x the bound."""
+    p, r, f, c = setup_flow(tmp_path)
+    enable(r, f, c)
+    stale_grant(r, 60)                       # exactly at the class bound (60 s) when checked
+    d = f.decide(p, now=NOW)
+    assert d.result == "authorized", d.reasons
+    original, calls = f.destination.observe, []
+
+    def stalled(effect_id):
+        calls.append(clock.now)
+        if len(calls) == 2:                   # the observation after the effect check: the stall sits before dispatch
+            clock.tick(59)
+        return original(effect_id).model_copy(update={"observed_at": NOW.isoformat()})
+    f.destination.observe = stalled
+    attempt, _ = execute(f, p, d)
+    assert attempt.status == "acknowledged" and len(calls) == 2
+    status_age_at_dispatch = (clock.now - (NOW - timedelta(seconds=60))).total_seconds()
+    assert status_age_at_dispatch == 119 and 60 < status_age_at_dispatch <= 2 * 60
+
+
+def test_status_age_at_dispatch_never_exceeds_twice_the_bound(tmp_path, clock):
+    p, r, f, c = setup_flow(tmp_path)
+    enable(r, f, c)
+    stale_grant(r, 60)
+    d = f.decide(p, now=NOW)
+    stall_before_dispatch(f, clock, 61, pin_observation=True)
+    with pytest.raises(PermissionError, match="check_expired_before_dispatch"):
+        execute(f, p, d)
+    assert f.destination.snapshot()["effects"] == {}
+
+
 # ------------------------------------------------------------------------------------------------ registry
 def test_every_freshness_code_is_registered():
     from agent_control_plane import freshness

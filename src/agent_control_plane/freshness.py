@@ -14,8 +14,12 @@ Limits (read before relying on it):
 * The lease is a same-host ``flock``. Cross-host takeover needs a fencing token checked at the destination (not built here).
 * ``age_basis = nonce_bound`` proves only that a response was produced after the reader issued its nonce, which needs a resolver
   that echoes it. Without that the age is what the source asserts (``source_asserted``).
-* Everything is a join over rows that a holder of the record-store key can rewrite: visibility for an honest reader, not
-  tamper evidence.
+* Everything is a join over rows in the record store, which is a plain JSON file under a same-host lock with no keyed integrity
+  check: anyone who can write the file can rewrite rows. Visibility for an honest reader, not tamper evidence. Signer and issuer
+  fields are asserted names, not authenticated identities.
+* The deadline is anchored at the opening of the check, not at the status's own timestamp. A status that was already close to the
+  class bound when read can be dispatched until the deadline, so the status age at dispatch can reach twice the bound
+  (tests/test_freshness.py::test_status_age_at_dispatch_can_reach_twice_the_bound pins this).
 """
 from __future__ import annotations
 
@@ -136,16 +140,23 @@ def _row(x) -> dict:
 
 
 # ------------------------------------------------------------------------------------------------ age extensions
-def extension_defects(rule_profile, row, *, max_extension_seconds: int) -> list[str]:
-    """Why an extension row does not count. Empty means it counts. Signers are those of the rule-revision profile (N2)."""
+def extension_defects(rule_profile, row, *, max_extension_seconds: int, base_seconds: int | None = None) -> list[str]:
+    """Why an extension row does not count. Empty means it counts. Signers are those of the rule-revision profile (N2).
+
+    ``base_seconds`` is the class bound from the trusted host profile. When given, the row's own ``from_max_age_seconds`` is not
+    trusted: the limit is measured from ``base_seconds`` and a row whose recorded base differs from it is invalid (fail closed).
+    A rewritten row cannot launder an oversized extension by lowering its own recorded base.
+    """
     r = _row(row)
     out: list[str] = []
+    from_seconds = r["from_max_age_seconds"]  # equals base_seconds whenever base_seconds is given (else the row is invalid)
+    base_mismatch = base_seconds is not None and r["from_max_age_seconds"] != base_seconds
     if rule_profile is None:
         out.append(CODE_EXT_AUTHORITY_UNCONFIGURED)
-    if (r["to_max_age_seconds"] <= r["from_max_age_seconds"] or parse_time(r["expires_at"]) <= parse_time(r["not_before"])
+    if (base_mismatch or r["to_max_age_seconds"] <= from_seconds or parse_time(r["expires_at"]) <= parse_time(r["not_before"])
             or not r.get("outage_ref")):
         out.append(CODE_EXT_INVALID)
-    elif r["to_max_age_seconds"] - r["from_max_age_seconds"] > max_extension_seconds:
+    elif r["to_max_age_seconds"] - from_seconds > max_extension_seconds:
         out.append(CODE_EXT_EXCEEDS_LIMIT)
     if not r.get("signer"):
         out.append(CODE_EXT_UNSIGNED)
@@ -161,14 +172,16 @@ def effective_age_bound(rule_profile, extensions, *, class_id: str, base_seconds
     """The class age bound at ``now``: (bound, extension_id that raised it or None, defect codes of active rows that do not count).
 
     A row counts only if it re-validates against the signer set configured *now* and its window is active; a signer removed from
-    the configured set withdraws the authority of rows it signed earlier.
+    the configured set withdraws the authority of rows it signed earlier. The limit is measured from ``base_seconds`` (the trusted
+    class bound), never from the base the row records about itself.
     """
     bound, used, defects = base_seconds, None, []
     for raw in extensions:
         r = _row(raw)
         if r["class_id"] != class_id or not (parse_time(r["not_before"]) <= now < parse_time(r["expires_at"])):
             continue
-        row_defects = extension_defects(rule_profile, r, max_extension_seconds=max_extension_seconds)
+        row_defects = extension_defects(rule_profile, r, max_extension_seconds=max_extension_seconds,
+                                        base_seconds=base_seconds)
         if row_defects:
             defects.extend(d for d in row_defects if d not in defects)
         elif r["to_max_age_seconds"] > bound:
