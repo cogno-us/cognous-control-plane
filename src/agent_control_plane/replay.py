@@ -17,7 +17,7 @@ def generate_replay_bundle(run_record: RunRecord) -> ReplayBundle:
     """Convert a :class:`~agent_control_plane.models.RunRecord` into a
     :class:`~agent_control_plane.models.ReplayBundle`.
 
-    The bundle is a self-contained snapshot that includes the frame, all
+    The bundle is a snapshot (without tool attempts or results) that includes the frame, all
     action proposals, policy decisions, authority records, reliance records,
     blocked actions, and the final output.
 

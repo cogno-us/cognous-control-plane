@@ -118,7 +118,7 @@ def add_run_parser(subparsers: Any) -> None:
         help="JSON with statuses, identities, mandates, approvals, policies, conflicts, evidence, role_mappings.",
     )
     run.add_argument("--store-dir", required=True, help="New or empty directory for the throwaway store.")
-    run.add_argument("--out-dir", required=True, help="New or empty directory for run-record.json and result.json.")
+    run.add_argument("--out-dir", required=True, help="New or empty directory for run-record.json, bounded-run-record.json and result.json.")
     run.add_argument(
         "--now",
         default=None,

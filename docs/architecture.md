@@ -101,8 +101,9 @@ run.  It aggregates:
 
 ### ReplayBundle
 
-A `ReplayBundle` is a self-contained export of a completed run.  It
-includes every record needed to reconstruct what happened, enabling
+A `ReplayBundle` is an export of a completed run.  It contains the frame,
+proposals, decisions, traces, authority, reliance and blocked records and the
+final output (not tool attempts or results, and no completion marker), for
 offline audit, replay simulation, or compliance review.
 
 ### Validation and redaction
@@ -167,8 +168,9 @@ redact_replay_bundle()   → redacted ReplayBundle
 - **Determinism**: given the same inputs the gate always returns the same
   result and fingerprint, while `decision_id` and `decided_at` are generated
   for each evaluation.
-- **Immutability**: records are append-only; existing records are never
-  modified after creation.
+- **Immutability**: records are append-only by API; the recorder returns copies
+  of decision, trace, blocked and reliance records, so changing a returned
+  object does not change the run. The stored JSON file has no keyed integrity.
 - **Portability**: all records serialise to plain JSON with no binary
   dependencies.
 - **Minimal dependencies**: only the Python standard library and Pydantic

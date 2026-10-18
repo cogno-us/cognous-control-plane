@@ -367,7 +367,7 @@ class SignedReplayBundle(BaseModel):
     """Replay bundle plus optional integrity metadata.
 
     This model stores a replay bundle alongside an HMAC signature so callers
-    can verify whether an exported bundle has changed since it was signed.
+    can verify whether the wrapped ``replay_bundle`` changed since signing; wrapper metadata is not covered.
     """
 
     signed_bundle_id: str = Field(

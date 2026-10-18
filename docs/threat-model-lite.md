@@ -24,7 +24,8 @@ context (e.g. sending external emails without approval).
 
 **Mitigation**: the `PolicyGate` checks every proposal against the Frame's
 allow/block lists and the active authority records.  Blocked tools and
-unauthorised action types are rejected before execution.
+unauthorised action types receive a `block` decision; execution is withheld only when the caller
+executes through `execute_with_control` or `BoundedAuthorizationWorkflow`.
 
 ---
 
@@ -43,9 +44,9 @@ blocking occurred.
 **Risk**: there is no way to reconstruct exactly what an agent proposed,
 decided, and output during a past run.
 
-**Mitigation**: `generate_replay_bundle()` produces a self-contained
-`ReplayBundle` that includes the frame, all proposals, decisions, authority
-records, reliance records, blocked actions, and final output.
+**Mitigation**: `generate_replay_bundle()` produces a `ReplayBundle` that contains the frame, all proposals,
+decisions, traces, authority records, reliance records, blocked actions, and final output. It omits tool
+attempts and results and carries no completion marker.
 
 ---
 

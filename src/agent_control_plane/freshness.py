@@ -186,7 +186,7 @@ def effective_age_bound(rule_profile, extensions, *, class_id: str, base_seconds
     """The class age bound at ``now``: (bound, extension_id that raised it or None, defect codes of active rows that do not count).
 
     A row counts only if it re-validates against the signer set configured *now* and its window is active; a signer removed from
-    the configured set withdraws the authority of rows it signed earlier. The limit is measured from ``base_seconds`` (the trusted
+    the configured set withdraws the authority of rows that named it earlier. The limit is measured from ``base_seconds`` (the trusted
     class bound), never from the base the row records about itself.
     """
     bound, used, defects = base_seconds, None, []
