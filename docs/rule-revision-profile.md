@@ -44,6 +44,6 @@ separate control.
 Host rules (registry, gate implementation, merge rule) are checked from `RuleRevisionProfile.host_digests`, which the host computes; the
 workflow does not compute them.
 
-## Proposed ODES contract delta (not made here)
+## ODES contract delta
 Optional members on decision and refusal rows: `rule_identity` (object: `rules` map of ref to `{digest, state, verified_through, findings}`,
-and `unknown` list). A `rule_revision` record and `rule_revision_refusal` record shape as above. Proposed only; ODES is untouched.
+and `unknown` list). A `rule_revision` record and `rule_revision_refusal` record shape as above. Drafted since in ODES as `contracts/rule-revision` (`0.1.0-draft`, not frozen); the journal contract declares `rule_identity` as an optional member. The Control Plane code is unchanged by that draft.
