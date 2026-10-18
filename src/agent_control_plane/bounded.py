@@ -849,14 +849,15 @@ class BoundedRecordStore:
         return report
 
     def record_age_extension(self, extension: AgeBoundExtension, *, rule_profile: RuleRevisionProfile | None,
-                             max_extension_seconds: int) -> AgeBoundExtension:
+                             max_extension_seconds: int, base_seconds: int | None = None) -> AgeBoundExtension:
         """Append an outage extension of a class age bound, or persist a refusal row and raise ``AgeExtensionRefused``.
 
         The signer must belong to the signer set configured in the rule-revision profile (N2) and must not be the requester;
         the extension may not exceed the freshness profile's declared limit. Authority is re-checked every time the row is used.
         """
         _parse(extension.not_before), _parse(extension.expires_at), _parse(extension.recorded_at)
-        reasons = extension_defects(rule_profile, extension, max_extension_seconds=max_extension_seconds)
+        reasons = extension_defects(rule_profile, extension, max_extension_seconds=max_extension_seconds,
+                                    base_seconds=base_seconds)
         with self._transaction():
             document = self._read_document()
             rows = document.setdefault("age_extensions", [])
@@ -1244,7 +1245,8 @@ class BoundedAuthorizationWorkflow:
                               to_max_age_seconds=to_max_age_seconds, not_before=not_before, expires_at=expires_at,
                               outage_ref=outage_ref, requested_by=requested_by, signer=signer, authority_ref=authority_ref,
                               recorded_at=self._svc(), evaluated_at=_iso(self._evaluation_time(now))),
-            rule_profile=self.rule_revision_profile, max_extension_seconds=fr.max_age_extension_seconds)
+            rule_profile=self.rule_revision_profile, max_extension_seconds=fr.max_age_extension_seconds,
+            base_seconds=cl.max_status_age_seconds)
 
     def reaper(self, *, clock=None):
         """The host's recovery runner (start-up pass, then the declared interval). Requires the freshness profile."""

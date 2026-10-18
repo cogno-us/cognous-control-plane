@@ -6,8 +6,11 @@ when a revision row for it was signed by a configured principal other than the r
 
 Limits (read before relying on it):
 * Trust moves to the revision signer. It is made explicit here; it is not removed.
-* Everything is a join over rows in the record store. A holder of the store key can rewrite rows, so this gives visibility to an
-  honest reader, not tamper evidence. An outside-held digest is a separate control.
+* Everything is a join over rows in the record store. The store is a plain JSON file under a same-host lock; it has no keyed
+  (HMAC) integrity check, so anyone who can write the file can rewrite rows. This gives visibility to an honest reader, not tamper
+  evidence. An outside-held digest is a separate control.
+* ``signer`` and ``reviser`` are asserted names. They are checked against the configured signer set and against each other, but
+  nothing here authenticates who supplied them: the signer remains an asserted name unless a keyed proof is configured (none is built).
 * Nothing here is active unless a `RuleRevisionProfile` is configured; the pinned default path is unchanged.
 """
 from __future__ import annotations

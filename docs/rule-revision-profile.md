@@ -32,8 +32,12 @@ One record shape, `RuleRevision`, modelled on `VocabularyChange`, covers four ru
   derivation shows the declared kind cannot hold (the integrity-relevant direction), and `declared_underclaim` (informational).
 
 ## Limits
-This moves trust to the revision signer; it does not remove it. All of it is a join over rows in the record store, and a holder of the
-store's HMAC key can rewrite rows, so it gives visibility to an honest reader, not tamper evidence. An outside-held digest is a separate control.
+This moves trust to the revision signer; it does not remove it. All of it is a join over rows in the record store. The store (`BoundedRecordStore`) is a plain JSON file under a same-host lock
+with **no keyed integrity check: there is no HMAC key protecting it** (the only HMAC in this package signs replay bundles, `signing`).
+Anyone who can write the file can rewrite rows, so it gives visibility to an honest reader, not tamper evidence. `signer` and
+`reviser` are asserted names: they are checked against the configured signer set and against each other, but nothing authenticates who
+supplied them, and the signer remains an asserted name unless a keyed proof is configured (none is built). An outside-held digest is a
+separate control.
 Host rules (registry, gate implementation, merge rule) are checked from `RuleRevisionProfile.host_digests`, which the host computes; the
 workflow does not compute them.
 
