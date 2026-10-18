@@ -21,8 +21,13 @@ class VocabularyChange(BaseModel):
 def refusal_trends(previous: list[dict], current: list[dict], *, previous_exposure: int,
                    current_exposure: int, minimum_prior_count: int = 5,
                    minimum_current_exposure: int = 1, vocabulary_changes: list | None = None,
-                   rule_revisions: list | None = None) -> dict:
-    """Count versioned reasons with declared exposure; never infer tampering."""
+                   rule_revisions: list | None = None, check_events: list | None = None,
+                   as_of: str | None = None) -> dict:
+    """Count versioned reasons with declared exposure; never infer tampering.
+
+    With ``check_events`` (the retained journal) and ``as_of`` the report also carries ``freshness``: abandoned-open, open and
+    overdue counts and the oldest open age, next to the refusal counts (see ``freshness.freshness_counts``). Without them the
+    output is unchanged."""
     if min(previous_exposure, current_exposure, minimum_prior_count, minimum_current_exposure) < 0:
         raise ValueError("counts and exposure must be nonnegative")
     def counts(rows):
@@ -33,6 +38,11 @@ def refusal_trends(previous: list[dict], current: list[dict], *, previous_exposu
     report = _trend_report(previous, current, before, after, eligible, previous_exposure, current_exposure, minimum_prior_count)
     if vocabulary_changes is not None or rule_revisions is not None:
         _annotate_adoption(report, previous, current, vocabulary_changes or [], rule_revisions or [])
+    if check_events is not None:
+        if as_of is None:
+            raise ValueError("as_of is required with check_events")
+        from .freshness import freshness_counts
+        report["freshness"] = freshness_counts(check_events, as_of=as_of)
     return report
 
 

@@ -28,6 +28,11 @@ from .operation_identity import (
     DESTINATION_CAPABILITY as OPERATION_IDENTITY_CAPABILITY, AttemptJoin, OperationAdmissionRow,
     OperationRenewalRow, licensed_revisions, operation_status,
 )
+from . import freshness as _fresh_profile
+from .freshness import (
+    AgeBoundExtension, AgeBoundExtensionRefusal, AgeExtensionRefused, CheckLeaseUnavailable, RecoveryReport, RecoveryRun,
+    acquire_lease_nonblocking, effective_age_bound, extension_defects, parse_time as _fparse,
+)
 
 MANIFEST_VERSION = "1.1"
 AUTHORITY_CONTEXT_VERSION = "0.1.0"
@@ -280,6 +285,8 @@ class ResolutionInput(BaseModel):
     missing: bool = False
     previous_observed_at: str | None = None
     read_state: str | None = Field(default=None, exclude_if=lambda v: v is None)
+    # freshness/0.1 only: how the age of this read is known. Omitted while unset (default path unchanged).
+    age_basis: Literal["nonce_bound", "source_asserted"] | None = Field(default=None, exclude_if=lambda v: v is None)
 
 
 class RuntimeDecision(BaseModel):
@@ -291,6 +298,9 @@ class RuntimeDecision(BaseModel):
     result: Literal["authorized", "hold", "deny"]
     reasons: list[str]
     decided_at: str
+    # freshness/0.1 only: the named clocks (``decided_at`` stays the evaluation time).
+    evaluated_at: str | None = Field(default=None, exclude_if=lambda v: v is None)
+    recorded_at: str | None = Field(default=None, exclude_if=lambda v: v is None)
     time_source: Literal["unrecorded", "control_plane", "test_override"] = "unrecorded"
     operation_horizon: OperationHorizon | None = None
     binding: TenantAuthorizationBinding | AuthorizationBinding | None = None
@@ -302,6 +312,9 @@ class EffectAttempt(BaseModel):
     effect_id: str
     decision_id: str
     started_at: str
+    # freshness/0.1 only: ``started_at`` stays the evaluation time; ``recorded_at`` is re-stamped at every write of the row.
+    evaluated_at: str | None = Field(default=None, exclude_if=lambda v: v is None)
+    recorded_at: str | None = Field(default=None, exclude_if=lambda v: v is None)
     time_source: Literal["unrecorded", "control_plane", "test_override"] = "unrecorded"
     status: Literal["attempted", "acknowledged", "unknown", "failed", "partial"]
     acknowledgement: dict = Field(default_factory=dict)
@@ -326,6 +339,8 @@ class EffectTimeRefusal(BaseModel):
     decision_id: str
     effect_id: str
     recorded_at: str
+    evaluated_at: str | None = Field(default=None, exclude_if=lambda v: v is None)  # freshness/0.1 only
+    deadline: str | None = Field(default=None, exclude_if=lambda v: v is None)       # freshness/0.1 only
     time_source: Literal["unrecorded", "control_plane", "test_override"] = "unrecorded"
     original_operation_horizon: OperationHorizon | None = None
     operation_horizon: OperationHorizon | None = None
@@ -368,6 +383,7 @@ class ResolutionCheck(BaseModel):
     check_id: str
     stage: Literal["decision", "effect", "claim"]
     evaluated_at: str
+    recorded_at: str | None = Field(default=None, exclude_if=lambda v: v is None)  # freshness/0.1 only
     time_source: Literal["control_plane", "test_override"]
     inputs: list[ResolutionInput]
     reasons: list[str]
@@ -387,9 +403,18 @@ class AttemptCloseout(BaseModel):
 class CheckEvent(BaseModel):
     """Append-only local resolution journal; no external commit assertion."""
     check_id: str
-    phase: Literal["opened", "input", "completed", "interrupted"]
+    # freshness/0.1 adds ``overdue`` (a live check past its deadline; not terminal) and ``expired`` (the licence of a completed
+    # check withdrawn at the dispatch gate; terminal).
+    phase: Literal["opened", "input", "completed", "interrupted", "overdue", "expired"]
     stage: Literal["decision", "effect", "claim"]
     recorded_at: str
+    # freshness/0.1 only, all omitted while unset: the evaluation clock, the deadline fixed at opening, the age bound that
+    # produced it (with the extension that raised it, if any) and the nonce sent with this check's reads.
+    evaluated_at: str | None = Field(default=None, exclude_if=lambda v: v is None)
+    deadline: str | None = Field(default=None, exclude_if=lambda v: v is None)
+    age_bound_seconds: int | None = Field(default=None, exclude_if=lambda v: v is None)
+    extension_id: str | None = Field(default=None, exclude_if=lambda v: v is None)
+    nonce: str | None = Field(default=None, exclude_if=lambda v: v is None)
     owner: dict[str, str]
     proposal_commitment: str
     decision_id: str | None = None
@@ -410,14 +435,25 @@ class _ResolverReadFailure(Exception):
 
 
 class _JournalInputs(list):
-    def __init__(self, values, on_input):
+    def __init__(self, values, on_input, *, nonce=None, freshness=False):
         super().__init__(values)
         self.records = {}
         self.read_states = {}
         self.on_input = on_input
+        # freshness/0.1: the check's nonce, how each read's age is known, and reads whose echoed nonce did not match.
+        self.nonce, self.freshness = nonce, freshness
+        self.age_bases = {}
+        self.mismatches = {}
 
     def append(self, item):
-        item.read_state = item.read_state or self.read_states.get((item.input_type, item.input_id))
+        key = (item.input_type, item.input_id)
+        item.read_state = item.read_state or self.read_states.get(key)
+        if self.freshness and item.input_type != "manifest":
+            item.age_basis = item.age_basis or self.age_bases.get(key, "source_asserted")
+            if key in self.mismatches:
+                requested, echoed = self.mismatches[key]
+                item.expected = {**item.expected, "nonce": requested}
+                item.observed = {**item.observed, "nonce": str(echoed)}
         self.on_input(item)  # persist before exposing the completed read
         super().append(item)
 
@@ -431,6 +467,9 @@ class BoundedRunRecord(BaseModel):
     operation_renewals: list[OperationRenewalRow] = Field(default_factory=list, exclude_if=lambda v: not v)
     attempt_joins: list[AttemptJoin] = Field(default_factory=list, exclude_if=lambda v: not v)
     vocabulary_changes: list[VocabularyChange] = Field(default_factory=list, exclude_if=lambda v: not v)
+    age_extensions: list[AgeBoundExtension] = Field(default_factory=list, exclude_if=lambda v: not v)
+    age_extension_refusals: list[AgeBoundExtensionRefusal] = Field(default_factory=list, exclude_if=lambda v: not v)
+    recovery_runs: list[RecoveryRun] = Field(default_factory=list, exclude_if=lambda v: not v)
     rule_revisions: list[RuleRevision] = Field(default_factory=list, exclude_if=lambda v: not v)
     rule_revision_refusals: list[RuleRevisionRefusal] = Field(default_factory=list, exclude_if=lambda v: not v)
     check_events: list[CheckEvent] = Field(default_factory=list, exclude_if=lambda v: not v)
@@ -530,6 +569,7 @@ class BoundedRecordStore:
         stage: Literal["decision", "effect", "claim"],
         time_source: Literal["control_plane", "test_override"],
         reasons: list[str], tolerance_seconds: int, check_id: str | None = None,
+        recorded_at: str | None = None,
     ) -> list[str]:
         """Compare and advance local per-input time floors in one transaction."""
         with self._transaction():
@@ -553,6 +593,7 @@ class BoundedRecordStore:
             check = ResolutionCheck(
                 check_id=check_id or str(uuid.uuid4()), stage=stage, evaluated_at=_iso(now),
                 time_source=time_source, inputs=inputs, reasons=result,
+                **({"recorded_at": recorded_at} if recorded_at else {}),
             )
             document.setdefault("resolution_checks", []).append(check.model_dump(mode="json"))
             BoundedRunRecord.model_validate(document)
@@ -598,11 +639,18 @@ class BoundedRecordStore:
         return self.path.with_name(self.path.name + ".check-" + check_id + ".lock")
 
     @contextmanager
-    def check_lease(self, check_id: str):
-        """Hold a stable per-check kernel lease; process death releases it."""
+    def check_lease(self, check_id: str, *, acquire_timeout: float | None = None):
+        """Hold a stable per-check kernel lease; process death releases it.
+
+        Legacy (``acquire_timeout`` None): a blocking flock with no timeout. freshness/0.1 passes its acquisition deadline:
+        the lease is then taken non-blocking and ``CheckLeaseUnavailable`` is raised when the deadline passes.
+        """
         fd = os.open(self._check_lease_path(check_id), os.O_CREAT | os.O_RDWR | os.O_CLOEXEC, 0o600)
         try:
-            fcntl.flock(fd, fcntl.LOCK_EX)
+            if acquire_timeout is None:
+                fcntl.flock(fd, fcntl.LOCK_EX)
+            else:
+                acquire_lease_nonblocking(fd, acquire_timeout)
             yield
         finally:
             os.close(fd)
@@ -644,7 +692,7 @@ class BoundedRecordStore:
             return operation_status(self._read_document(), **binding)
 
     def record_renewal(self, *, operation_id: str, to_revision: str, written_by: str,
-                       recorded_at: str) -> OperationRenewalRow:
+                       recorded_at: str, evaluated_at: str | None = None) -> OperationRenewalRow:
         """Record a renewal row. Only the issuer recorded at admission may write an accepted one.
 
         Any other writer, an unknown operation or a revision that is not new yields a
@@ -668,7 +716,8 @@ class BoundedRecordStore:
                 grant_id=admitted["grant_id"] if admitted else None,
                 from_revision=(accepted[-1] if accepted else admitted["first_grant_revision"]) if admitted else None,
                 to_revision=to_revision, written_by=written_by,
-                outcome="refused" if code else "accepted", refusal_code=code, recorded_at=recorded_at)
+                outcome="refused" if code else "accepted", refusal_code=code, recorded_at=recorded_at,
+                **({"evaluated_at": evaluated_at} if evaluated_at else {}))
             document.setdefault("operation_renewals", []).append(row.model_dump(mode="json"))
             BoundedRunRecord.model_validate(document)
             self._write(document)
@@ -708,9 +757,15 @@ class BoundedRecordStore:
                     raise ValueError("check already opened")
             elif not previous or previous[0]["phase"] != "opened":
                 raise ValueError("check opening missing")
-            elif any(x["phase"] in {"completed", "interrupted"} for x in previous):
+            elif event.phase == "expired":
+                # freshness/0.1: withdraw the licence of a completed (or still open) check, once; never after recovery closed it.
+                if any(x["phase"] in {"interrupted", "expired"} for x in previous):
+                    raise ValueError("check already closed")
+            elif any(x["phase"] in {"completed", "interrupted", "expired"} for x in previous):
                 raise ValueError("check already closed")
-            elif event.owner != previous[0]["owner"]:
+            elif event.phase == "overdue" and any(x["phase"] == "overdue" for x in previous):
+                raise ValueError("check already reported overdue")
+            if previous and event.phase != "opened" and event.owner != previous[0]["owner"]:
                 raise ValueError("check owner mismatch")
             events.append(event.model_dump(mode="json"))
             BoundedRunRecord.model_validate(document)
@@ -733,6 +788,92 @@ class BoundedRecordStore:
                 BoundedRunRecord.model_validate(document)
                 self._write(document)
         return recovered
+
+    def check_opening(self, check_id: str) -> dict | None:
+        """The opening journal event of one check (raw), or None."""
+        with self._transaction():
+            return next((x for x in self._read_document().get("check_events", [])
+                         if x["check_id"] == check_id and x["phase"] == "opened"), None)
+
+    def recovery_pass(self, *, trigger: Literal["startup", "interval", "manual"] = "manual",
+                      now: datetime | None = None, record_run: bool = False) -> RecoveryReport:
+        """freshness/0.1 recovery pass: close abandoned checks, report live checks past their deadline, close nothing alive.
+
+        * dead lease, no terminal event: closed ``interrupted`` (as ``recover_interrupted_checks`` does);
+        * live lease past its deadline: reported ``check_overdue`` and a non-terminal ``overdue`` event is written once. The
+          process is alive, so the check is NOT closed;
+        * live lease within its deadline, or a legacy check with no deadline: open.
+        With ``record_run`` a ``RecoveryRun`` row (counts, trigger, service time) is appended in the same transaction.
+        """
+        at = (now or _now()).astimezone(timezone.utc)
+        report = RecoveryReport(as_of=_iso(at))
+        oldest: float | None = None
+        with self._transaction():
+            document = self._read_document()
+            events = document.get("check_events", [])
+            terminal = {"completed", "interrupted", "expired"}
+            closed = {x["check_id"] for x in events if x["phase"] in terminal}
+            overdue_written = {x["check_id"] for x in events if x["phase"] == "overdue"}
+            for opening in list(events):
+                if opening["phase"] != "opened" or opening["check_id"] in closed:
+                    continue
+                check_id = opening["check_id"]
+                if not self._check_is_live(check_id):
+                    end = dict(opening, phase="interrupted", recorded_at=_iso(at), reasons=["check_interrupted"])
+                    end.pop("evaluated_at", None)
+                    events.append(end)
+                    report.interrupted.append(check_id)
+                    continue
+                age = (at - _parse(opening["recorded_at"])).total_seconds()
+                oldest = age if oldest is None else max(oldest, age)
+                deadline = opening.get("deadline")
+                if deadline and at > _parse(deadline):
+                    report.overdue.append({"check_id": check_id, "deadline": deadline, "reasons": [_fresh_profile.CODE_OVERDUE],
+                                           "overdue_seconds": (at - _parse(deadline)).total_seconds()})
+                    if check_id not in overdue_written:
+                        mark = dict(opening, phase="overdue", recorded_at=_iso(at), reasons=["check_overdue"])
+                        mark.pop("evaluated_at", None)
+                        events.append(mark)
+                else:
+                    report.open_within_deadline.append(check_id)
+            report.oldest_open_age_seconds = oldest
+            if record_run:
+                document.setdefault("recovery_runs", []).append(RecoveryRun(
+                    run_id=str(uuid.uuid4()), trigger=trigger, recorded_at=_iso(at), interrupted=report.interrupted,
+                    overdue=[x["check_id"] for x in report.overdue],
+                    open_count=len(report.overdue) + len(report.open_within_deadline),
+                    oldest_open_age_seconds=oldest).model_dump(mode="json"))
+            if report.interrupted or report.overdue or record_run:
+                BoundedRunRecord.model_validate(document)
+                self._write(document)
+        return report
+
+    def record_age_extension(self, extension: AgeBoundExtension, *, rule_profile: RuleRevisionProfile | None,
+                             max_extension_seconds: int) -> AgeBoundExtension:
+        """Append an outage extension of a class age bound, or persist a refusal row and raise ``AgeExtensionRefused``.
+
+        The signer must belong to the signer set configured in the rule-revision profile (N2) and must not be the requester;
+        the extension may not exceed the freshness profile's declared limit. Authority is re-checked every time the row is used.
+        """
+        _parse(extension.not_before), _parse(extension.expires_at), _parse(extension.recorded_at)
+        reasons = extension_defects(rule_profile, extension, max_extension_seconds=max_extension_seconds)
+        with self._transaction():
+            document = self._read_document()
+            rows = document.setdefault("age_extensions", [])
+            if any(x["extension_id"] == extension.extension_id for x in rows):
+                reasons.append("age_extension_invalid")
+            if not reasons:
+                rows.append(extension.model_dump(mode="json"))
+                BoundedRunRecord.model_validate(document)
+                self._write(document)
+                return extension
+            refusal = AgeBoundExtensionRefusal(
+                refusal_id=str(uuid.uuid4()), extension=extension.model_dump(mode="json"),
+                reasons=sorted(set(reasons)), recorded_at=extension.recorded_at)
+            document.setdefault("age_extension_refusals", []).append(refusal.model_dump(mode="json"))
+            BoundedRunRecord.model_validate(document)
+            self._write(document)
+        raise AgeExtensionRefused(refusal.reasons)
 
     def _write(self, document: dict) -> None:
         """Replace the JSON document; caller must hold the transaction lock."""
@@ -772,6 +913,17 @@ class SyntheticResolver:
         self.evidence = evidence
         self.role_mappings = role_mappings
         self._authority_effect_lock = threading.RLock()
+
+    #: freshness/0.1 (opt-in, CI only): when True this synthetic resolver declares ``status-nonce/0.1`` and echoes the reader's nonce.
+    echo_nonce = False
+
+    @property
+    def nonce_capability(self) -> str | None:
+        return _fresh_profile.NONCE_CAPABILITY if self.echo_nonce else None
+
+    def nonce_read(self, nonce: str, method: str, *args):
+        """Serve one read and echo the reader's nonce, so the reader can bind the response's age to its own check."""
+        return getattr(self, method)(*args), nonce
 
     def authority_context(self, ref: str) -> dict | None:
         return copy.deepcopy(self.contexts.get(ref))
@@ -1036,7 +1188,95 @@ class BoundedAuthorizationWorkflow:
             inputs=inputs, now=now, reasons=reasons, stage=stage,
             time_source=self.time_source, tolerance_seconds=self.clock_tolerance_seconds,
             **({"check_id": check_id} if check_id else {}),
+            **({"recorded_at": self._svc()} if self._freshness else {}),
         )
+
+    @property
+    def _freshness(self):
+        """The opt-in freshness/0.1 configuration, or None on the default path."""
+        profile = self.runtime_authority_profile
+        return profile.freshness if profile is not None else None
+
+    def _svc(self) -> str:
+        """The service clock, re-read now (``recorded_at``)."""
+        return _iso(_now())
+
+    def _write_time(self, now: datetime) -> str:
+        """Value for a legacy ``*_at`` write field: the evaluation time by default, the service clock under freshness/0.1."""
+        return self._svc() if self._freshness else _iso(now)
+
+    def _eval_stamp(self, now: datetime) -> dict:
+        return {"evaluated_at": _iso(now)} if self._freshness else {}
+
+    def _stamp_attempt(self, attempt: EffectAttempt, now: datetime) -> None:
+        if self._freshness:
+            attempt.evaluated_at, attempt.recorded_at = _iso(now), self._svc()
+
+    def _class_age_bound(self, action_id: str, now: datetime) -> tuple[int | None, str | None, list[str]]:
+        """The class status-age bound: (seconds, extension_id that raised it, defects of active extensions that do not count)."""
+        profile = self.runtime_authority_profile
+        cl = profile.actions.get(action_id) if profile is not None else None
+        if cl is None:
+            return None, None, []
+        fr = profile.freshness
+        if fr is None:
+            return cl.max_status_age_seconds, None, []
+        return effective_age_bound(self.rule_revision_profile, self.records.load().age_extensions, class_id=cl.class_id,
+                                   base_seconds=cl.max_status_age_seconds, now=now,
+                                   max_extension_seconds=fr.max_age_extension_seconds)
+
+    def record_age_extension(self, *, class_id: str, to_max_age_seconds: int, not_before: str, expires_at: str,
+                             outage_ref: str, requested_by: str, signer: str | None,
+                             authority_ref: str | None = None, now: datetime | None = None) -> AgeBoundExtension:
+        """Record an outage extension of one class's age bound as a decision with its authority.
+
+        The signer must be in the signer set configured in the rule-revision profile (N2). A refused attempt is persisted and
+        ``AgeExtensionRefused`` raised. Without a freshness profile there is nothing to extend.
+        """
+        fr = self._freshness
+        if fr is None:
+            raise PermissionError("freshness profile is not enabled")
+        cl = next((c for c in self.runtime_authority_profile.actions.values() if c.class_id == class_id), None)
+        if cl is None:
+            raise ValueError("unknown action class")
+        return self.records.record_age_extension(
+            AgeBoundExtension(extension_id=str(uuid.uuid4()), class_id=class_id, from_max_age_seconds=cl.max_status_age_seconds,
+                              to_max_age_seconds=to_max_age_seconds, not_before=not_before, expires_at=expires_at,
+                              outage_ref=outage_ref, requested_by=requested_by, signer=signer, authority_ref=authority_ref,
+                              recorded_at=self._svc(), evaluated_at=_iso(self._evaluation_time(now))),
+            rule_profile=self.rule_revision_profile, max_extension_seconds=fr.max_age_extension_seconds)
+
+    def reaper(self, *, clock=None):
+        """The host's recovery runner (start-up pass, then the declared interval). Requires the freshness profile."""
+        if self._freshness is None:
+            raise PermissionError("freshness profile is not enabled")
+        from .freshness import Reaper
+        return Reaper(self.records, self._freshness, clock=clock)
+
+    def _expired_before_dispatch(self, check_id: str) -> str | None:
+        """The check's deadline if the service clock, re-read now, has passed it; else None."""
+        opening = self.records.check_opening(check_id)
+        deadline = opening.get("deadline") if opening else None
+        return deadline if deadline and _now() > _fparse(deadline) else None
+
+    def _refuse_expired_before_dispatch(self, *, check_id: str, deadline: str, attempt: EffectAttempt,
+                                        persisted: RuntimeDecision, frozen, inputs, now: datetime) -> None:
+        """Withdraw the licence of a check whose deadline passed before dispatch: nothing is sent to the destination."""
+        code = _fresh_profile.CODE_EXPIRED_BEFORE_DISPATCH
+        assert code == "check_expired_before_dispatch"
+        attempt.status, attempt.error = "failed", code  # definitive: never dispatched (see prior-attempt filter in execute)
+        self._stamp_attempt(attempt, now)
+        self.records.append_attempt(attempt)
+        self.records.append_refusal(EffectTimeRefusal(
+            check_id=check_id, refusal_id=str(uuid.uuid4()), decision_id=persisted.decision_id, effect_id=persisted.effect_id,
+            recorded_at=self._svc(), evaluated_at=_iso(now), deadline=deadline, time_source=self.time_source,
+            original_operation_horizon=persisted.operation_horizon, operation_horizon=self._horizon(frozen),
+            reason_vocabulary_version=VOCABULARY_VERSION, rule_identity=self._rule_identity(inputs),
+            reasons=["check_expired_before_dispatch"], changed_inputs=[], resolution_inputs=inputs))
+        opening = self.records.check_opening(check_id)
+        self.records.append_check_event(CheckEvent.model_validate(
+            dict(opening, phase="expired", recorded_at=self._svc(), reasons=["check_expired_before_dispatch"], input=None)))
+        raise PermissionError(code)
 
     @property
     def _identity(self):
@@ -1049,7 +1289,8 @@ class BoundedAuthorizationWorkflow:
         outcome = self.records.admit_operation(OperationAdmissionRow(
             operation_id=extension["operation_id"], principal_id=binding.principal,
             authority_domain=self._authority_domain(binding), issuer=extension["operation_issuer"],
-            grant_id=binding.grant_id, first_grant_revision=binding.grant_revision, admitted_at=_iso(now)))
+            grant_id=binding.grant_id, first_grant_revision=binding.grant_revision, admitted_at=self._write_time(now),
+            **self._eval_stamp(now)))
         if outcome == "collision":
             reasons.append("operation_grant_mismatch")
         elif outcome == "renewal_unrecorded":
@@ -1081,8 +1322,10 @@ class BoundedAuthorizationWorkflow:
         """
         if self._identity is None:
             raise PermissionError("operation identity profile is not enabled")
-        row = self.records.record_renewal(operation_id=operation_id, to_revision=to_revision,
-                                          written_by=written_by, recorded_at=_iso(self._evaluation_time(now)))
+        evaluated = self._evaluation_time(now)
+        row = self.records.record_renewal(operation_id=operation_id, to_revision=to_revision, written_by=written_by,
+                                          recorded_at=self._write_time(evaluated),
+                                          **({"evaluated_at": _iso(evaluated)} if self._freshness else {}))
         if row.outcome == "refused":
             raise PermissionError(row.refusal_code)
         return row
@@ -1102,7 +1345,7 @@ class BoundedAuthorizationWorkflow:
             resolver_version=identity.resolver_version,
             class_max_age=self.runtime_authority_profile.actions[current.action_id].max_status_age_seconds,
             expected_effective_grant_digest=extension.get("expected_effective_grant_digest"),
-            recorded_at=_iso(now), time_source=self.time_source))
+            recorded_at=self._write_time(now), time_source=self.time_source, **self._eval_stamp(now)))
 
     def decide(self, proposal: RuntimeProposal, *, now: datetime | None = None) -> RuntimeDecision:
         now = self._evaluation_time(now)
@@ -1110,7 +1353,7 @@ class BoundedAuthorizationWorkflow:
         inputs: list[ResolutionInput] = []
         check_ref: list[str] = []
         reasons, binding = self._resolve(frozen, now, inputs=inputs, **({"stage":"decision"} if self.runtime_authority_profile else {}),
-                                         **({"check_ref": check_ref} if self._identity else {}))
+                                         **({"check_ref": check_ref} if (self._identity or self._freshness) else {}))
         if self._identity and binding is not None and not reasons:
             self._admit_operation(binding, now, reasons)
         reasons = self._record_check(inputs, now, reasons, "decision", check_id=check_ref[0] if check_ref else None)
@@ -1125,6 +1368,7 @@ class BoundedAuthorizationWorkflow:
             result="authorized" if not reasons else "hold",
             reasons=reasons,
             decided_at=_iso(now),
+            **({"evaluated_at": _iso(now), "recorded_at": self._svc()} if self._freshness else {}),
             time_source=self.time_source, operation_horizon=self._horizon(frozen),
             reason_vocabulary_version=(VOCABULARY_VERSION if self.runtime_authority_profile else None),
             rule_identity=self._rule_identity(inputs),
@@ -1158,7 +1402,7 @@ class BoundedAuthorizationWorkflow:
         inputs: list[ResolutionInput] = []
         check_ref: list[str] = []
         reasons, current = self._resolve(frozen, now, inputs=inputs, **({"stage":"effect", "decision":persisted} if self.runtime_authority_profile else {}),
-                                         **({"check_ref": check_ref} if self._identity else {}))
+                                         **({"check_ref": check_ref} if (self._identity or self._freshness) else {}))
         if self._identity and current is not None and not reasons:
             self._operation_gate(current, reasons)
         reasons = self._record_check(inputs, now, reasons, "effect", check_id=check_ref[0] if check_ref else None)
@@ -1171,7 +1415,8 @@ class BoundedAuthorizationWorkflow:
                 refusal_id=str(uuid.uuid4()),
                 decision_id=persisted.decision_id,
                 effect_id=persisted.effect_id,
-                recorded_at=_iso(now),
+                recorded_at=self._write_time(now),
+                **self._eval_stamp(now),
                 time_source=self.time_source,
                 original_operation_horizon=persisted.operation_horizon,
                 operation_horizon=self._horizon(frozen),
@@ -1196,6 +1441,11 @@ class BoundedAuthorizationWorkflow:
             item for item in self.records.load().attempts
             if item.effect_id == effect_id
         ]
+        if self._freshness is not None:
+            # An attempt refused at the dispatch gate never reached the destination: it must not poison a later retry.
+            latest = {item.attempt_id: item for item in prior_attempts}
+            prior_attempts = [item for item in latest.values()
+                              if not (item.status == "failed" and item.error == _fresh_profile.CODE_EXPIRED_BEFORE_DISPATCH)]
         rec = self._observe_and_reconcile(effect_id, now=now)
         existing = rec.observation
         if rec.result == "applied":
@@ -1210,6 +1460,7 @@ class BoundedAuthorizationWorkflow:
             )
             if check_ref:
                 self._join_attempt(attempt, persisted, current, check_ref[0], now)
+            self._stamp_attempt(attempt, now)
             self.records.append_attempt(attempt)
             return attempt, existing
         if existing is not None and existing.state == "partial" and rec.observation_accepted:
@@ -1224,6 +1475,7 @@ class BoundedAuthorizationWorkflow:
             )
             if check_ref:
                 self._join_attempt(attempt, persisted, current, check_ref[0], now)
+            self._stamp_attempt(attempt, now)
             self.records.append_attempt(attempt)
             return attempt, existing
         if rec.result != "observed_absent":
@@ -1243,7 +1495,16 @@ class BoundedAuthorizationWorkflow:
         )
         if check_ref:
             self._join_attempt(attempt, persisted, current, check_ref[0], now)
+        self._stamp_attempt(attempt, now)
         self.records.append_attempt(attempt)
+
+        if self._freshness is not None and check_ref:
+            # freshness/0.1: re-read the service clock immediately before dispatch. A passed deadline refuses and closes the
+            # check. This narrows the window between check and commit; it does not close it.
+            deadline = self._expired_before_dispatch(check_ref[0])
+            if deadline is not None:
+                self._refuse_expired_before_dispatch(check_id=check_ref[0], deadline=deadline, attempt=attempt,
+                                                     persisted=persisted, frozen=frozen, inputs=inputs, now=now)
 
         # No authority-context or grant reread occurs after validation. The destination
         # receives only the frozen proposal plus values in the validated binding.
@@ -1273,6 +1534,7 @@ class BoundedAuthorizationWorkflow:
             attempt.status = "unknown"
             attempt.error = "destination_outcome_unknown:" + type(exc).__name__
 
+        self._stamp_attempt(attempt, now)
         self.records.append_attempt(attempt)
         post = self._observe_and_reconcile(effect_id, now=now)
         return attempt, post.observation if post.observation_accepted else None
@@ -1365,7 +1627,11 @@ class BoundedAuthorizationWorkflow:
                     observed_at = observed_at.astimezone(timezone.utc)
 
         if observed_at is not None and evaluation_time is not None and policy is not None:
-            future_limit = evaluation_time + timedelta(seconds=policy.clock_tolerance_seconds)
+            # freshness/0.1 decouples the observation clock from the evaluation pass: "future" is judged against the service
+            # clock re-read now (an observation stamped by the checked party after the pass began is not future), while
+            # staleness stays relative to the evaluation. Elapsed time since the check opened is the dispatch deadline's job.
+            reference = max(evaluation_time, _now()) if self._freshness is not None else evaluation_time
+            future_limit = reference + timedelta(seconds=policy.clock_tolerance_seconds)
             if observed_at > future_limit:
                 reasons.append("observation_time_future")
             elif (evaluation_time - observed_at).total_seconds() > policy.max_age_seconds:
@@ -1420,6 +1686,13 @@ class BoundedAuthorizationWorkflow:
         changed = []
         for item in inputs:
             if item.input_type not in {"grant", "policy", "approval", "evidence", "role_mapping"}:
+                continue
+            if item.read_state == "nonce_mismatch":
+                # freshness/0.1: the response echoed a nonce other than this check's: record both, whatever else it says
+                changed.append(RefusalInputVersion(
+                    input_type=item.input_type, input_id=item.input_id,
+                    expected_version="nonce=" + item.expected.get("nonce", "none"),
+                    observed_version="nonce=" + item.observed.get("nonce", "none")))
                 continue
             expected = dict(item.expected)
             if item.input_type == "grant":
@@ -1494,9 +1767,13 @@ class BoundedAuthorizationWorkflow:
         check_id = str(uuid.uuid4())
         if check_ref is not None:
             check_ref.append(check_id)  # lets the caller record the ResolutionCheck under the journal id
-        with self.records.check_lease(check_id):
-            return self._resolve_journal(proposal, now, inputs=inputs, stage=stage,
-                                         decision=decision, check_id=check_id)
+        fr = self._freshness
+        try:
+            with self.records.check_lease(check_id, **({"acquire_timeout": fr.lease_acquire_timeout_seconds} if fr else {})):
+                return self._resolve_journal(proposal, now, inputs=inputs, stage=stage,
+                                             decision=decision, check_id=check_id)
+        except CheckLeaseUnavailable:
+            return ["check_lease_unavailable"], None
 
     def _resolve_journal(self, proposal, now, *, inputs, stage, decision, check_id):
         """Opt-in write-ahead recording, with no shared per-call mutable state."""
@@ -1504,17 +1781,34 @@ class BoundedAuthorizationWorkflow:
         if profile is None:
             return self._resolve_inputs(proposal, now, inputs=inputs)
         action_class = profile.actions.get(proposal.action_id)
+        fr = profile.freshness
+        clocks = {}
+        nonce = None
+        if fr is not None:
+            # Three named clocks: recorded_at is the service clock at THIS write; evaluated_at is the shared evaluation pass.
+            # The deadline is fixed at opening: opened_at + the class age bound (plus a recorded, authorised extension).
+            opened = _now()
+            bound, extension_id, _ = self._class_age_bound(proposal.action_id, now)
+            clocks = {"evaluated_at": _iso(now), "recorded_at": _iso(opened)}
+            if bound is not None:
+                clocks.update(deadline=_iso(opened + timedelta(seconds=bound)), age_bound_seconds=bound,
+                              **({"extension_id": extension_id} if extension_id else {}))
+            nonce = uuid.uuid4().hex if fr.nonce else None
+            if nonce:
+                clocks["nonce"] = nonce
         event = CheckEvent(
-            check_id=check_id, phase="opened", stage=stage, recorded_at=_iso(now),
+            check_id=check_id, phase="opened", stage=stage, recorded_at=clocks.pop("recorded_at", _iso(now)),
             owner=_process_owner(), proposal_commitment=commitment(proposal.model_dump(mode="json")),
             decision_id=decision.decision_id if decision else None,
             effect_id=decision.effect_id if decision else None,
             action_class=action_class.model_dump() if action_class else {},
+            **clocks,
         )
         self.records.append_check_event(event)
         def retain(item):
-            self.records.append_check_event(event.model_copy(update={"phase":"input", "input":item}))
-        reads = _JournalInputs([], retain)
+            self.records.append_check_event(event.model_copy(update={
+                "phase": "input", "input": item, **({"recorded_at": self._svc()} if fr else {})}))
+        reads = _JournalInputs([], retain, nonce=nonce, freshness=fr is not None)
         try:
             if action_class is None:
                 reasons, binding = ["action_class_unknown"], None
@@ -1524,6 +1818,8 @@ class BoundedAuthorizationWorkflow:
                 reasons, binding = ["resolver_not_authenticated"], None
             else:
                 reasons, binding = self._resolve_inputs(proposal, now, inputs=reads)
+                if reads.mismatches:  # a replayed or foreign response: its age cannot be bound to this check
+                    reasons, binding = sorted(set(reasons + ["status_nonce_mismatch"])), None
         except _ResolverReadFailure:
             reasons, binding = ["status_unreadable"], None
         except (ValueError, KeyError, TypeError, AttributeError):
@@ -1532,7 +1828,8 @@ class BoundedAuthorizationWorkflow:
         finally:
             if inputs is not None:
                 inputs.extend(reads)
-        self.records.append_check_event(event.model_copy(update={"phase":"completed", "reasons":reasons}))
+        self.records.append_check_event(event.model_copy(update={
+            "phase": "completed", "reasons": reasons, **({"recorded_at": self._svc()} if fr else {})}))
         return reasons, binding
 
     def _read_grant(self, inputs, grant_id, action_id):
@@ -1541,7 +1838,7 @@ class BoundedAuthorizationWorkflow:
             return self.resolver.grant_status(grant_id)
         failed = False
         try:
-            status = self.resolver.grant_status(grant_id)
+            status = self._read_via_resolver(inputs, "grant", grant_id, self.resolver.grant_status, grant_id)
         except Exception:
             status, failed = None, True
         if status is None:
@@ -1563,17 +1860,39 @@ class BoundedAuthorizationWorkflow:
                 if candidate is not None and candidate.status == "active" and not known_denial:
                     status = candidate
                     inputs.read_states[("grant", grant_id)] = "cached_positive"
+                    inputs.age_bases[("grant", grant_id)] = "source_asserted"  # a cached positive is never nonce bound
             if status is None and failed:
                 raise _ResolverReadFailure()
         inputs.records[("grant", grant_id)] = copy.deepcopy(status)
         return status
+
+    _READ_METHODS = {"authority_context": "authority_context", "role_mapping": "role_mapping", "identity": "identity_status",
+                     "mandate": "issuer_mandate", "grant": "grant_status", "conflict": "conflict_status",
+                     "policy": "policy_status", "approval": "approval_status", "evidence": "evidence_status"}
+
+    def _read_via_resolver(self, inputs, kind, ref, method, *args):
+        """One resolver read. Under freshness/0.1, where the resolver supports it, the reader sends this check's nonce and
+        compares the echo: an echoed nonce makes the age ``nonce_bound``, a different one is recorded as a mismatch (the read
+        is not accepted). No echo support, or no freshness profile: the plain read, age ``source_asserted``."""
+        nonce = getattr(inputs, "nonce", None)
+        if (not nonce or getattr(self.resolver, "nonce_capability", None) != _fresh_profile.NONCE_CAPABILITY
+                or kind not in self._READ_METHODS):
+            return method(*args)
+        value, echoed = self.resolver.nonce_read(nonce, self._READ_METHODS[kind], *args)
+        if value is not None:
+            if echoed == nonce:
+                inputs.age_bases[(kind, ref)] = "nonce_bound"
+            else:
+                inputs.mismatches[(kind, ref)] = (nonce, echoed)
+                inputs.read_states[(kind, ref)] = "nonce_mismatch"
+        return value
 
     def _read_input(self, inputs, kind, ref, method, *args):
         """Wrap resolver exceptions and preserve an actual missing-read diagnostic."""
         if self.runtime_authority_profile is None:
             return method(*args)
         try:
-            value = method(*args)
+            value = self._read_via_resolver(inputs, kind, ref, method, *args)
         except Exception:
             inputs.append(ResolutionInput(input_type=kind, input_id=ref, missing=True,
                                           read_state="unreadable"))
@@ -1731,7 +2050,12 @@ class BoundedAuthorizationWorkflow:
                                if self.runtime_authority_profile else "grant_not_active")
             if status.revision != grant["revision"]:
                 reasons.append("grant_revision_stale")
-            if not self._fresh(status.observed_at, now, (self.runtime_authority_profile.actions[proposal.action_id].max_status_age_seconds
+            if self._freshness is not None:
+                bound, _, defects = self._class_age_bound(proposal.action_id, now)
+                if not self._fresh(status.observed_at, now, bound):
+                    reasons.append("grant_status_stale_or_future")
+                    reasons.extend(defects)  # an active extension that does not count (e.g. its signer lost authority)
+            elif not self._fresh(status.observed_at, now, (self.runtime_authority_profile.actions[proposal.action_id].max_status_age_seconds
                     if self.runtime_authority_profile else self.status_max_age_seconds)):
                 reasons.append("grant_status_stale_or_future")
 

@@ -203,7 +203,8 @@ _REASON_SOURCES = ("bounded.py", "runtime_authority.py")
 _REASON_NAMES = {"reasons", "mismatches", "result", "refusal_reasons"}
 # Non-literal values that are known to carry reasons produced elsewhere in the
 # scanned sources (and therefore already enumerated by this walk).
-_DELEGATED = {"extra_reasons", "validate_evidence(status, criterion, profile, context)"}
+_DELEGATED = {"extra_reasons", "validate_evidence(status, criterion, profile, context)",
+              "defects"}  # defects: age-extension defect codes from freshness.extension_defects (checked by tests/test_freshness.py)
 
 
 def _reason_literals(node, grant_states):
