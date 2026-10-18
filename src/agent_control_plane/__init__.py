@@ -62,7 +62,7 @@ from agent_control_plane.policy_config import (
     load_policy_config,
 )
 from agent_control_plane.policy_gate import PolicyGate
-from agent_control_plane.redaction import redact_replay_bundle, redact_run_record
+from agent_control_plane.redaction import redact_replay_bundle, redact_run_record, redact_tool_execution_result
 from agent_control_plane.records import RunRecorder
 from agent_control_plane.replay import generate_replay_bundle
 from agent_control_plane.signing import (
@@ -131,6 +131,7 @@ __all__ = [
     "load_policy_config",
     "redact_replay_bundle",
     "redact_run_record",
+    "redact_tool_execution_result",
     "sign_replay_bundle",
     "validate_replay_bundle",
     "validate_run_record",
