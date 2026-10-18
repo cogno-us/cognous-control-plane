@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Fixed — `acp run` strict input parsing (F1)
+- Input files are parsed fail-closed: duplicate object members (`input_json_duplicate_member`), `NaN`/`Infinity`/`-Infinity` (`input_json_non_finite_number`) and non-UTF-8 bytes (`input_not_utf8`) are refused with exit 2 and the stable code in the message. Before, duplicates silently resolved to the last value. Records for valid inputs are unchanged (examples diffed before/after, 11 files equal after normalising uuids, timestamps and paths). Other CLI entry points are not changed.
+
 ### Fixed — `acp run` hardening (F1, review R1 finding 9)
 - Untrusted member and key names are escaped (control, format and non-printable characters become `\xNN`/`\uNNNN`), bounded to five names of 60 characters and a 200-character message before they reach stderr or the text output, so a name can no longer forge a line or an ANSI sequence. Output directories that did not exist are created without `exist_ok` and existing ones are re-verified (same inode, not a symlink, still empty) at use; inputs are read through one `O_NOFOLLOW` descriptor with `fstat` re-checks. The window between check and use is narrowed, not closed against a hostile local writer. Tests added for the surviving mutants R1 found (CR/LF/NUL on an existing path, a real hard link, both nesting directions with an existing parent, both input-containment halves).
 

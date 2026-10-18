@@ -400,3 +400,55 @@ def test_input_swapped_for_a_symlink_after_validation_is_not_read(tmp_path, monk
     code, _, stderr = _invoke(*_argv(inputs, tmp_path / "store", tmp_path / "out"))
     assert code == 2 and "cannot open input safely" in stderr, stderr
     assert not (tmp_path / "store").exists() and not (tmp_path / "out").exists()
+
+
+# --- strict input parsing (duplicate members, NaN/Infinity, non-UTF-8) -----------------------------------------------------
+
+
+def _dup_member(path: Path, key: str, value) -> None:
+    text = path.read_text(encoding="utf-8").rstrip()
+    assert text.endswith("}")
+    path.write_text(text[:-1] + f", {json.dumps(key)}: {json.dumps(value)}}}", encoding="utf-8")
+
+
+@pytest.mark.parametrize("name", ["proposal", "authority-context", "resolver-state", "manifest"])
+@pytest.mark.parametrize("same_value", [True, False])
+def test_duplicate_object_member_is_refused_in_every_input(tmp_path, name, same_value):
+    inputs = _inputs(tmp_path, "authorized")
+    doc = _json(inputs[name])
+    key = next(iter(doc))
+    _dup_member(inputs[name], key, doc[key] if same_value else "other")
+    code, _, err = _run(tmp_path, inputs=inputs)
+    assert code == 2 and "[input_json_duplicate_member]" in err and not (tmp_path / "out").exists()
+
+
+def test_duplicate_member_in_a_nested_object_is_refused(tmp_path):
+    inputs = _inputs(tmp_path, "authorized")
+    path = inputs["proposal"]
+    path.write_text(path.read_text(encoding="utf-8").replace('"customer_id": "customer-001",', '"customer_id": "a", "customer_id": "b",', 1))
+    code, _, err = _run(tmp_path, inputs=inputs)
+    assert code == 2 and "[input_json_duplicate_member]" in err
+
+
+@pytest.mark.parametrize("token", ["NaN", "Infinity", "-Infinity"])
+def test_non_finite_numbers_are_refused_with_their_own_code(tmp_path, token):
+    inputs = _inputs(tmp_path, "authorized")
+    path = inputs["proposal"]
+    # in a free-form member, where the model would not otherwise reject the value
+    path.write_text(path.read_text(encoding="utf-8").replace('"risk_metadata": {}', f'"risk_metadata": {{"x": {token}}}'))
+    code, _, err = _run(tmp_path, inputs=inputs)
+    assert code == 2 and "[input_json_non_finite_number]" in err
+
+
+def test_non_utf8_input_is_refused_with_its_own_code(tmp_path):
+    inputs = _inputs(tmp_path, "authorized")
+    inputs["proposal"].write_bytes(b'{"a": "\xe9"}')
+    code, _, err = _run(tmp_path, inputs=inputs)
+    assert code == 2 and "[input_not_utf8]" in err
+
+
+def test_strict_loads_accepts_ordinary_documents_and_keeps_values():
+    from agent_control_plane.cli_run import strict_loads
+
+    assert strict_loads(b'{"a": [1, 2.5, null, true], "b": {"c": "\\u00e9"}}') == {"a": [1, 2.5, None, True], "b": {"c": "é"}}
+    assert strict_loads(b'{"a": 1, "b": 1}') == {"a": 1, "b": 1}  # same value under different keys is fine
