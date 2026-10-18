@@ -16,6 +16,55 @@ from .reversibility import ReversibilityProfile, check_class_members, flatten_x_
 
 PROFILE_VERSION = "runtime-authority/0.1"
 VOCABULARY_VERSION = "runtime-authority-reasons/0.1"
+VOCABULARY_VERSION_0_2 = "runtime-authority-reasons/0.2"
+#: Codes registered by 0.2 and not by 0.1 (all emitted only by opt-in profiles). ``schemas/runtime_authority_reasons_0_1.json`` is the
+#: original 121 codes, byte-identical to its pinned form; ``..._0_2.json`` is the full set (0.1 plus these) because one row can mix
+#: codes of both, and a row carries exactly one label that must resolve all of its codes. A test pins this set to the two files.
+CODES_ADDED_IN_0_2 = frozenset({
+    "operation_grant_mismatch",
+    "operation_id_invalid",
+    "operation_id_missing",
+    "operation_not_admitted",
+    "operation_renewal_unrecorded",
+    "renewal_not_written_by_grant_issuer",
+    "renewal_revision_not_new",
+    "check_expired_before_dispatch",
+    "check_overdue",
+    "check_lease_unavailable",
+    "status_nonce_mismatch",
+    "age_extension_unsigned",
+    "age_extension_self_signed",
+    "age_extension_signer_not_configured",
+    "age_extension_exceeds_limit",
+    "age_extension_invalid",
+    "age_extension_authority_unconfigured",
+    "holder_inventory_missing",
+    "merge_operation_ids_invalid",
+    "merge_operation_not_admitted",
+    "merge_operation_discriminator_mismatch",
+    "merge_operation_already_folded",
+    "merge_survivor_already_folded",
+    "merge_authority_unfunded",
+    "merge_rule_unknown",
+    "operation_merged_effect_exists",
+    "operation_merged_effect_unresolved",
+    "purpose_cache_irreversible_class",
+    "purpose_cache_after_reversal_window",
+    "purpose_cache_stale",
+    "purpose_closure_recorded",
+    "age_extension_irreversible_class",
+    "dedupe_unresolved_attempt_blocks_new_key",
+    "attempt_unresolved_past_horizon",
+    "escalation_after_key_ttl",
+    "dedupe_operation_effect_applied",
+})
+
+
+def vocabulary_for(reasons) -> str:
+    """The registry label a row's reasons need: 0.1 unless a code only 0.2 registers is present (then 0.2, a superset of 0.1).
+
+    Rows that carry no opt-in-profile code keep the pinned 0.1 label, so the default path is unchanged."""
+    return VOCABULARY_VERSION_0_2 if any(code in CODES_ADDED_IN_0_2 for code in reasons) else VOCABULARY_VERSION
 
 
 class ActionClass(BaseModel):

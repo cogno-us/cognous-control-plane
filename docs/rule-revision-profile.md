@@ -2,8 +2,11 @@
 
 One record shape, `RuleRevision`, modelled on `VocabularyChange`, covers four rule kinds: `reason_registry`, `policy`,
 `gate_implementation`, `merge_equivalence_rule`. Nothing is active unless a `RuleRevisionProfile` is passed to
-`BoundedAuthorizationWorkflow(rule_revision_profile=...)`. The pinned default path and the reason registry version
-(`runtime-authority-reasons/0.1`, 121 codes: 120 `typed_only`, 1 `recomputable`) are unchanged.
+`BoundedAuthorizationWorkflow(rule_revision_profile=...)`. The pinned default path is unchanged. The reason registry is two labels:
+`runtime-authority-reasons/0.1` is the original 121 codes (120 `typed_only`, 1 `recomputable`) in `schemas/runtime_authority_reasons_0_1.json`,
+byte-identical to its pinned form; `runtime-authority-reasons/0.2` is the full set (157 codes: 156 `typed_only`, 1 `recomputable`) in
+`schemas/runtime_authority_reasons_0_2.json`, the 0.1 entries unchanged plus the codes the opt-in profiles emit. A row carries 0.1 unless one
+of its reasons is a 0.2 code, so default-path rows are unchanged.
 
 ## Row
 `rule_ref`, `from_digest` (None on an adoption row), `to_digest`, `reviser`, `signer`, `authority_ref`, `reason`, `supersedes`,

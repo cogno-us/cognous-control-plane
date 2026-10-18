@@ -24,7 +24,7 @@ from tests.test_bounded_authorization import NOW, POLICY_REF, PROFILE
 from tests.test_runtime_authority import bind_approval, setup_flow
 
 REGISTRY = json.loads((__import__("pathlib").Path(__file__).resolve().parents[1] / "schemas"
-                       / "runtime_authority_reasons_0_1.json").read_text(encoding="utf-8"))
+                       / "runtime_authority_reasons_0_2.json").read_text(encoding="utf-8"))
 SIGNER, OTHER = "urn:cognous:principal:rule-signer", "urn:cognous:principal:requester"
 POLICY_SIGNER = "urn:cognous:principal:policy-signer"
 POLICY_DIGEST = commitment({"policy": "v1"})
@@ -180,6 +180,9 @@ def test_stalled_check_past_class_bound_is_refused_before_dispatch(tmp_path, clo
     assert row.recorded_at > row.deadline and row.evaluated_at == NOW.isoformat()
     events = [e for e in rec.check_events if e.check_id == row.check_id]
     assert [e.phase for e in events][-2:] == ["completed", "expired"] and events[-1].reasons == ["check_expired_before_dispatch"]
+    # check_expired_before_dispatch is registered by 0.2 only: the refusal and the expired event say so; the completed event had no such code
+    assert row.reason_vocabulary_version == events[-1].reason_vocabulary_version == "runtime-authority-reasons/0.2"
+    assert events[-2].reason_vocabulary_version == "runtime-authority-reasons/0.1"
     last = [a for a in rec.attempts][-1]
     assert (last.status, last.error) == ("failed", "check_expired_before_dispatch")
 
@@ -279,6 +282,7 @@ def test_live_check_past_deadline_is_reported_overdue_and_not_closed(tmp_path, c
     assert not report.interrupted
     phases = [e.phase for e in f.records.load().check_events]
     assert "overdue" in phases and "interrupted" not in phases and "completed" not in phases, "alive: reported, not closed"
+    assert [e.reason_vocabulary_version for e in f.records.load().check_events if e.phase == "overdue"] == ["runtime-authority-reasons/0.2"]
     again = f.records.recovery_pass()
     assert len(again.overdue) == 1 and [e.phase for e in f.records.load().check_events].count("overdue") == 1, "reported once in the journal"
     release.set()

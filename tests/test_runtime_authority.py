@@ -283,8 +283,8 @@ def _emitted_reason_codes():
 
 
 def test_every_emitted_reason_code_is_in_the_versioned_registry():
-    registry = json.loads((_REPO / "schemas" / "runtime_authority_reasons_0_1.json").read_text(encoding="utf-8"))
-    assert registry["version"] == "runtime-authority-reasons/0.1"
+    registry = json.loads((_REPO / "schemas" / "runtime_authority_reasons_0_2.json").read_text(encoding="utf-8"))
+    assert registry["version"] == "runtime-authority-reasons/0.2"  # the full set: every code a workflow can emit, 0.1 plus the profile codes
     emitted = _emitted_reason_codes()
     # Guard the walk itself: representative codes from every emission shape.
     for sample in ("adapter_mismatch", "authority_context_missing", "grant_suspended",

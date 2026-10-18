@@ -23,7 +23,7 @@ from agent_control_plane.runtime_authority import ActionClass, PurposeStatus, Ru
 from tests.test_bounded_authorization import INSTITUTION, NOW, POLICY_REF
 from tests.test_runtime_authority import bind_approval, setup_flow
 
-REGISTRY = json.loads((pathlib.Path(__file__).resolve().parents[1] / "schemas" / "runtime_authority_reasons_0_1.json").read_text())
+REGISTRY = json.loads((pathlib.Path(__file__).resolve().parents[1] / "schemas" / "runtime_authority_reasons_0_2.json").read_text())
 UNTIL = (NOW + timedelta(minutes=10)).isoformat()
 
 
