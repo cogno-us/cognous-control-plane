@@ -10,6 +10,7 @@ from typing import Sequence, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
+from agent_control_plane.cli_run import add_run_parser, run_command
 from agent_control_plane.models import (
     RedactionConfig,
     ReplayBundle,
@@ -63,6 +64,8 @@ def _build_parser() -> argparse.ArgumentParser:
     verify_signed = subparsers.add_parser("verify-signed-replay")
     verify_signed.add_argument("path")
     verify_signed.add_argument("--secret", required=True)
+
+    add_run_parser(subparsers)
 
     return parser
 
@@ -129,6 +132,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         args = parser.parse_args(argv)
     except SystemExit as exc:
         return int(exc.code)
+
+    if args.command == "run":
+        return run_command(args, sys.stderr)
 
     try:
         if args.command == "validate-run":

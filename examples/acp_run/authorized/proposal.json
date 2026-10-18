@@ -1,0 +1,32 @@
+{
+  "manifest_id": "refund-integration-pilot-v1",
+  "manifest_version": "1.1",
+  "manifest_digest": "sha256:4d1ad6c96bc242c63998231b4df3ad7c86dc2e5e59cdae63afe7bff86e60f6ac",
+  "actor": "urn:cognous:identity:refund-agent-1",
+  "principal": "urn:cognous:principal:refund-service",
+  "action_id": "urn:cognous:action:refund-issue-routine-v1",
+  "adapter_id": "urn:cognous:adapter:synthetic-refund-v1",
+  "target": "urn:cognous:synthetic-account:customer-001",
+  "payload": {
+    "customer_id": "customer-001",
+    "refund_reason": "duplicate"
+  },
+  "payload_commitment": "sha256:6b782ebbcc034edeca4069b31aa4d8cbc9d3eeaf3b2034ab989bb430de962c0e",
+  "requested_permissions": [
+    "refund.issue.routine"
+  ],
+  "amount": 50.0,
+  "unit": "USD",
+  "effects": 1,
+  "authority_context_ref": "urn:cognous:alvorada:public-stack-profile:0.1.0",
+  "requirement_id": "urn:cognous:authority-requirement:refund-routine-v1",
+  "risk_metadata": {},
+  "not_before": null,
+  "expires_at": null,
+  "correlation_id": "case-1",
+  "run_id": "run-1",
+  "expected_side_effects": [],
+  "evidence_refs": [
+    "urn:cognous:evidence:refund-entitlement"
+  ]
+}
