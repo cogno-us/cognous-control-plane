@@ -47,6 +47,9 @@ from .freshness import (
 
 MANIFEST_VERSION = "1.1"
 AUTHORITY_CONTEXT_VERSION = "0.1.0"
+# Governance Authority Context schema generations accepted by name. 0.2.0 adds requirement.consequence.delay_limit, which
+# is a declaration only here: it is neither read nor enforced and no default delay is applied to a 0.1.0 context.
+AUTHORITY_CONTEXT_VERSIONS = ("0.1.0", "0.2.0")
 AUTHORITY_CONTEXT_STATUS = "proposed_pending_governor_review"
 MANIFEST_UPSTREAM_COMMIT = "46c950bed37fe3812000895430bc0312d29e37ce"
 ALVORADA_UPSTREAM_COMMIT = "fb3d97938969a89e149e8ff8db2756091d1233fc"
@@ -2252,7 +2255,7 @@ class BoundedAuthorizationWorkflow:
         if not tenant_aware and context.get("tenant_id") is not None:
             reasons.append("tenant_proposal_required")
 
-        if context.get("schema_version") != AUTHORITY_CONTEXT_VERSION:
+        if context.get("schema_version") not in AUTHORITY_CONTEXT_VERSIONS:
             reasons.append("authority_context_version_mismatch")
         if context.get("interface_status") != AUTHORITY_CONTEXT_STATUS:
             reasons.append("authority_context_status_mismatch")
