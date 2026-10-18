@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 from .runtime_authority import (RuntimeAuthorityProfile, VOCABULARY_VERSION_0_2, reopen_conditions,
                                 vocabulary_for)
 from .strict_json import strict_loads
+from .time_instant import TIME_INSTANT_NAIVE, InstantError, parse_instant
 from .rule_revision import RuleRevision, RuleRevisionProfile, RuleRevisionRefusal, resolve_rule, rule_identity
 from .operation_identity import (
     DESTINATION_CAPABILITY as OPERATION_IDENTITY_CAPABILITY, AttemptJoin, OperationAdmissionRow,
@@ -60,8 +61,8 @@ def _iso(value: datetime) -> str:
 
 
 def _parse(value: str) -> datetime:
-    dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+    """Strict instant (ODES time semantics section 1): a naive or malformed time raises ``InstantError`` (a ValueError)."""
+    return parse_instant(value)
 
 
 def _canonical_bytes(value: object) -> bytes:
@@ -1849,15 +1850,10 @@ class BoundedAuthorizationWorkflow:
             reasons.append("observation_time_missing")
         else:
             try:
-                observed_at = datetime.fromisoformat(raw_time.replace("Z", "+00:00"))
-            except (TypeError, ValueError):
-                reasons.append("observation_time_malformed")
-            else:
-                if observed_at.tzinfo is None or observed_at.utcoffset() is None:
-                    reasons.append("observation_time_timezone_missing")
-                    observed_at = None
-                else:
-                    observed_at = observed_at.astimezone(timezone.utc)
+                observed_at = parse_instant(raw_time)
+            except InstantError as exc:
+                reasons.append("observation_time_timezone_missing" if exc.code == TIME_INSTANT_NAIVE
+                               else "observation_time_malformed")
 
         if observed_at is not None and evaluation_time is not None and policy is not None:
             # freshness/0.1 decouples the observation clock from the evaluation pass: "future" is judged against the service

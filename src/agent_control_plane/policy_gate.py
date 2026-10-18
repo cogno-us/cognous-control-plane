@@ -32,6 +32,8 @@ import hashlib
 import json
 import uuid
 from datetime import datetime, timezone
+
+from agent_control_plane.time_instant import aware_utc, parse_instant
 from typing import TYPE_CHECKING
 
 from agent_control_plane.models import (
@@ -71,8 +73,8 @@ class PolicyGate:
             frame: The execution frame active for the current run.
             authority_records: Authority records granting scoped permissions.
             now: Optional evaluation time used to filter active authority
-                records. Strings must be ISO-8601; naive datetimes are
-                treated as UTC.
+                records. Strings must be RFC 3339 instants with an explicit
+                offset; a naive string or datetime is refused (ValueError).
 
         Returns:
             A :class:`~agent_control_plane.models.PolicyDecision` with
@@ -291,12 +293,8 @@ class PolicyGate:
         return datetime.now(timezone.utc)
 
     def _parse_time(self, value: str | datetime) -> datetime:
-        """Parse a time value and normalise it to UTC."""
+        """Parse a time value strictly and normalise it to UTC; a naive or malformed time raises ``InstantError``."""
 
         if isinstance(value, datetime):
-            dt = value
-        else:
-            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        if dt.tzinfo is None:
-            return dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(timezone.utc)
+            return aware_utc(value)
+        return parse_instant(value)

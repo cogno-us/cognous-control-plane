@@ -28,6 +28,8 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+
+from .time_instant import TIME_INSTANT_NAIVE, InstantError, parse_instant
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -78,8 +80,7 @@ class SnapshotUse(BaseModel):
 
 
 def _utc(value: str) -> datetime:
-    dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+    return parse_instant(value)
 
 
 X_MEMBER = "x-reversibility"
@@ -146,11 +147,13 @@ def check_class_members(data: dict) -> dict:
                          "reversal_cost only for reversible_at_cost")
     if until is not None:
         try:
-            stamp = datetime.fromisoformat(until.replace("Z", "+00:00"))
-        except (TypeError, ValueError):
+            parse_instant(until)
+        except InstantError as exc:
+            if exc.code == TIME_INSTANT_NAIVE:
+                raise ValueError("timestamp_invalid: reversible_until needs a UTC offset") from None
             raise ValueError("timestamp_invalid: reversible_until") from None
-        if stamp.tzinfo is None:
-            raise ValueError("timestamp_invalid: reversible_until needs a UTC offset")
+        except TypeError:
+            raise ValueError("timestamp_invalid: reversible_until") from None
     if data.get("reads_protected_data") and value != "irreversible":
         raise ValueError("protected_read_not_irreversible: a read cannot be taken back")
     if data.get("counterparty_observable") is False and value != "irreversible":

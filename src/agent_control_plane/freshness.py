@@ -27,6 +27,8 @@ import logging
 import threading
 import time
 from datetime import datetime, timedelta, timezone
+
+from .time_instant import parse_instant
 from typing import Callable, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -132,8 +134,8 @@ class RecoveryReport(BaseModel):
 
 
 def parse_time(value: str) -> datetime:
-    dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+    """Strict instant (ODES time semantics section 1); a naive or malformed time raises ``InstantError`` (a ValueError)."""
+    return parse_instant(value)
 
 
 def iso(value: datetime) -> str:

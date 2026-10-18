@@ -12,6 +12,18 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
+try:
+    from .time_instant import TIME_INSTANT_NAIVE, InstantError, parse_instant
+except ImportError:  # loaded standalone by file path (tools/verify_decision_input_commitment.py): load the stdlib-only sibling
+    import importlib.util as _importlib_util
+    from pathlib import Path as _Path
+
+    _spec = _importlib_util.spec_from_file_location("_acp_time_instant", _Path(__file__).with_name("time_instant.py"))
+    _time_instant = _importlib_util.module_from_spec(_spec)
+    _spec.loader.exec_module(_time_instant)
+    TIME_INSTANT_NAIVE, InstantError, parse_instant = (
+        _time_instant.TIME_INSTANT_NAIVE, _time_instant.InstantError, _time_instant.parse_instant)
+
 PROFILE_VERSION = "0.1.0-proposed"
 CANONICALIZATION_PROFILE = "json-sort-keys-compact-utf8-no-nan-python-semantics-v0.1-proposed"
 COMMITMENT_ALGORITHM = "SHA-256"
@@ -80,12 +92,11 @@ def _parse_time(value: Any, *, code: str) -> datetime:
     if not isinstance(value, str) or not value.strip():
         raise ProfileValidationError(code, "timestamp must be a non-empty string")
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError as exc:
+        return parse_instant(value)
+    except InstantError as exc:
+        if exc.code == TIME_INSTANT_NAIVE:
+            raise ProfileValidationError(code, "timestamp must include a timezone") from exc
         raise ProfileValidationError(code, "timestamp is malformed") from exc
-    if parsed.tzinfo is None or parsed.utcoffset() is None:
-        raise ProfileValidationError(code, "timestamp must include a timezone")
-    return parsed.astimezone(timezone.utc)
 
 
 def _require_dict(value: Any, path: str) -> dict[str, Any]:

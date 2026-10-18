@@ -49,6 +49,7 @@ from agent_control_plane.models import (
     PolicyDecision,
     RunRecord,
 )
+from agent_control_plane.time_instant import TIME_INSTANT_NAIVE, InstantError, parse_instant
 from agent_control_plane.strict_json import (
     INPUT_DUPLICATE_MEMBER,
     INPUT_NON_FINITE_NUMBER,
@@ -296,12 +297,11 @@ def _parse_now(value: str | None) -> datetime | None:
     if value is None:
         return None
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError as exc:
+        return parse_instant(value)
+    except InstantError as exc:
+        if exc.code == TIME_INSTANT_NAIVE:
+            raise InvalidInput("--now: must be timezone-aware") from exc
         raise InvalidInput(f"--now: not an ISO-8601 time: {value!r}") from exc
-    if parsed.tzinfo is None or parsed.utcoffset() is None:
-        raise InvalidInput("--now: must be timezone-aware")
-    return parsed.astimezone(timezone.utc)
 
 
 # --------------------------------------------------------------------------- #
