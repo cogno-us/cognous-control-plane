@@ -235,6 +235,23 @@ def test_operation_id_cannot_move_to_another_grant(tmp_path):
     assert d.result == "hold" and "operation_grant_mismatch" in d.reasons
 
 
+def test_operation_not_admitted_is_refused_at_effect_time_and_recorded(tmp_path):
+    """R1 test gap: `operation_not_admitted` (effect-time gate) had no test. The admission row is gone between decide and
+    execute (rewritten or lost ledger): the effect is refused, nothing is applied, the refusal row carries the code."""
+    p, r, f, c = setup_flow(tmp_path)
+    enable(r, f, c)
+    d = f.decide(p, now=NOW)
+    assert d.result == "authorized" and run_document(f)["operations"]
+    document = run_document(f)
+    document["operations"] = []
+    f.records._write(document)
+    with pytest.raises(PermissionError):
+        f.execute(p, d, adapter_id=p.adapter_id, now=NOW)
+    refusals = f.records.load().refusals
+    assert refusals and "operation_not_admitted" in refusals[-1].reasons
+    assert f.destination.snapshot()["effects"] == {}
+
+
 # ---------------------------------------------------------------- destination dedupe on the operation id
 class DelayedCommit(LocalRefundDestination):
     """MINIMAL IN-TEST delayed-commit destination (stand-in for the later CI delayed-commit mode)."""

@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 import tempfile
 import uuid
 from datetime import datetime, timezone
@@ -78,6 +79,28 @@ RESOLVER_SECTIONS: dict[str, type[BaseModel]] = {
 
 class InvalidInput(ValueError):
     """Declared input or path refused; maps to exit code 2."""
+
+
+MAX_TEXT = 200
+MAX_NAMES = 5
+
+
+def _safe(value: Any, limit: int = MAX_TEXT) -> str:
+    """Escape and truncate text that may carry untrusted bytes before it reaches stderr or a message.
+
+    Control, format and other non-printable characters (CR, LF, NUL, ESC, bidi overrides, U+2028) become ``\\xNN``/``\\uNNNN``
+    escapes, so a member name cannot forge a line or an ANSI sequence in a terminal or a CI log.
+    """
+    text = "".join(
+        c if c.isprintable() else (f"\\x{ord(c):02x}" if ord(c) < 256 else f"\\u{ord(c):04x}") for c in str(value)
+    )
+    return text if len(text) <= limit else text[: max(limit - 3, 0)] + "..."
+
+
+def _names(names: list[str]) -> str:
+    """A bounded, escaped list of untrusted member names."""
+    shown = ", ".join(_safe(n, 60) for n in names[:MAX_NAMES])
+    return shown + (f" (+{len(names) - MAX_NAMES} more)" if len(names) > MAX_NAMES else "")
 
 
 def add_run_parser(subparsers: Any) -> None:
@@ -151,7 +174,8 @@ def _input_file(raw: str, label: str) -> Path:
     return path
 
 
-def _output_dir(raw: str, label: str) -> Path:
+def _output_dir(raw: str, label: str) -> tuple[Path, tuple[int, int] | None]:
+    """Validate an output directory; also return its identity at validation time (None: it does not exist yet)."""
     path = _lexical_abs(raw)
     _refuse_symlink_components(path)
     if not path.parent.is_dir():
@@ -161,18 +185,72 @@ def _output_dir(raw: str, label: str) -> Path:
             raise InvalidInput(f"{label}: exists and is not a directory")
         if any(path.iterdir()):
             raise InvalidInput(f"{label}: directory is not empty")
-    return path
+    return path, _identity(path)
+
+
+def _identity(path: Path) -> tuple[int, int] | None:
+    """(st_dev, st_ino) of a path without following a final symlink; None when it does not exist."""
+    try:
+        st = os.lstat(path)
+    except FileNotFoundError:
+        return None
+    return (st.st_dev, st.st_ino)
+
+
+def _prepare_output_dir(path: Path, label: str, seen: tuple[int, int] | None) -> None:
+    """Create or re-verify an output directory at use time (closes the check-then-create window as far as practical).
+
+    A directory that did not exist at validation is created WITHOUT ``exist_ok``: if something appeared meanwhile the run is
+    refused. A directory that existed is re-checked: same device and inode, still a real directory (no symlink swap), still empty.
+    Residual: this narrows the window between check and use; it does not make it atomic against a hostile local writer.
+    """
+    _refuse_symlink_components(path)
+    if seen is None:
+        try:
+            os.mkdir(path)
+        except FileExistsError:
+            raise InvalidInput(f"{label}: appeared after validation; refusing to reuse it") from None
+        return
+    if _identity(path) != seen or path.is_symlink() or not path.is_dir():
+        raise InvalidInput(f"{label}: directory changed after validation")
+    if any(path.iterdir()):
+        raise InvalidInput(f"{label}: directory is not empty")
 
 
 def _inside(child: Path, parent: Path) -> bool:
     return child == parent or parent in child.parents
 
 
-def _load_json(path: Path, label: str) -> Any:
+def _read_input_bytes(path: Path, label: str) -> bytes:
+    """Read a validated input through one descriptor: refuse a final symlink, a non-regular file, a hard link or a size change.
+
+    ``_input_file`` checked the path earlier; the file could have been swapped since. ``O_NOFOLLOW`` and ``fstat`` on the opened
+    descriptor re-check what is actually read.
+    """
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NONBLOCK", 0)
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        fd = os.open(path, flags)
+    except OSError as exc:
+        raise InvalidInput(f"{label}: cannot open input safely ({type(exc).__name__})") from exc
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_nlink > 1 or st.st_size > MAX_INPUT_BYTES:
+            raise InvalidInput(f"{label}: input changed after validation")
+        with os.fdopen(fd, "rb", closefd=False) as stream:
+            data = stream.read(MAX_INPUT_BYTES + 1)
+    finally:
+        os.close(fd)
+    if len(data) > MAX_INPUT_BYTES:
+        raise InvalidInput(f"{label}: file larger than {MAX_INPUT_BYTES} bytes")
+    return data
+
+
+def _load_json(path: Path, label: str) -> Any:
+    data = _read_input_bytes(path, label)
+    try:
+        return json.loads(data.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise InvalidInput(f"{label}: invalid JSON: {exc}") from exc
+        raise InvalidInput(f"{label}: invalid JSON: {_safe(exc)}") from exc
 
 
 def _model(model_type: type[BaseModel], payload: Any, label: str) -> Any:
@@ -180,11 +258,11 @@ def _model(model_type: type[BaseModel], payload: Any, label: str) -> Any:
         raise InvalidInput(f"{label}: expected a JSON object")
     unknown = sorted(set(payload) - set(model_type.model_fields))
     if unknown:
-        raise InvalidInput(f"{label}: unknown members refused: {', '.join(unknown)}")
+        raise InvalidInput(f"{label}: unknown members refused: {_names(unknown)}")
     try:
         return model_type.model_validate(payload)
     except ValidationError as exc:
-        raise InvalidInput(f"{label}: {exc.error_count()} validation error(s): {exc.errors()[0]['loc']}") from exc
+        raise InvalidInput(f"{label}: {exc.error_count()} validation error(s): {_safe(exc.errors()[0]['loc'])}") from exc
 
 
 def _resolver(state: Any, context: dict, proposal: RuntimeProposal) -> SyntheticResolver:
@@ -192,14 +270,14 @@ def _resolver(state: Any, context: dict, proposal: RuntimeProposal) -> Synthetic
         raise InvalidInput("resolver-state: expected a JSON object")
     unknown = sorted(set(state) - set(RESOLVER_SECTIONS))
     if unknown:
-        raise InvalidInput(f"resolver-state: unknown sections refused: {', '.join(unknown)}")
+        raise InvalidInput(f"resolver-state: unknown sections refused: {_names(unknown)}")
     sections: dict[str, dict] = {}
     for name, model_type in RESOLVER_SECTIONS.items():
         raw = state.get(name, {})
         if not isinstance(raw, dict):
             raise InvalidInput(f"resolver-state.{name}: expected a JSON object")
         sections[name] = {
-            key: _model(model_type, value, f"resolver-state.{name}[{key!r}]") for key, value in raw.items()
+            key: _model(model_type, value, f"resolver-state.{name}[{_safe(key, 60)!s}]") for key, value in raw.items()
         }
     if not proposal.authority_context_ref:
         raise InvalidInput("proposal: authority_context_ref is required")
@@ -342,13 +420,13 @@ def _emit(envelope: dict, fmt: str) -> None:
         return
     print(f"acp run: {envelope['outcome']} (exit {envelope['exit_code']})")
     for message in envelope["messages"]:
-        print(f"  {message}")
+        print(f"  {_safe(message)}")
     if envelope["reason_codes"]:
-        print("  reason codes: " + ", ".join(envelope["reason_codes"]))
+        print("  reason codes: " + ", ".join(_safe(c, 80) for c in envelope["reason_codes"]))
     ext = envelope["extensions"]["x-acp-run"]
     for key in ("time_source", "effect_id", "attempt_status", "out_dir"):
         if ext.get(key) is not None:
-            print(f"  {key}: {ext[key]}")
+            print(f"  {key}: {_safe(ext[key])}")
     print("  does not prove:")
     for item in envelope["does_not_prove"]:
         print(f"    - {item}")
@@ -368,8 +446,8 @@ def run_command(args: Any, stderr: Any) -> int:
             "context": _input_file(args.authority_context, "--authority-context"),
             "state": _input_file(args.resolver_state, "--resolver-state"),
         }
-        store_dir = _output_dir(args.store_dir, "--store-dir")
-        out_dir = _output_dir(args.out_dir, "--out-dir")
+        store_dir, store_seen = _output_dir(args.store_dir, "--store-dir")
+        out_dir, out_seen = _output_dir(args.out_dir, "--out-dir")
         if _inside(store_dir, out_dir) or _inside(out_dir, store_dir):
             raise InvalidInput("--store-dir and --out-dir must be separate, non-nested directories")
         for label, path in paths.items():
@@ -387,10 +465,20 @@ def run_command(args: Any, stderr: Any) -> int:
         if proposal.manifest_digest != commitment(manifest):
             raise InvalidInput("proposal.manifest_digest does not match the supplied manifest")
     except InvalidInput as exc:
-        print(f"acp run: invalid input: {exc}", file=stderr)
+        print(f"acp run: invalid input: {_safe(exc)}", file=stderr)
         return 2
     except OSError as exc:
         print(f"acp run: cannot read input: {type(exc).__name__}", file=stderr)
+        return 2
+
+    try:
+        _prepare_output_dir(store_dir, "--store-dir", store_seen)
+        _prepare_output_dir(out_dir, "--out-dir", out_seen)
+    except InvalidInput as exc:
+        print(f"acp run: invalid input: {_safe(exc)}", file=stderr)
+        return 2
+    except OSError as exc:
+        print(f"acp run: cannot prepare output directory: {type(exc).__name__}", file=stderr)
         return 2
 
     ext: dict[str, Any] = {
@@ -407,8 +495,6 @@ def run_command(args: Any, stderr: Any) -> int:
     exit_code = 4
     outcome = {"reason_codes": ["internal_error"], "summary": "internal error before a decision"}
     try:
-        store_dir.mkdir(exist_ok=True)
-        out_dir.mkdir(exist_ok=True)
         run_id = proposal.run_id or f"run-{uuid.uuid4()}"
         records = BoundedRecordStore(store_dir / "bounded-run-record.json", run_id)
         destination = (
