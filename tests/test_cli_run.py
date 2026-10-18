@@ -440,6 +440,24 @@ def test_non_finite_numbers_are_refused_with_their_own_code(tmp_path, token):
     assert code == 2 and "[input_json_non_finite_number]" in err
 
 
+@pytest.mark.parametrize("member,code", [
+    ('"x": 1e400', "input_json_non_finite_number"),
+    ('"x": [2.5e999]', "input_json_non_finite_number"),
+    ('"x": "\\ud800"', "input_json_lone_surrogate"),
+    ('"\\udfff": 1', "input_json_lone_surrogate"),
+])
+@pytest.mark.parametrize("which", ["proposal", "authority-context", "resolver-state", "manifest"])
+def test_out_of_range_numbers_and_unpaired_surrogates_are_invalid_input(tmp_path, member, code, which):
+    """Exit 2 with the stable code (not an internal error), and nothing is applied."""
+    inputs = _inputs(tmp_path, "authorized")
+    path = inputs[which]
+    path.write_text(path.read_text(encoding="utf-8").replace("{", "{" + member + ", ", 1), encoding="utf-8")
+    code_, _, err = _run(tmp_path, inputs=inputs)
+    assert code_ == 2 and f"[{code}]" in err
+    destination = tmp_path / "store" / "destination.json"
+    assert not destination.exists() or not _json(destination).get("effects")
+
+
 def test_non_utf8_input_is_refused_with_its_own_code(tmp_path):
     inputs = _inputs(tmp_path, "authorized")
     inputs["proposal"].write_bytes(b'{"a": "\xe9"}')
