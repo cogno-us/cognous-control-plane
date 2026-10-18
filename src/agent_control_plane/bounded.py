@@ -30,6 +30,11 @@ from .operation_identity import (
     OperationRenewalRow, licensed_revisions, operation_status,
 )
 from . import freshness as _fresh_profile
+from . import merge as _merge
+from .dedupe import (DedupeEscalation, DestinationInProgress, applied_under_other_effect, blocks_new_key, dedupe_mode, due_escalations,
+                     classify as _dedupe_classify, ERROR_IN_PROGRESS)
+from .merge import CompensationObligation, MergeRecord
+from .reversibility import SnapshotUse, effectively_irreversible, effective_reversibility, judge_cached_purpose, recorded_closures
 from .freshness import (
     AgeBoundExtension, AgeBoundExtensionRefusal, AgeExtensionRefused, CheckLeaseUnavailable, Reaper, RecoveryReport, RecoveryRun,
     acquire_lease_nonblocking, effective_age_bound, extension_defects, parse_time as _fparse,
@@ -473,6 +478,11 @@ class BoundedRunRecord(BaseModel):
     recovery_runs: list[RecoveryRun] = Field(default_factory=list, exclude_if=lambda v: not v)
     rule_revisions: list[RuleRevision] = Field(default_factory=list, exclude_if=lambda v: not v)
     rule_revision_refusals: list[RuleRevisionRefusal] = Field(default_factory=list, exclude_if=lambda v: not v)
+    # merge-record/0.1, reversibility/0.1 and dedupe-ttl/0.1 ledgers (stream N4); omitted while empty (default path unchanged).
+    merge_records: list[MergeRecord] = Field(default_factory=list, exclude_if=lambda v: not v)
+    compensation_obligations: list[CompensationObligation] = Field(default_factory=list, exclude_if=lambda v: not v)
+    snapshot_uses: list[SnapshotUse] = Field(default_factory=list, exclude_if=lambda v: not v)
+    dedupe_escalations: list[DedupeEscalation] = Field(default_factory=list, exclude_if=lambda v: not v)
     check_events: list[CheckEvent] = Field(default_factory=list, exclude_if=lambda v: not v)
     run_id: str
     input_time_floors: dict[str, str] = Field(default_factory=dict)
@@ -732,6 +742,46 @@ class BoundedRecordStore:
             document.setdefault("attempt_joins", []).append(value.model_dump(mode="json"))
             BoundedRunRecord.model_validate(document)
             self._write(document)
+
+    def document_snapshot(self) -> dict:
+        """One consistent read of the whole retained document (a copy; nothing is written)."""
+        with self._transaction():
+            return self._read_document()
+
+    def record_merge(self, *, profile: _merge.MergeProfile, rule_profile, survivor: str, folded: list[str],
+                     equivalence_rule_ref: str, equivalence_rule_digest: str, merged_by: str, authority_ref: str | None,
+                     reason: str, recorded_at: str, evaluated_at: str | None = None) -> MergeRecord:
+        """Judge and append one merge (and its compensation obligation, if two effects already landed) in one transaction.
+
+        Every outcome is appended as a row (``merged``, ``held``, ``unknown`` or ``refused``); only ``merged`` has effect. Nothing
+        already written is edited.
+        """
+        with self._transaction():
+            document = self._read_document()
+            record, obligation = _merge.resolve_merge(
+                document, profile=profile, rule_profile=rule_profile, survivor=survivor, folded=folded,
+                equivalence_rule_ref=equivalence_rule_ref, equivalence_rule_digest=equivalence_rule_digest,
+                merged_by=merged_by, authority_ref=authority_ref, reason=reason, recorded_at=recorded_at, evaluated_at=evaluated_at)
+            document.setdefault("merge_records", []).append(record.model_dump(mode="json"))
+            if obligation is not None:
+                document.setdefault("compensation_obligations", []).append(obligation.model_dump(mode="json"))
+            BoundedRunRecord.model_validate(document)
+            self._write(document)
+            return record
+
+    def append_snapshot_use(self, value: SnapshotUse) -> None:
+        self._append("snapshot_uses", value)
+
+    def append_escalations(self, build) -> list[DedupeEscalation]:
+        """Append the escalation rows ``build(document)`` says are due, once per effect, in one transaction."""
+        with self._transaction():
+            document = self._read_document()
+            rows = [x for x in build(document) if not any(e["effect_id"] == x.effect_id for e in document.get("dedupe_escalations", []))]
+            if rows:
+                document.setdefault("dedupe_escalations", []).extend(x.model_dump(mode="json") for x in rows)
+                BoundedRunRecord.model_validate(document)
+                self._write(document)
+            return rows
 
     def append_vocabulary_change(self, event: VocabularyChange) -> None:
         """Persist a governed change without reinterpreting existing refusal rows."""
@@ -1246,9 +1296,14 @@ class BoundedAuthorizationWorkflow:
         fr = profile.freshness
         if fr is None:
             return cl.max_status_age_seconds, None, []
-        return effective_age_bound(self.rule_revision_profile, self.records.load().age_extensions, class_id=cl.class_id,
-                                   base_seconds=cl.max_status_age_seconds, now=now,
-                                   max_extension_seconds=fr.max_age_extension_seconds)
+        bound, used, defects = effective_age_bound(
+            self.rule_revision_profile, self.records.load().age_extensions, class_id=cl.class_id,
+            base_seconds=cl.max_status_age_seconds, now=now, max_extension_seconds=fr.max_age_extension_seconds)
+        if used is not None and self._reversibility is not None and effective_reversibility(cl, now)[0] == "irreversible":
+            # reversibility/0.1: an outage extension never raises the bound of an irreversible class (nor of a class whose
+            # reversal window has passed), whatever its signer's authority.
+            return cl.max_status_age_seconds, None, [*defects, "age_extension_irreversible_class"]
+        return bound, used, defects
 
     def record_age_extension(self, *, class_id: str, to_max_age_seconds: int, not_before: str, expires_at: str,
                              outage_ref: str, requested_by: str, signer: str | None,
@@ -1329,6 +1384,72 @@ class BoundedAuthorizationWorkflow:
         profile = self.runtime_authority_profile
         return profile.operation_identity if profile is not None else None
 
+    @property
+    def _merge_profile(self):
+        """The opt-in merge-record/0.1 configuration, or None on the default path."""
+        profile = self.runtime_authority_profile
+        return profile.merge if profile is not None else None
+
+    @property
+    def _reversibility(self):
+        """The opt-in reversibility/0.1 configuration, or None on the default path."""
+        profile = self.runtime_authority_profile
+        return profile.reversibility if profile is not None else None
+
+    @property
+    def _dedupe(self):
+        """The opt-in dedupe-ttl/0.1 configuration, or None on the default path."""
+        profile = self.runtime_authority_profile
+        return profile.dedupe if profile is not None else None
+
+    def record_merge(self, *, survivor_operation_id: str, folded_operation_ids: list[str], equivalence_rule_ref: str,
+                     equivalence_rule_digest: str, merged_by: str, authority_ref: str | None = None, reason: str,
+                     now: datetime | None = None) -> MergeRecord:
+        """Fold ``folded_operation_ids`` into ``survivor_operation_id`` (operation ids only, never attempt ids).
+
+        Always appends a row and returns it; only an ``outcome == "merged"`` row has effect. A merge by an authority that is not
+        funded is ``held``; one whose equivalence-rule digest is not adopted by a signed, independent ``merge_equivalence_rule``
+        revision is ``unknown``; a structurally invalid one is ``refused``. The compensation obligation (record only) is written in
+        the same transaction when two effects had already been applied.
+        """
+        profile = self._merge_profile
+        if profile is None or self._identity is None:
+            raise PermissionError("merge profile is not enabled")
+        evaluated = self._evaluation_time(now)
+        return self.records.record_merge(
+            profile=profile, rule_profile=self.rule_revision_profile, survivor=survivor_operation_id,
+            folded=list(folded_operation_ids), equivalence_rule_ref=equivalence_rule_ref,
+            equivalence_rule_digest=equivalence_rule_digest, merged_by=merged_by, authority_ref=authority_ref, reason=reason,
+            recorded_at=self._write_time(evaluated), **({"evaluated_at": _iso(evaluated)} if self._freshness else {}))
+
+    def dedupe_report(self, *, now: datetime | None = None, destination=None) -> list[dict]:
+        """State of every unresolved attempt against the dedupe-ttl/0.1 profile at ``now`` (reads only).
+
+        ``destination`` is the destination that dispatches (its declared capability decides the mode). It defaults to this
+        workflow's own; a runtime executor route dispatches through another object, which the host passes here.
+        """
+        profile = self._dedupe
+        if profile is None:
+            raise PermissionError("dedupe profile is not enabled")
+        return _dedupe_classify(self.records.document_snapshot(), profile,
+                                dedupe_mode(destination if destination is not None else self.destination, profile),
+                                self._evaluation_time(now))
+
+    def escalation_pass(self, *, now: datetime | None = None, destination=None) -> list[DedupeEscalation]:
+        """Record an escalation for every unresolved attempt past its deadline that has none yet.
+
+        A host runs this on its reaper interval. The attempts stay ``unknown``: this only records that someone must look, and
+        flags a row that fired after the key TTL (``escalation_after_key_ttl``).
+        """
+        profile = self._dedupe
+        if profile is None:
+            raise PermissionError("dedupe profile is not enabled")
+        evaluated = self._evaluation_time(now)
+        mode = dedupe_mode(destination if destination is not None else self.destination, profile)
+        return self.records.append_escalations(lambda document: due_escalations(
+            document, profile, mode, evaluated, recorded_at=self._write_time(evaluated),
+            evaluated_at=_iso(evaluated) if self._freshness else None))
+
     def _admit_operation(self, binding: AuthorizationBinding, now: datetime, reasons: list[str]) -> None:
         extension = binding.runtime_authority or {}
         outcome = self.records.admit_operation(OperationAdmissionRow(
@@ -1353,6 +1474,22 @@ class BoundedAuthorizationWorkflow:
             reasons.append("operation_grant_mismatch")
         elif outcome == "renewal_unrecorded":
             reasons.append("operation_renewal_unrecorded")
+        elif self._merge_profile is not None or self._dedupe is not None:
+            self._effect_gate_n4(binding, extension["operation_id"], reasons)
+
+    def _effect_gate_n4(self, binding: AuthorizationBinding, operation_id: str, reasons: list[str]) -> None:
+        """merge-record/0.1 and dedupe-ttl/0.1 effect-time gates (opt-in; reached only when one of them is configured)."""
+        document = self.records.document_snapshot()
+        effect_id = self._effect_id(binding)
+        members = _merge.merge_members(document, operation_id) if self._merge_profile is not None else [operation_id]
+        if self._merge_profile is not None:
+            merge_code = _merge.merge_gate(document, operation_id, effect_id)
+            if merge_code is not None:
+                reasons.append(merge_code)
+        if self._dedupe is not None and blocks_new_key(document, members, effect_id):
+            reasons.append("dedupe_unresolved_attempt_blocks_new_key")
+        if self._dedupe is not None and applied_under_other_effect(document, members, effect_id):
+            reasons.append("dedupe_operation_effect_applied")
 
     def _authority_domain(self, binding: AuthorizationBinding) -> str:
         action = next((x for x in self.manifest.get("actions", []) if x.get("action_id") == binding.action_id), {})
@@ -1390,6 +1527,8 @@ class BoundedAuthorizationWorkflow:
             resolver_version=identity.resolver_version,
             class_max_age=self.runtime_authority_profile.actions[current.action_id].max_status_age_seconds,
             expected_effective_grant_digest=extension.get("expected_effective_grant_digest"),
+            **({"merged_into": _merge.merged_into(self.records.document_snapshot(), extension["operation_id"])}
+               if self._merge_profile is not None else {}),
             recorded_at=self._write_time(now), time_source=self.time_source, **self._eval_stamp(now)))
 
     def decide(self, proposal: RuntimeProposal, *, now: datetime | None = None) -> RuntimeDecision:
@@ -1570,13 +1709,24 @@ class BoundedAuthorizationWorkflow:
                 **({"expected_effective_grant_digest": current.runtime_authority["expected_effective_grant_digest"],
                     "effective_grant_derivation_version": current.runtime_authority["effective_grant_derivation_version"]}
                    if current.runtime_authority and current.runtime_authority.get("expected_effective_grant_digest") else {}),
-                **({"operation_id": current.runtime_authority["operation_id"]} if self._identity else {}),
+                **({"operation_id": (_merge.dispatch_operation_id(self.records.document_snapshot(),
+                                                                  current.runtime_authority["operation_id"])
+                                     if self._merge_profile is not None else current.runtime_authority["operation_id"])}
+                   if self._identity else {}),
             )
             attempt.status = "partial" if partial else "acknowledged"
             attempt.acknowledgement = ack
         except DefinitiveDestinationRejection as exc:
             attempt.status = "failed"
             attempt.error = exc.reason_code
+        except DestinationInProgress as exc:
+            # dedupe-ttl/0.1: the destination holds our key and is still processing it. Unknown, never a reason for a new key.
+            # Without the profile this is an ordinary unknown outcome, exactly as before.
+            attempt.status = "unknown"
+            if self._dedupe is not None:
+                attempt.error, attempt.acknowledgement = ERROR_IN_PROGRESS, {"in_progress": True}
+            else:
+                attempt.error = "destination_outcome_unknown:" + type(exc).__name__
         except Exception as exc:
             # Exception classes do not prove that the provider did not accept.
             attempt.status = "unknown"
@@ -1860,6 +2010,7 @@ class BoundedAuthorizationWorkflow:
             self.records.append_check_event(event.model_copy(update={
                 "phase": "input", "input": item, **({"recorded_at": self._svc()} if fr else {})}))
         reads = _JournalInputs([], retain, nonce=nonce, freshness=fr is not None)
+        reads.check_id = check_id  # lets a cached-snapshot use (reversibility/0.1) join to its check by id
         try:
             if action_class is None:
                 reasons, binding = ["action_class_unknown"], None
@@ -1883,7 +2034,36 @@ class BoundedAuthorizationWorkflow:
             "phase": "completed", "reasons": reasons, **({"recorded_at": self._svc()} if fr else {})}))
         return reasons, binding
 
-    def _read_grant(self, inputs, grant_id, action_id):
+    def _cached_purpose(self, purpose: dict, ref: str, cl, proposal, now: datetime, inputs):
+        """reversibility/0.1: may a cached "open" purpose snapshot stand in for an unreadable purpose status?
+
+        Returns ``(accepted PurposeStatus or None, specific reason codes, observed extras)`` and appends a ``snapshot_use`` row
+        either way. Accepted only for a reversible class, within its age bound (a signed N3 extension may raise the bound for a
+        reversible class only), with no recorded closure of this purpose.
+        """
+        from .runtime_authority import PurposeStatus
+        if cl is None:
+            return None, [], None
+        cached = None
+        provider = getattr(self.resolver, "cached_purpose_status", None)
+        if provider is not None:
+            try:
+                cached = PurposeStatus.model_validate(provider(copy.deepcopy(purpose)))
+            except Exception:
+                cached = None
+        bound, extension_id, _ = self._class_age_bound(proposal.action_id, now)
+        use, accepted = judge_cached_purpose(
+            action_class=cl, now=now, purpose_ref=ref, cached=cached, bound_seconds=bound,
+            extension_id=extension_id, check_id=getattr(inputs, "check_id", None),
+            closures=recorded_closures(self.records.document_snapshot(), ref), recorded_at=self._write_time(now))
+        self.records.append_snapshot_use(use)
+        if accepted is None:
+            return None, [x for x in use.reasons if x != "purpose_unreadable"], None
+        inputs.read_states[("purpose", ref)] = "cached_positive"
+        inputs.age_bases[("purpose", ref)] = "source_asserted"  # a cached read is never nonce bound
+        return accepted, [], {"age_seconds": str(use.age_seconds), "age_bound_seconds": str(bound), "reversibility": use.reversibility}
+
+    def _read_grant(self, inputs, grant_id, action_id, now=None):
         """Only governed reversible classes may use a trusted cached positive."""
         if self.runtime_authority_profile is None:
             return self.resolver.grant_status(grant_id)
@@ -1897,7 +2077,7 @@ class BoundedAuthorizationWorkflow:
                                           missing=True, read_state="unreadable"))
             cl = self.runtime_authority_profile.actions[action_id]
             cached = getattr(self.resolver, "cached_grant_status", None)
-            if not cl.irreversible and cl.on_unreadable == "bounded_tolerance" and cached:
+            if not effectively_irreversible(cl, now) and cl.on_unreadable == "bounded_tolerance" and cached:
                 try:
                     candidate = cached(grant_id)
                 except Exception:
@@ -1956,7 +2136,7 @@ class BoundedAuthorizationWorkflow:
         *, inputs: list[ResolutionInput] | None = None,
     ) -> tuple[list[str], AuthorizationBinding | None]:
         def capture(kind: str, ref: str, record: BaseModel | dict | None,
-                    expected: dict[str, str] | None = None) -> None:
+                    expected: dict[str, str] | None = None, extra: dict[str, str] | None = None) -> None:
             if inputs is None:
                 return
             data = record.model_dump(mode="json") if isinstance(record, BaseModel) else record
@@ -1966,6 +2146,7 @@ class BoundedAuthorizationWorkflow:
                       "schema_version", "interface_status", "digest", "grant_revision",
                       "runtime_authority_commitment", "epoch", "epoch_capability")
             observed = {key: str(data[key]) for key in fields if data is not None and key in data}
+            observed.update(extra or {})  # reversibility/0.1: age and bound of a cached purpose snapshot
             if kind == "approval" and data is not None:
                 observed["proposal"] = data["proposal_commitment"]
                 observed["policies"] = commitment(data["policy_versions"])
@@ -2080,7 +2261,7 @@ class BoundedAuthorizationWorkflow:
         if not self._fresh(mandate.observed_at, now, self.mandate_max_age_seconds):
             reasons.append("issuer_mandate_stale_or_future")
 
-        status = self._read_grant(inputs, grant["grant_id"], proposal.action_id)
+        status = self._read_grant(inputs, grant["grant_id"], proposal.action_id, now)
         capture("grant", grant["grant_id"], status, {"revision": grant["revision"], "status": "active"})
         if status is None:
             reasons.append("status_unreadable" if self.runtime_authority_profile else "grant_not_active")
@@ -2247,7 +2428,9 @@ class BoundedAuthorizationWorkflow:
         if self.runtime_authority_profile:
             from .runtime_authority import validate_extensions
             extra_reasons, extension = validate_extensions(
-                self.runtime_authority_profile, proposal, context, inputs, self.resolver, now, capture)
+                self.runtime_authority_profile, proposal, context, inputs, self.resolver, now, capture,
+                **({"purpose_cache": lambda purpose, ref, cl: self._cached_purpose(purpose, ref, cl, proposal, now, inputs)}
+                   if self._reversibility is not None else {}))
             reasons.extend(extra_reasons)
         if reasons:
             return sorted(set(reasons)), None

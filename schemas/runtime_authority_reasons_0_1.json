@@ -560,6 +560,78 @@
     "holder_inventory_missing": {
       "reason_kind": "typed_only",
       "description": "an action class requires revocation assurance but no holder inventory enumerating at least one authority holder is configured (holder-inventory/0.1 only)"
+    },
+    "merge_operation_ids_invalid": {
+      "reason_kind": "typed_only",
+      "description": "a merge names no folded operation, repeats an id, or names a malformed operation id (merge-record/0.1 only)"
+    },
+    "merge_operation_not_admitted": {
+      "reason_kind": "typed_only",
+      "description": "a merge names an operation id that was never admitted (merge-record/0.1 only)"
+    },
+    "merge_operation_discriminator_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "merged operations are bound to different principals or authority domains (merge-record/0.1 only)"
+    },
+    "merge_operation_already_folded": {
+      "reason_kind": "typed_only",
+      "description": "a folded operation was already folded into another operation (merge-record/0.1 only)"
+    },
+    "merge_survivor_already_folded": {
+      "reason_kind": "typed_only",
+      "description": "the named survivor was itself already folded into another operation (merge-record/0.1 only)"
+    },
+    "merge_authority_unfunded": {
+      "reason_kind": "typed_only",
+      "description": "the merging authority is not in the configured funded set; the merge holds and has no effect (merge-record/0.1 only)"
+    },
+    "merge_rule_unknown": {
+      "reason_kind": "typed_only",
+      "description": "the merge's equivalence-rule digest is not adopted by a signed, independent merge_equivalence_rule revision; the merge has no effect (merge-record/0.1 only)"
+    },
+    "operation_merged_effect_exists": {
+      "reason_kind": "typed_only",
+      "description": "an operation in a merged set already has an applied effect under a different effect id; the second effect is suppressed (merge-record/0.1 only)"
+    },
+    "operation_merged_effect_unresolved": {
+      "reason_kind": "typed_only",
+      "description": "an operation in a merged set has an attempt with no outcome yet under a different effect id; a second effect is held (merge-record/0.1 only)"
+    },
+    "purpose_cache_irreversible_class": {
+      "reason_kind": "typed_only",
+      "description": "a cached purpose snapshot cannot stand in for an unreadable purpose status of an irreversible class, a protected read or an unobservable counterparty (reversibility/0.1 only)"
+    },
+    "purpose_cache_after_reversal_window": {
+      "reason_kind": "typed_only",
+      "description": "the class's reversible_until window has passed, so it is treated as irreversible and a cached purpose snapshot is refused (reversibility/0.1 only)"
+    },
+    "purpose_cache_stale": {
+      "reason_kind": "typed_only",
+      "description": "the cached purpose snapshot is older than the class age bound (reversibility/0.1 only)"
+    },
+    "purpose_closure_recorded": {
+      "reason_kind": "typed_only",
+      "description": "a recorded closure of the purpose overrides a cached open snapshot (reversibility/0.1 only)"
+    },
+    "age_extension_irreversible_class": {
+      "reason_kind": "typed_only",
+      "description": "an age-bound extension does not apply to an irreversible class or one whose reversal window has passed (reversibility/0.1 with freshness/0.1)"
+    },
+    "dedupe_unresolved_attempt_blocks_new_key": {
+      "reason_kind": "typed_only",
+      "description": "an operation has an unresolved or in-progress attempt under another effect id, so no new key is minted for it (dedupe-ttl/0.1 only)"
+    },
+    "attempt_unresolved_past_horizon": {
+      "reason_kind": "typed_only",
+      "description": "an attempt is still unresolved at its escalation deadline, after the provider horizon; recorded as an escalation (dedupe-ttl/0.1 only)"
+    },
+    "escalation_after_key_ttl": {
+      "reason_kind": "typed_only",
+      "description": "an escalation was recorded after the destination's key TTL had passed (dedupe-ttl/0.1 only)"
+    },
+    "dedupe_operation_effect_applied": {
+      "reason_kind": "typed_only",
+      "description": "the operation already has an applied effect under another effect id; refused by the control plane's own ledger, whether or not the destination still remembers the key (dedupe-ttl/0.1 only)"
     }
   }
 }

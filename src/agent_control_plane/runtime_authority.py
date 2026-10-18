@@ -5,11 +5,14 @@ import copy
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictInt
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_serializer, model_validator
 
+from .dedupe import DedupeProfile
 from .freshness import FreshnessProfile
 from .holder_inventory import HolderInventory
+from .merge import MergeProfile
 from .operation_identity import OperationIdentityProfile, valid_operation_id
+from .reversibility import ReversibilityProfile, check_class_members, flatten_x_reversibility, nest_x_reversibility
 
 PROFILE_VERSION = "runtime-authority/0.1"
 VOCABULARY_VERSION = "runtime-authority-reasons/0.1"
@@ -25,6 +28,25 @@ class ActionClass(BaseModel):
     # Opt-in holder-inventory/0.1: a flagged class holds until the profile carries a holder inventory. Omitted from dumps while
     # False, which keeps the default path (and every commitment that hashes the profile) byte-identical.
     requires_revocation_assurance: bool = Field(default=False, exclude_if=lambda v: not v)
+    # Opt-in reversibility/0.1 members (see reversibility.py). All omitted from dumps while unset, so the default path is unchanged.
+    # ``irreversible`` stays the derived legacy field: true if and only if ``reversibility`` is ``irreversible``.
+    reversibility: Literal["irreversible", "reversible_until", "reversible_at_cost"] | None = Field(
+        default=None, exclude_if=lambda v: v is None)
+    reversible_until: str | None = Field(default=None, exclude_if=lambda v: v is None)
+    reversal_cost: str | None = Field(default=None, exclude_if=lambda v: v is None)
+    reads_protected_data: bool = Field(default=False, exclude_if=lambda v: not v)
+    counterparty_observable: bool = Field(default=True, exclude_if=lambda v: v)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reversibility_members(cls, data):
+        return check_class_members(flatten_x_reversibility(data)) if isinstance(data, dict) else data
+
+    @model_serializer(mode="wrap")
+    def _x_reversibility(self, handler):
+        # ODES effect-reversibility shape: the five members travel as ONE ``x-reversibility`` object on the action class. Absent
+        # (and the dump byte-identical to before) unless a value is declared.
+        return nest_x_reversibility(handler(self))
 
 
 class EvidenceCriterion(BaseModel):
@@ -67,6 +89,19 @@ class RuntimeAuthorityProfile(BaseModel):
     freshness: FreshnessProfile | None = Field(default=None, exclude_if=lambda v: v is None)
     # Opt-in holder-inventory/0.1 (enumerated authority holders). Same omission rule.
     holder_inventory: HolderInventory | None = Field(default=None, exclude_if=lambda v: v is None)
+    # Opt-in merge-record/0.1, reversibility/0.1 and dedupe-ttl/0.1 (stream N4). Same omission rule.
+    merge: MergeProfile | None = Field(default=None, exclude_if=lambda v: v is None)
+    reversibility: ReversibilityProfile | None = Field(default=None, exclude_if=lambda v: v is None)
+    dedupe: DedupeProfile | None = Field(default=None, exclude_if=lambda v: v is None)
+
+    @model_validator(mode="after")
+    def _profiles_compose(self):
+        if (self.merge is not None or self.dedupe is not None) and self.operation_identity is None:
+            raise ValueError("merge-record/0.1 and dedupe-ttl/0.1 are defined over operation ids and need operation-identity/0.1")
+        declared = [a for a in self.actions.values() if a.reversibility is not None]
+        if declared and self.reversibility is None:
+            raise ValueError("reversibility values need the reversibility/0.1 profile")
+        return self
 
     def snapshot(self) -> RuntimeAuthorityProfile:
         """Detach trusted configuration from caller-owned mutable dictionaries."""
@@ -138,8 +173,11 @@ def validate_evidence(status, criterion: EvidenceCriterion, profile: RuntimeAuth
 
 
 def validate_extensions(profile: RuntimeAuthorityProfile, proposal, context: dict,
-                        inputs: list, resolver, now: datetime, capture) -> tuple[list[str], dict]:
-    """Validate approval-owned prerequisites using the reads used by the gate."""
+                        inputs: list, resolver, now: datetime, capture, purpose_cache=None) -> tuple[list[str], dict]:
+    """Validate approval-owned prerequisites using the reads used by the gate.
+
+    ``purpose_cache`` (reversibility/0.1 only) is called when the purpose status is unreadable: ``(purpose, ref, action_class) ->
+    (accepted PurposeStatus or None, reason codes, observed extras)``. Without it a purpose outage refuses for every class."""
     from .bounded import _parse, commitment
     reasons = []
     spec = context.get("runtime_authority")
@@ -199,7 +237,14 @@ def validate_extensions(profile: RuntimeAuthorityProfile, proposal, context: dic
                 observed = PurposeStatus.model_validate(raw)
             except (ValueError, TypeError):
                 observed = None
-            capture("purpose", ref, observed)
+            extra = None
+            if observed is None and raw is None and purpose_cache is not None:
+                observed, cache_reasons, extra = purpose_cache(purpose, ref, profile.actions.get(proposal.action_id))
+                reasons.extend(cache_reasons)
+            if extra is not None:
+                capture("purpose", ref, observed, None, extra)
+            else:
+                capture("purpose", ref, observed)
             if observed is None:
                 reasons.append("purpose_unreadable")
             else:
@@ -216,7 +261,8 @@ def validate_extensions(profile: RuntimeAuthorityProfile, proposal, context: dic
                 if observed.state == "closed":
                     reasons.append("purpose_closed")
                 age = (now - _parse(observed.observed_at)).total_seconds()
-                if not cl or age < 0 or age > cl.max_status_age_seconds:
+                # An accepted cached snapshot was already held to its own bound (class bound, or a signed extension of it).
+                if extra is None and (not cl or age < 0 or age > cl.max_status_age_seconds):
                     reasons.append("purpose_unreadable")
     elif not grant.get("expires_at"):
         reasons.append("grant_expiry_required")
