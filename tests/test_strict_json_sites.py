@@ -36,6 +36,10 @@ DAMAGE = [
     ("infinity", "input_json_non_finite_number", _inject(b'"zz": Infinity')),
     ("neg_infinity", "input_json_non_finite_number", _inject(b'"zz": -Infinity')),
     ("not_utf8", "input_not_utf8", _inject(b'"zz": "\xe9"')),
+    ("number_out_of_range", "input_json_non_finite_number", _inject(b'"zz": 1e400')),
+    ("negative_number_out_of_range", "input_json_non_finite_number", _inject(b'"zz": [-1.5e999]')),
+    ("unpaired_surrogate_value", "input_json_lone_surrogate", _inject(b'"zz": ["ok", "a\\ud800"]')),
+    ("unpaired_surrogate_name", "input_json_lone_surrogate", _inject(b'"\\udc00": 1')),
 ]
 DAMAGE_PARAMS = [pytest.param(code, fn, id=name) for name, code, fn in DAMAGE]
 
@@ -56,10 +60,22 @@ def _damage(path: Path, fn) -> bytes:
 # -- the shared loader ------------------------------------------------------------------------------------------------
 
 def test_valid_documents_parse_exactly_as_json_loads_does():
-    text = '{"a": [1, 2.5, -0.0, null, true], "b": {"c": "\\u00e9\\ud800"}, "d": 1e3, "e": {}, "f": []}'
+    text = ('{"a": [1, 2.5, -0.0, null, true], "b": {"c": "\\u00e9\\ud83d\\ude00"}, "d": 1e3, "e": {}, "f": [], '
+            '"g": "\\\\ud800", "h": 1.7976931348623157e308, "i": 5e-324}')
     assert strict_loads(text) == json.loads(text)
     assert strict_loads(text.encode()) == json.loads(text)
     assert strict_loads(b'{"a": 1, "b": 1}') == {"a": 1, "b": 1}
+
+
+def test_unpaired_surrogates_and_out_of_range_numbers_are_refused_by_the_shared_loader():
+    for text, code in (('"\\ud800"', "input_json_lone_surrogate"), ('{"a": {"b": ["\\udfff x"]}}', "input_json_lone_surrogate"),
+                       ('"\ud800"', "input_json_lone_surrogate"), ("1e400", "input_json_non_finite_number"),
+                       ('{"a": -2e308}', "input_json_non_finite_number")):
+        with pytest.raises(ValueError, match=rf"\[{code}\]"):
+            strict_loads(text)
+    deep = "[" * 900 + '"\\ud800"' + "]" * 900  # the walk is iterative
+    with pytest.raises(ValueError, match=r"\[input_json_lone_surrogate\]"):
+        strict_loads(deep)
 
 
 # -- cli.py (_load_json_model: validate-run and its siblings) ---------------------------------------------------------

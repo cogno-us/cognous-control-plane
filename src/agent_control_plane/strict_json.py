@@ -1,17 +1,21 @@
 """Strict JSON reading for operator-supplied and stored documents (a leaf module: imports nothing from this package).
 
 Refused, fail closed, with a stable ``[code]`` in the message: input that is not UTF-8, an object with a duplicate member name,
-and the non-JSON constants ``NaN``, ``Infinity`` and ``-Infinity``. Valid input parses to exactly what ``json.loads`` returns.
+the non-JSON constants ``NaN``, ``Infinity`` and ``-Infinity``, a number too large to be a finite float (``1e400``), and a string
+or member name holding an unpaired UTF-16 surrogate (``"\\ud800"``). Valid input parses to exactly what ``json.loads`` returns.
 """
 
 from __future__ import annotations
 
 import json
+import math
+import re
 from typing import Any
 
 INPUT_DUPLICATE_MEMBER = "input_json_duplicate_member"
 INPUT_NON_FINITE_NUMBER = "input_json_non_finite_number"
 INPUT_NOT_UTF8 = "input_not_utf8"
+INPUT_LONE_SURROGATE = "input_json_lone_surrogate"
 
 MAX_TEXT = 200
 
@@ -41,6 +45,37 @@ def _no_constant(token: str) -> Any:
     raise ValueError(f"[{INPUT_NON_FINITE_NUMBER}] {token} is not valid JSON")
 
 
+def _finite_float(token: str) -> float:
+    value = float(token)  # exactly what json.loads does with a number token
+    if not math.isfinite(value):
+        raise ValueError(f"[{INPUT_NON_FINITE_NUMBER}] number {safe_text(token, 40)} is outside the finite range")
+    return value
+
+
+# Only text that holds a surrogate code point or a surrogate escape can decode to one; everything else skips the walk.
+_SURROGATE_HINT = re.compile("[\ud800-\udfff]|\\\\u[dD][89a-fA-F]")
+
+
+def _is_lone_surrogate_text(text: str) -> bool:
+    return any(0xD800 <= ord(c) <= 0xDFFF for c in text)
+
+
+def _has_lone_surrogate(document: Any) -> bool:
+    """Iterative walk (no recursion limit) over every string and member name of a parsed document."""
+    stack = [document]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, str):
+            if _is_lone_surrogate_text(item):
+                return True
+        elif isinstance(item, dict):
+            stack.extend(item.keys())
+            stack.extend(item.values())
+        elif isinstance(item, list):
+            stack.extend(item)
+    return False
+
+
 def decode_utf8(data: bytes) -> str:
     try:
         return data.decode("utf-8")
@@ -49,6 +84,10 @@ def decode_utf8(data: bytes) -> str:
 
 
 def strict_loads(data: bytes | str) -> Any:
-    """Parse JSON fail-closed: UTF-8 only, no duplicate object members, no NaN/Infinity/-Infinity."""
+    """Parse JSON fail-closed: UTF-8 only, no duplicate object members, no NaN/Infinity/-Infinity, finite numbers only, no
+    unpaired surrogates."""
     text = data if isinstance(data, str) else decode_utf8(data)
-    return json.loads(text, object_pairs_hook=_no_duplicates, parse_constant=_no_constant)
+    value = json.loads(text, object_pairs_hook=_no_duplicates, parse_constant=_no_constant, parse_float=_finite_float)
+    if _SURROGATE_HINT.search(text) and _has_lone_surrogate(value):
+        raise ValueError(f"[{INPUT_LONE_SURROGATE}] a string holds an unpaired UTF-16 surrogate")
+    return value

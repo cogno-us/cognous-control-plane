@@ -80,6 +80,19 @@ def commitment(value: object) -> str:
     return "sha256:" + hashlib.sha256(_canonical_bytes(value)).hexdigest()
 
 
+def _exact_strings(value: object) -> frozenset[str] | None:
+    """The members of a declared string list, or None when the value is not a list (or tuple or set) of strings.
+
+    Membership against the result is exact string equality. Any other shape (a single string, a mapping, a number, a list with
+    a non-string item) is malformed, and callers treat it as declaring nothing, so the check it feeds refuses.
+    """
+    if not isinstance(value, (list, tuple, set, frozenset)):
+        return None
+    if not all(isinstance(item, str) for item in value):
+        return None
+    return frozenset(value)
+
+
 class RuntimeProposal(BaseModel):
     """Historical bounded-authorization-effect/0.1 proposal."""
     manifest_id: str
@@ -93,9 +106,11 @@ class RuntimeProposal(BaseModel):
     payload: dict
     payload_commitment: str
     requested_permissions: list[str] = Field(default_factory=list)
-    amount: float = Field(default=0, ge=0, allow_inf_nan=False)
+    # Strict: a JSON number only (an integer is accepted as its float value); a string or boolean is refused, not coerced.
+    amount: float = Field(default=0, ge=0, allow_inf_nan=False, strict=True)
     unit: str = ""
-    effects: int = Field(default=1, ge=0)
+    # Strict: a JSON integer only; a boolean, a float (even 1.0) or a string is refused, not coerced.
+    effects: int = Field(default=1, ge=0, strict=True)
     authority_context_ref: str | None = None
     requirement_id: str | None = None
     risk_metadata: dict = Field(default_factory=dict)
@@ -1401,6 +1416,22 @@ class BoundedAuthorizationWorkflow:
         return profile.reversibility if profile is not None else None
 
     @property
+    def _terminal_revocation(self):
+        """The opt-in terminal-revocation/0.1 configuration, or None on the default path."""
+        profile = self.runtime_authority_profile
+        return profile.terminal_revocation if profile is not None else None
+
+    def _recorded_grant_denial(self, grant_id: str, revisions, states) -> bool:
+        """Whether a retained resolution check observed this grant in one of ``states`` at one of ``revisions``."""
+        revisions = set(revisions)
+        return any(
+            item.input_type == "grant" and item.input_id == grant_id
+            and item.observed.get("revision") in revisions
+            and item.observed.get("status") in states
+            for check in self.records.load().resolution_checks for item in check.inputs
+        )
+
+    @property
     def _dedupe(self):
         """The opt-in dedupe-ttl/0.1 configuration, or None on the default path."""
         profile = self.runtime_authority_profile
@@ -2087,12 +2118,8 @@ class BoundedAuthorizationWorkflow:
                     candidate = cached(grant_id)
                 except Exception:
                     candidate = None
-                known_denial = (candidate is not None and any(
-                    item.input_type == "grant" and item.input_id == grant_id
-                    and item.observed.get("revision") == candidate.revision
-                    and item.observed.get("status") in {"revoked", "suspended"}
-                    for check in self.records.load().resolution_checks for item in check.inputs
-                ))
+                known_denial = (candidate is not None and self._recorded_grant_denial(
+                    grant_id, {candidate.revision}, {"revoked", "suspended"}))
                 if candidate is not None and candidate.status == "active" and not known_denial:
                     status = candidate
                     inputs.read_states[("grant", grant_id)] = "cached_positive"
@@ -2287,6 +2314,9 @@ class BoundedAuthorizationWorkflow:
                                if self.runtime_authority_profile else "grant_not_active")
             if status.revision != grant["revision"]:
                 reasons.append("grant_revision_stale")
+            if self._terminal_revocation is not None and self._recorded_grant_denial(
+                    grant["grant_id"], {str(grant["revision"]), status.revision}, {"revoked"}):
+                reasons.append("grant_revocation_recorded")  # terminal-revocation/0.1 (runtime_authority.CODE_REVOCATION_RECORDED)
             if self._freshness is not None:
                 bound, _, defects = self._class_age_bound(proposal.action_id, now)
                 if not self._fresh(status.observed_at, now, bound):
@@ -2506,21 +2536,25 @@ class BoundedAuthorizationWorkflow:
             mismatches.append("adapter_mismatch")
 
         target_policy = action.get("target_policy")
+        allowed_targets = (_exact_strings(target_policy.get("allowed_targets", []))
+                           if isinstance(target_policy, dict) else None)
         if (
             not target_policy
+            or allowed_targets is None  # malformed target policy: declares no target
             or target_policy.get("allow_any_target")
-            or proposal.target not in target_policy.get("allowed_targets", [])
+            or proposal.target not in allowed_targets
         ):
             mismatches.append("target_out_of_scope")
 
         payload_policy = action.get("payload_policy")
-        if payload_policy is None:
-            mismatches.append("missing_payload_policy")
+        payload_fields = ([_exact_strings(payload_policy.get(name, [])) for name in
+                           ("required_fields", "optional_fields", "forbidden_fields")]
+                          if isinstance(payload_policy, dict) else [None])
+        if payload_policy is None or any(item is None for item in payload_fields):
+            mismatches.append("missing_payload_policy")  # absent or malformed: no usable payload policy
         else:
             keys = set(proposal.payload)
-            required = set(payload_policy.get("required_fields", []))
-            optional = set(payload_policy.get("optional_fields", []))
-            forbidden = set(payload_policy.get("forbidden_fields", []))
+            required, optional, forbidden = (set(item) for item in payload_fields)
             if required - keys:
                 mismatches.append("missing_required_payload_field")
             if keys & forbidden:
@@ -2565,13 +2599,18 @@ class BoundedAuthorizationWorkflow:
         )
         if action is None:
             return None
-        for permission in container.get("permissions", []):
-            if permission["action"] != action["action_name"]:
+        permissions = container.get("permissions", [])
+        if not isinstance(permissions, list):
+            return None
+        for permission in permissions:
+            if not isinstance(permission, dict) or permission.get("action") != action["action_name"]:
                 continue
-            if proposal.target not in permission["targets"]:
-                continue
-            if not set(proposal.requested_permissions).issubset(set(permission["data_scopes"])):
-                continue
+            targets = _exact_strings(permission.get("targets"))
+            if targets is None or proposal.target not in targets:
+                continue  # a malformed target list grants nothing
+            data_scopes = _exact_strings(permission.get("data_scopes"))
+            if data_scopes is None or not set(proposal.requested_permissions).issubset(data_scopes):
+                continue  # a malformed data-scope list grants nothing
             if proposal.amount > float(permission["max_amount"]):
                 continue
             if proposal.unit != permission["unit"]:

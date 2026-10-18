@@ -36,10 +36,10 @@ def test_the_0_1_file_is_the_original_121_codes_byte_identical_to_its_pinned_for
 def test_the_0_2_file_is_the_full_superset_of_0_1():
     kinds = [v["reason_kind"] for v in R02["codes"].values()]
     assert R02["version"] == VOCABULARY_VERSION_0_2 == "runtime-authority-reasons/0.2"
-    assert (len(kinds), kinds.count("typed_only"), kinds.count("recomputable")) == (157, 156, 1)
+    assert (len(kinds), kinds.count("typed_only"), kinds.count("recomputable")) == (158, 157, 1)
     assert all(R02["codes"][code] == spec for code, spec in R01["codes"].items()), "every 0.1 entry is unchanged in 0.2"
     assert list(R02["codes"])[:len(R01["codes"])] == list(R01["codes"]), "and keeps its position"
-    assert set(R02["codes"]) - set(R01["codes"]) == CODES_ADDED_IN_0_2 and len(CODES_ADDED_IN_0_2) == 36
+    assert set(R02["codes"]) - set(R01["codes"]) == CODES_ADDED_IN_0_2 and len(CODES_ADDED_IN_0_2) == 37
     assert set(R01["codes"]) <= set(R02["codes"])
 
 
