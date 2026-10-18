@@ -176,8 +176,12 @@ It can redact:
 - final output
 - recorded reasons
 
-Redaction preserves IDs, timestamps, policy names, fingerprints, and trace
-relationships so exports remain usable for replay and audit workflows.
+Redaction preserves IDs, timestamps, policy names and trace relationships so
+exports remain usable for replay and audit workflows. When payloads or targets
+are redacted it also blanks each decision's and trace's `deterministic_fingerprint`
+(an unkeyed SHA-256 of the original inputs, which a reader can guess offline for a
+low-entropy value such as a short PIN); `RedactionConfig(keep_fingerprints=True)`
+keeps them and accepts that risk.
 
 ---
 

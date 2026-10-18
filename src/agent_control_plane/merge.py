@@ -5,7 +5,7 @@ here runs and no stored or hashed byte changes.
 
 * A merge names a survivor operation and one or more folded operations. It never names an attempt id.
 * The equivalence rule behind it is identified by content digest. The digest must be adopted by a ``rule_revision`` row of kind
-  ``merge_equivalence_rule`` that was signed by a configured principal other than its reviser (N2). Otherwise the merge resolves
+  ``merge_equivalence_rule`` that is named by a configured signer (asserted, unauthenticated), a principal other than its reviser (N2). Otherwise the merge resolves
   ``unknown`` and has no effect.
 * A merge by an authority that is not funded (``MergeProfile.funded_authorities``) is ``held`` and has no effect.
 * A merge is ``refused`` when its operation ids are malformed, not admitted, bound to different principals or domains, or already folded.
@@ -17,7 +17,7 @@ here runs and no stored or hashed byte changes.
 
 Limits (read before relying on it):
 * This moves trust to the merge authority and to the rule signer; it makes that dependency explicit and does not remove it.
-* All of it is a join over rows that a holder of the record-store key can rewrite: visibility for an honest reader, not tamper evidence.
+* All of it is a join over rows that anyone who can write the record file can rewrite (there is no record-store key): visibility for an honest reader, not tamper evidence.
 * The destination key of a folded operation becomes the survivor's id, which a destination that stores our id enforces atomically; a
   destination without that capability is protected only by the control plane's own gate (check, then dispatch).
 """

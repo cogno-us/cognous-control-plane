@@ -122,6 +122,7 @@ def test_run_recorder_stores_policy_traces_by_default() -> None:
     )
 
     decision, blocked = recorder.evaluate_action(action)
+    recorder.complete_run()
     run_record = recorder.to_run_record()
     replay_bundle = recorder.generate_replay_bundle()
 

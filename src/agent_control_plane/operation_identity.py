@@ -14,7 +14,8 @@ Identity facts, in the vocabulary of the runtime sidecar ``OperationDiscriminato
 * ``check_id`` is the journal check that licensed the attempt. The same id is now
   carried by ``CheckEvent``, ``ResolutionCheck`` and the attempt join row.
 * A renewal names the operation it continues. Only the issuer recorded at admission
-  writes one; any other writer is refused and the refusal is recorded.
+  writes one; any other writer is refused and the refusal is recorded. ``written_by`` is an asserted name (unauthenticated):
+  the check compares strings, it does not authenticate the writer.
 * A merge is defined over operation ids. ``merged_into`` is a field only here; merge
   logic is a later stream.
 """

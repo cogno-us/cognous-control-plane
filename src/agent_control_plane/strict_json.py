@@ -16,6 +16,7 @@ INPUT_DUPLICATE_MEMBER = "input_json_duplicate_member"
 INPUT_NON_FINITE_NUMBER = "input_json_non_finite_number"
 INPUT_NOT_UTF8 = "input_not_utf8"
 INPUT_LONE_SURROGATE = "input_json_lone_surrogate"
+OUTPUT_UNSERIALISABLE = "output_json_unserialisable"
 
 MAX_TEXT = 200
 
@@ -91,3 +92,28 @@ def strict_loads(data: bytes | str) -> Any:
     if _SURROGATE_HINT.search(text) and _has_lone_surrogate(value):
         raise ValueError(f"[{INPUT_LONE_SURROGATE}] a string holds an unpaired UTF-16 surrogate")
     return value
+
+
+def dumps_bytes(
+    value: Any,
+    *,
+    indent: int | None = 2,
+    sort_keys: bool = False,
+    ensure_ascii: bool = False,
+    newline: bool = False,
+) -> bytes:
+    """Serialise ``value`` to UTF-8 JSON bytes that :func:`strict_loads` accepts, or refuse before anything is written.
+
+    Refused with a stable ``[output_json_unserialisable]`` message: a non-finite number (``NaN``, ``Infinity``), a string or member name
+    holding an unpaired UTF-16 surrogate, and a value that is not JSON-serialisable. Every file writer calls this *before* it opens or
+    replaces a file, so a refused write leaves an existing record intact and readable. ``ensure_ascii=True`` keeps the escaped form
+    (byte-identical to ``json.dumps`` for well-formed text); the surrogate check then runs on the value, not the output.
+    """
+    try:
+        if ensure_ascii and _has_lone_surrogate(value):
+            raise ValueError("an unpaired UTF-16 surrogate")
+        text = json.dumps(value, indent=indent, sort_keys=sort_keys, ensure_ascii=ensure_ascii, allow_nan=False)
+        data = (text + ("\n" if newline else "")).encode("utf-8")
+    except (ValueError, TypeError, RecursionError, UnicodeEncodeError) as exc:
+        raise ValueError(f"[{OUTPUT_UNSERIALISABLE}] the value cannot be written as strict JSON ({type(exc).__name__})") from None
+    return data

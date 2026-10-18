@@ -9,11 +9,11 @@ that can be exported to JSON or converted to a
 
 from __future__ import annotations
 
-import json
 import pathlib
 import uuid
 from typing import Optional
 
+from agent_control_plane.atomic_write import write_bytes_atomic
 from agent_control_plane.frame import create_frame
 from agent_control_plane.models import (
     ActionProposal,
@@ -28,6 +28,7 @@ from agent_control_plane.models import (
 )
 from agent_control_plane.policy_gate import PolicyGate
 from agent_control_plane.replay import generate_replay_bundle
+from agent_control_plane.strict_json import dumps_bytes
 
 
 class RunRecorder:
@@ -137,7 +138,7 @@ class RunRecorder:
         Returns:
             The created :class:`~agent_control_plane.models.AuthorityRecord`.
         """
-        self._require_started()
+        self._require_open()
         record = AuthorityRecord(
             authority_id=str(uuid.uuid4()),
             run_id=self._run_id,  # type: ignore[arg-type]
@@ -173,7 +174,7 @@ class RunRecorder:
         Returns:
             The created :class:`~agent_control_plane.models.ActionProposal`.
         """
-        self._require_started()
+        self._require_open()
         proposal = ActionProposal(
             action_id=str(uuid.uuid4()),
             run_id=self._run_id,  # type: ignore[arg-type]
@@ -184,7 +185,7 @@ class RunRecorder:
             reason=reason,
         )
         self._actions.append(proposal)
-        return proposal
+        return proposal.model_copy(deep=True)  # the recorded proposal is not reachable from the caller's copy
 
     def evaluate_action(
         self, action: ActionProposal, include_trace: bool = True
@@ -203,11 +204,15 @@ class RunRecorder:
             The :class:`~agent_control_plane.models.BlockedAction` is ``None`` for
             non-blocking decisions.
         """
-        self._require_started()
+        self._require_open()
         if action.run_id != self._run_id:
             raise ValueError("Action belongs to a different run.")
-        if not any(proposed.action_id == action.action_id for proposed in self._actions):
+        stored = next((proposed for proposed in self._actions if proposed.action_id == action.action_id), None)
+        if stored is None:
             raise ValueError("Action was not proposed in this run.")
+        if action.model_dump() != stored.model_dump():
+            raise ValueError("Submitted action differs from the proposal recorded under this action_id.")
+        action = stored  # always evaluate and record the proposal as it was recorded
         if include_trace:
             decision, trace = self._gate.evaluate_with_trace(  # type: ignore[arg-type]
                 action,
@@ -261,7 +266,7 @@ class RunRecorder:
         Returns:
             The created :class:`~agent_control_plane.models.RelianceRecord`.
         """
-        self._require_started()
+        self._require_open()
         record = RelianceRecord(
             reliance_id=str(uuid.uuid4()),
             run_id=self._run_id,  # type: ignore[arg-type]
@@ -279,7 +284,7 @@ class RunRecorder:
         Args:
             final_output: Optional string output produced by the agent.
         """
-        self._require_started()
+        self._require_open()
         self._completed = True
         self._final_output = final_output
 
@@ -295,12 +300,12 @@ class RunRecorder:
             task=self._task,  # type: ignore[arg-type]
             created_at=self._created_at,  # type: ignore[arg-type]
             frame=self._frame,  # type: ignore[arg-type]
-            actions=list(self._actions),
-            decisions=list(self._decisions),
-            policy_traces=list(self._policy_traces),
-            authority_records=list(self._authority_records),
-            reliance_records=list(self._reliance_records),
-            blocked_actions=list(self._blocked_actions),
+            actions=[item.model_copy(deep=True) for item in self._actions],
+            decisions=[item.model_copy(deep=True) for item in self._decisions],
+            policy_traces=[item.model_copy(deep=True) for item in self._policy_traces],
+            authority_records=[item.model_copy(deep=True) for item in self._authority_records],
+            reliance_records=[item.model_copy(deep=True) for item in self._reliance_records],
+            blocked_actions=[item.model_copy(deep=True) for item in self._blocked_actions],
             completed=self._completed,
             final_output=self._final_output,
             replay_bundle_id=self._replay_bundle_id,
@@ -317,16 +322,20 @@ class RunRecorder:
             The resolved :class:`~pathlib.Path` that was written.
         """
         out = pathlib.Path(path)
-        out.parent.mkdir(parents=True, exist_ok=True)
         run_record = self.to_run_record()
-        out.write_text(
-            json.dumps(run_record.model_dump(), indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
+        # ``mode="json"`` turns a non-finite number into null, so the file always passes ``acp validate-run``; the document is
+        # serialised before any file is opened and replaced atomically (mode 0600).
+        data = dumps_bytes(run_record.model_dump(mode="json"), indent=2)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        write_bytes_atomic(out, data, overwrite=True)
         return out
 
-    def generate_replay_bundle(self) -> ReplayBundle:
+    def generate_replay_bundle(self, *, allow_incomplete: bool = False) -> ReplayBundle:
         """Generate a :class:`~agent_control_plane.models.ReplayBundle` for this run.
+
+        A bundle is a snapshot of a *completed* run, so the run must have been closed with
+        :meth:`complete_run`; ``allow_incomplete=True`` explicitly produces a snapshot of a run that is
+        still open (the bundle carries no completion marker, so a reader cannot tell the difference).
 
         The bundle is self-contained and includes all data required to
         replay or audit the run.  The ``replay_bundle_id`` is stored on
@@ -335,6 +344,9 @@ class RunRecorder:
         Returns:
             A :class:`ReplayBundle` instance.
         """
+        self._require_started()
+        if not self._completed and not allow_incomplete:
+            raise RuntimeError("Run is not completed.  Call complete_run() first, or pass allow_incomplete=True.")
         run_record = self.to_run_record()
         bundle = generate_replay_bundle(run_record)
         self._replay_bundle_id = bundle.replay_bundle_id
@@ -343,6 +355,11 @@ class RunRecorder:
     # ------------------------------------------------------------------
     # Private
     # ------------------------------------------------------------------
+
+    def _require_open(self) -> None:
+        self._require_started()
+        if self._completed:
+            raise RuntimeError("Run is completed.  No further events can be recorded.")
 
     def _require_started(self) -> None:
         if self._run_id is None:

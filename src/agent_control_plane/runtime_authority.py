@@ -328,7 +328,7 @@ def validate_extensions(profile: RuntimeAuthorityProfile, proposal, context: dic
                 if observed.state == "closed":
                     reasons.append("purpose_closed")
                 age = (now - _parse(observed.observed_at)).total_seconds()
-                # An accepted cached snapshot was already held to its own bound (class bound, or a signed extension of it).
+                # An accepted cached snapshot was already held to its own bound (class bound, or an extension of it named by a configured signer: asserted, unauthenticated).
                 if extra is None and (not cl or age < 0 or age > cl.max_status_age_seconds):
                     reasons.append("purpose_unreadable")
     elif not grant.get("expires_at"):
