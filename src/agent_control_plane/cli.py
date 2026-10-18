@@ -11,6 +11,7 @@ from typing import Sequence, TypeVar
 from pydantic import BaseModel, ValidationError
 
 from agent_control_plane.cli_run import add_run_parser, run_command
+from agent_control_plane.strict_json import strict_loads
 from agent_control_plane.witness import add_witness_parser, witness_command
 from agent_control_plane.models import (
     RedactionConfig,
@@ -84,8 +85,8 @@ def _load_json_model(path: str | Path, model_type: type[ModelT]) -> ModelT:
     if not file_path.exists():
         raise FileNotFoundError(f"File not found: {file_path}")
     try:
-        payload = json.loads(file_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
+        payload = strict_loads(file_path.read_bytes())
+    except (ValueError, RecursionError) as exc:  # includes json.JSONDecodeError and the strict refusals
         raise _InvalidJsonError(f"Invalid JSON in {file_path}: {exc}") from exc
     try:
         return model_type.model_validate(payload)

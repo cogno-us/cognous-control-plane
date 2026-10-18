@@ -43,6 +43,7 @@ from typing import Any, Protocol
 from pydantic import BaseModel
 
 from .bounded import commitment
+from .strict_json import decode_utf8, strict_loads
 
 PROFILE_ID = "witness-digest/0.1"
 GENESIS = "sha256:" + "0" * 64
@@ -73,7 +74,7 @@ def _as_document(document: Any) -> dict:
     if isinstance(document, BaseModel):
         return document.model_dump(mode="json")
     if isinstance(document, (str, Path)):
-        return json.loads(Path(document).read_text(encoding="utf-8"))
+        return strict_loads(Path(document).read_bytes())
     return document
 
 
@@ -175,7 +176,7 @@ class LocalFileWitness:
     def history(self) -> list[dict]:
         if not self.path.exists():
             return []
-        return [json.loads(line) for line in self.path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        return [strict_loads(line) for line in decode_utf8(self.path.read_bytes()).splitlines() if line.strip()]
 
     def latest(self) -> dict | None:
         records = self.history()

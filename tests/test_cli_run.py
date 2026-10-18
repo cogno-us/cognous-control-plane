@@ -452,3 +452,30 @@ def test_strict_loads_accepts_ordinary_documents_and_keeps_values():
 
     assert strict_loads(b'{"a": [1, 2.5, null, true], "b": {"c": "\\u00e9"}}') == {"a": [1, 2.5, None, True], "b": {"c": "é"}}
     assert strict_loads(b'{"a": 1, "b": 1}') == {"a": 1, "b": 1}  # same value under different keys is fine
+
+
+@pytest.mark.parametrize("case,expected_exit", [("authorized", 0), ("held", 1)])
+def test_strict_reading_of_everything_a_run_writes_equals_plain_json_loads(tmp_path, case, expected_exit):
+    """Default path unchanged: every JSON file an example run writes parses identically under the strict and the plain loader,
+    its canonical commitment is unchanged, and the stores reopen and the witness digest computes through the strict readers."""
+    from agent_control_plane.bounded import BoundedRecordStore, LocalRefundDestination, commitment
+    from agent_control_plane.strict_json import strict_loads
+    from agent_control_plane.witness import make_record
+
+    code, _, _ = _run(tmp_path, case)
+    assert code == expected_exit
+    files = sorted(p for d in ("store", "out") for p in (tmp_path / d).glob("*.json"))
+    assert len(files) >= 5
+    for path in files:
+        data = path.read_bytes()
+        assert strict_loads(data) == json.loads(data.decode("utf-8")), path.name
+        assert commitment(strict_loads(data)) == commitment(json.loads(data)), path.name
+    record = tmp_path / "store" / "bounded-run-record.json"
+    run_id = json.loads(record.read_bytes())["run_id"]
+    before = record.read_bytes()
+    assert BoundedRecordStore(record, run_id).load().run_id == run_id
+    assert LocalRefundDestination(tmp_path / "store" / "destination.json").snapshot() == json.loads(
+        (tmp_path / "store" / "destination.json").read_bytes()
+    )
+    assert make_record(record)["digest"] == make_record(json.loads(before))["digest"]
+    assert record.read_bytes() == before

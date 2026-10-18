@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 
 from .runtime_authority import (RuntimeAuthorityProfile, VOCABULARY_VERSION_0_2, reopen_conditions,
                                 vocabulary_for)
+from .strict_json import strict_loads
 from .rule_revision import RuleRevision, RuleRevisionProfile, RuleRevisionRefusal, resolve_rule, rule_identity
 from .operation_identity import (
     DESTINATION_CAPABILITY as OPERATION_IDENTITY_CAPABILITY, AttemptJoin, OperationAdmissionRow,
@@ -548,7 +549,7 @@ class BoundedRecordStore:
                 os.close(fd)  # Kernel also releases the lock when a process dies.
 
     def _read_document(self) -> dict:
-        document = json.loads(self.path.read_text(encoding="utf-8"))
+        document = strict_loads(self.path.read_bytes())
         BoundedRunRecord.model_validate(document)
         return document
 
@@ -1158,7 +1159,7 @@ class LocalRefundDestination:
             return copy.deepcopy(self._load())
 
     def _load(self) -> dict:
-        return json.loads(self.path.read_text(encoding="utf-8"))
+        return strict_loads(self.path.read_bytes())
 
     @contextmanager
     def _transaction(self):

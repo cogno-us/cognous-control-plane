@@ -49,6 +49,14 @@ from agent_control_plane.models import (
     PolicyDecision,
     RunRecord,
 )
+from agent_control_plane.strict_json import (
+    INPUT_DUPLICATE_MEMBER,
+    INPUT_NON_FINITE_NUMBER,
+    INPUT_NOT_UTF8,
+    MAX_TEXT,
+    safe_text,
+    strict_loads,
+)
 
 ENVELOPE_VERSION = "1"
 MAX_INPUT_BYTES = 1024 * 1024
@@ -81,48 +89,10 @@ class InvalidInput(ValueError):
     """Declared input or path refused; maps to exit code 2."""
 
 
-# Stable refusal codes for strict input parsing (printed as ``[code]`` in the invalid-input message).
-INPUT_DUPLICATE_MEMBER = "input_json_duplicate_member"
-INPUT_NON_FINITE_NUMBER = "input_json_non_finite_number"
-INPUT_NOT_UTF8 = "input_not_utf8"
-
-
-def _no_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-    seen: dict[str, Any] = {}
-    for key, value in pairs:
-        if key in seen:
-            raise ValueError(f"[{INPUT_DUPLICATE_MEMBER}] duplicate object member {_safe(key, 60)!s}")
-        seen[key] = value
-    return seen
-
-
-def _no_constant(token: str) -> Any:
-    raise ValueError(f"[{INPUT_NON_FINITE_NUMBER}] {token} is not valid JSON")
-
-
-def strict_loads(data: bytes) -> Any:
-    """Parse input JSON fail-closed: UTF-8 only, no duplicate object members, no NaN/Infinity/-Infinity."""
-    try:
-        text = data.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise ValueError(f"[{INPUT_NOT_UTF8}] input is not valid UTF-8 (byte offset {exc.start})") from None
-    return json.loads(text, object_pairs_hook=_no_duplicates, parse_constant=_no_constant)
-
-
-MAX_TEXT = 200
 MAX_NAMES = 5
 
 
-def _safe(value: Any, limit: int = MAX_TEXT) -> str:
-    """Escape and truncate text that may carry untrusted bytes before it reaches stderr or a message.
-
-    Control, format and other non-printable characters (CR, LF, NUL, ESC, bidi overrides, U+2028) become ``\\xNN``/``\\uNNNN``
-    escapes, so a member name cannot forge a line or an ANSI sequence in a terminal or a CI log.
-    """
-    text = "".join(
-        c if c.isprintable() else (f"\\x{ord(c):02x}" if ord(c) < 256 else f"\\u{ord(c):04x}") for c in str(value)
-    )
-    return text if len(text) <= limit else text[: max(limit - 3, 0)] + "..."
+_safe = safe_text
 
 
 def _names(names: list[str]) -> str:

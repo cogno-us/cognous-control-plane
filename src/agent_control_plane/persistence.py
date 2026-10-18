@@ -9,6 +9,7 @@ from typing import Protocol, TypeVar
 from pydantic import BaseModel
 
 from agent_control_plane.models import ReplayBundle, RunRecord
+from agent_control_plane.strict_json import strict_loads
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
 
@@ -95,5 +96,5 @@ class FileSystemPersistenceAdapter:
     ) -> ModelT:
         if not path.exists():
             raise FileNotFoundError(missing_message)
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload = strict_loads(path.read_bytes())
         return model_type.model_validate(payload)
