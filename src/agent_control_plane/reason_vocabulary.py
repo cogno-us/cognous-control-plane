@@ -70,10 +70,10 @@ def _row_time(row: dict) -> str | None:
 def adoption_times(vocabulary_changes: list, rule_revisions: list) -> dict[str, str]:
     """Earliest adoption timestamp per version label: a VocabularyChange's `version`, or a counting-or-not revision row's `rule_ref`
     of kind reason_registry (the label of the registry it adopts)."""
-    from datetime import datetime
+    from agent_control_plane.time_instant import parse_instant
     out: dict[str, str] = {}
     def put(label, ts):
-        if label and ts and (label not in out or datetime.fromisoformat(ts) < datetime.fromisoformat(out[label])):
+        if label and ts and (label not in out or parse_instant(ts) < parse_instant(out[label])):
             out[label] = ts
     for c in map(_d, vocabulary_changes):
         put(c["version"], c["acknowledged_at"])
@@ -87,13 +87,13 @@ def _annotate_adoption(report: dict, previous: list, current: list, changes: lis
     """Flag rows whose version predates that version's adoption row; mark pre-split counts `tainted_for_trend`.
 
     A version with no adoption row (for example the pinned default registry) is not flagged: there is no row to predate."""
-    from datetime import datetime
+    from agent_control_plane.time_instant import parse_instant
     adopted = adoption_times(changes, revisions)
     flagged, flagged_codes = [], set()
     for which, rows in (("previous", previous), ("current", current)):
         for i, row in enumerate(map(_d, rows)):
             v, ts = row.get("reason_vocabulary_version"), _row_time(row)
-            if v in adopted and ts and datetime.fromisoformat(ts) < datetime.fromisoformat(adopted[v]):
+            if v in adopted and ts and parse_instant(ts) < parse_instant(adopted[v]):
                 flagged.append({"set": which, "index": i, "version": v, "row_time": ts, "adoption_time": adopted[v]})
                 flagged_codes.update((v, code) for code in row.get("reasons", []))
     split_old = {(c["previous_version"], code) for c in map(_d, changes) if c["kind"] == "split" for code in c["previous_codes"]}
@@ -126,13 +126,14 @@ def operand_shape(row) -> tuple[str, ...]:
 def measured_arity(rows: list, *, as_of: str, period_seconds: int) -> dict:
     """Diversity of operand shapes per code over the period ending at `as_of` (inclusive, exclusive at the start).
     The result is an observation "as of T", not a property of the code."""
-    from datetime import datetime, timedelta
-    end = datetime.fromisoformat(as_of)
+    from datetime import timedelta
+    from agent_control_plane.time_instant import parse_instant
+    end = parse_instant(as_of)
     start = end - timedelta(seconds=period_seconds)
     shapes: dict[str, set] = {}
     for row in map(_d, rows):
         ts = _row_time(row)
-        if not ts or not (start < datetime.fromisoformat(ts) <= end):
+        if not ts or not (start < parse_instant(ts) <= end):
             continue
         for code in set(row.get("reasons", [])):
             shapes.setdefault(code, set()).add(operand_shape(row))
