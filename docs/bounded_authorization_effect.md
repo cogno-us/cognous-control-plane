@@ -192,15 +192,18 @@ cannot establish tenant equality, so it holds with `tenant_proposal_required`
 when any of those inputs carries a `tenant_id`; 0.1 behaviour is unchanged when
 no tenant is involved.
 
-Evidence status is **not** tenant-bound. `EvidenceStatus` has no `tenant_id`
-field and the gate checks evidence only for obligation ID, source_ref,
-institution, authority domain, state and freshness. If tenants share an
-institution/domain and reuse obligation or source identifiers, one tenant's
-current evidence can satisfy another tenant's obligation. Tenant separation for
-evidence therefore relies on the trusted resolver returning only the evaluating
-tenant's evidence. The opt-in runtime-authority profile's signed evidence
-statements do include `tenant_id` and are compared with the Authority Context
-tenant; unsigned evidence on the default path is not.
+Evidence status is tenant-bound only when the resolver supplies the optional
+`EvidenceStatus.tenant_id`. When present on a tenant-aware proposal it must equal
+the proposal's tenant (otherwise `evidence_binding_mismatch`), and a tenantless
+0.1 proposal refuses tenant-bearing evidence (`tenant_proposal_required`). The
+field is omitted from dumps while unset, so tenantless evidence is unchanged.
+Compatibility limit: evidence that carries no `tenant_id` is still accepted for
+a tenant-aware proposal, so if tenants share an institution/domain and reuse
+obligation or source identifiers, tenantless evidence from one tenant can satisfy
+another tenant's obligation unless the trusted resolver returns only the
+evaluating tenant's evidence. The opt-in runtime-authority profile's evidence
+statements (named by a configured signer: asserted, unauthenticated) include
+`tenant_id` and are compared with the Authority Context tenant.
 
 Grant, policy, conflict, identity, mandate and approval observations use explicit maximum
 ages. Required evidence uses its Authority Context max_age_seconds. All observed_at values

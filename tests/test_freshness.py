@@ -835,6 +835,31 @@ def test_status_age_at_dispatch_never_exceeds_twice_the_bound(tmp_path, clock):
     assert f.destination.snapshot()["effects"] == {}
 
 
+def test_input_anchored_deadline_refuses_a_status_that_was_old_at_opening(tmp_path, clock):
+    """Opt-in anchor_deadline_to_inputs: observed_at + own bound, so the 2x window of the documented profile closes."""
+    p, r, f, c = setup_flow(tmp_path)
+    enable(r, f, c, anchor_deadline_to_inputs=True)
+    stale_grant(r, 60)
+    d = f.decide(p, now=NOW)
+    assert d.result == "authorized", d.reasons
+    original, calls = f.destination.observe, []
+
+    def stalled(effect_id):
+        calls.append(clock.now)
+        if len(calls) == 1:
+            clock.tick(59)
+        return original(effect_id).model_copy(update={"observed_at": NOW.isoformat()})
+    f.destination.observe = stalled
+    with pytest.raises(PermissionError, match="check_expired_before_dispatch"):
+        execute(f, p, d)
+    assert f.destination.snapshot()["effects"] == {}
+
+
+def test_input_anchor_flag_is_omitted_from_profile_dump_while_off():
+    assert "anchor_deadline_to_inputs" not in FreshnessProfile().model_dump(mode="json")
+    assert FreshnessProfile(anchor_deadline_to_inputs=True).model_dump(mode="json")["anchor_deadline_to_inputs"] is True
+
+
 # ------------------------------------------------------------------------------------------------ registry
 def test_every_freshness_code_is_registered():
     from agent_control_plane import freshness

@@ -440,6 +440,15 @@ class RedactionConfig(BaseModel):
         default="[REDACTED]",
         description="Replacement text used for string fields when redacting.",
     )
+    keep_fingerprints: bool = Field(
+        default=False,
+        description=(
+            "Keep each decision's and trace's deterministic_fingerprint when payloads or targets are redacted.  "
+            "The fingerprint is an unkeyed SHA-256 of the original inputs, so a small search space (a short PIN or "
+            "account number) can be recovered by guessing.  The default blanks it whenever payloads or targets "
+            "are redacted; set True to keep it (and accept that risk)."
+        ),
+    )
 
 
 class ToolExecutionResult(BaseModel):

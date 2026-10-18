@@ -17,9 +17,12 @@ Limits (read before relying on it):
 * Everything is a join over rows in the record store, which is a plain JSON file under a same-host lock with no keyed integrity
   check: anyone who can write the file can rewrite rows. Visibility for an honest reader, not tamper evidence. Signer and issuer
   fields are asserted names, not authenticated identities.
-* The deadline is anchored at the opening of the check, not at the status's own timestamp. A status that was already close to the
-  class bound when read can be dispatched until the deadline, so the status age at dispatch can reach twice the bound
-  (tests/test_freshness.py::test_status_age_at_dispatch_can_reach_twice_the_bound pins this).
+* By default the deadline is anchored at the opening of the check, not at the status's own timestamp. A status that was already
+  close to the class bound when read can be dispatched until the deadline, so the status age at dispatch can reach twice the bound
+  (tests/test_freshness.py::test_status_age_at_dispatch_can_reach_twice_the_bound pins this). With
+  ``FreshnessProfile.anchor_deadline_to_inputs=True`` the deadline is the earliest of that value and ``observed_at + own bound``
+  over every input judged for freshness (carried on the ``completed`` event; the recovery pass still reports against the opening
+  deadline).
 """
 from __future__ import annotations
 
@@ -65,6 +68,10 @@ class FreshnessProfile(BaseModel):
     nonce: bool = True
     #: Largest extension of a class age bound a signer may record. 0 refuses every extension.
     max_age_extension_seconds: int = Field(default=0, ge=0)
+    #: Opt-in (omitted from the profile dump while False, so existing profile commitments are unchanged). When True the dispatch
+    #: deadline is the earliest of ``opened + class bound`` and ``observed_at + its own bound`` for every status input the
+    #: evaluation judged for freshness, so a read that was already old at opening cannot be dispatched for another full bound.
+    anchor_deadline_to_inputs: bool = Field(default=False, exclude_if=lambda v: not v)
 
 
 class ReaperFailed(RuntimeError):

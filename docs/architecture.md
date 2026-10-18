@@ -109,7 +109,8 @@ offline audit, replay simulation, or compliance review.
 
 Semantic validation produces a `ValidationReport` for `RunRecord` and
 `ReplayBundle` exports. Redaction helpers create deep copies that preserve
-identifiers, policy decisions, and fingerprints while removing selected fields.
+identifiers and policy decisions while removing selected fields; fingerprints are blanked
+when payloads or targets are redacted (`keep_fingerprints=True` keeps them).
 
 ### Tool adapter execution
 

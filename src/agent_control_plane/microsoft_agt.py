@@ -195,9 +195,13 @@ class MicrosoftAgtPreToolCallAdapter:
         *,
         backend: MicrosoftAgtBackend,
         authority: CognousAuthorityEvaluator,
+        tool_bindings: Mapping[str, str] | None = None,
     ) -> None:
         self._backend = backend
         self._authority = authority
+        # Opt-in: ``{adapter_id: tool_name}`` taken from the same trusted manifest entry as the proposals. When given, an
+        # evaluation whose proposal adapter has no entry, or whose ``tool_name`` differs, is held before AGT is asked.
+        self._tool_bindings = dict(tool_bindings) if tool_bindings is not None else None
 
     async def evaluate(
         self,
@@ -225,6 +229,34 @@ class MicrosoftAgtPreToolCallAdapter:
                 cognous=None,
                 transformed=False,
                 reasons=("tenant_missing",),
+            )
+
+        proposal_tenant = getattr(proposal, "tenant_id", None)
+        if proposal_tenant is not None and proposal_tenant != tenant:
+            return self._finish(
+                result="hold",
+                tenant_id=tenant,
+                tool_name=tool_name,
+                tool_call_id=tool_call_id,
+                agt=AgtDecision(decision="unavailable", reason="tenant_mismatch"),
+                original_commitment=original_commitment,
+                proposal=None,
+                cognous=None,
+                transformed=False,
+                reasons=("tenant_mismatch",),
+            )
+        if self._tool_bindings is not None and self._tool_bindings.get(proposal.adapter_id) != tool_name:
+            return self._finish(
+                result="hold",
+                tenant_id=tenant,
+                tool_name=tool_name,
+                tool_call_id=tool_call_id,
+                agt=AgtDecision(decision="unavailable", reason="tool_binding_mismatch"),
+                original_commitment=original_commitment,
+                proposal=None,
+                cognous=None,
+                transformed=False,
+                reasons=("tool_binding_mismatch",),
             )
 
         try:

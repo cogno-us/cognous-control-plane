@@ -75,12 +75,14 @@ def test_original_object_is_unchanged() -> None:
     assert record.actions[0].reason == "Send the update to the customer."
 
 
-def test_redacted_replay_bundle_preserves_ids_and_decision_fingerprints() -> None:
+def test_redacted_replay_bundle_preserves_ids_and_decision_fingerprints_when_kept() -> None:
     record, bundle = _build_record_and_bundle()
 
     redacted = redact_replay_bundle(
         bundle,
-        RedactionConfig(redact_targets=True, redact_final_output=True, redact_reasons=True),
+        RedactionConfig(
+            redact_targets=True, redact_final_output=True, redact_reasons=True, keep_fingerprints=True
+        ),
     )
 
     assert redacted.run_id == bundle.run_id
@@ -90,3 +92,35 @@ def test_redacted_replay_bundle_preserves_ids_and_decision_fingerprints() -> Non
         redacted.decisions[0].deterministic_fingerprint
         == record.decisions[0].deterministic_fingerprint
     )
+
+
+def test_fingerprints_are_blanked_by_default_when_payloads_or_targets_are_redacted() -> None:
+    record, bundle = _build_record_and_bundle()
+    assert record.decisions[0].deterministic_fingerprint  # recorded
+    for config in (RedactionConfig(), RedactionConfig(redact_payloads=False, redact_targets=True)):
+        redacted_run = redact_run_record(record, config)
+        redacted_bundle = redact_replay_bundle(bundle, config)
+        for item in (redacted_run, redacted_bundle):
+            assert all(d.deterministic_fingerprint == "" for d in item.decisions)
+            assert all(t.deterministic_fingerprint == "" for t in item.policy_traces)
+            assert item.decisions[0].decision_id == record.decisions[0].decision_id
+    # the original is not changed
+    assert record.decisions[0].deterministic_fingerprint
+
+
+def test_fingerprints_are_kept_when_nothing_sensitive_is_redacted_or_when_asked() -> None:
+    record, _ = _build_record_and_bundle()
+    only_reasons = redact_run_record(record, RedactionConfig(redact_payloads=False, redact_reasons=True))
+    assert only_reasons.decisions[0].deterministic_fingerprint == record.decisions[0].deterministic_fingerprint
+    kept = redact_run_record(record, RedactionConfig(keep_fingerprints=True))
+    assert kept.decisions[0].deterministic_fingerprint == record.decisions[0].deterministic_fingerprint
+
+
+def test_a_low_entropy_target_is_not_recoverable_from_a_default_redacted_export() -> None:
+    import hashlib  # noqa: F401  (the guess below would need the fingerprint; there is none)
+
+    record, _ = _build_record_and_bundle()
+    redacted = redact_run_record(record, RedactionConfig(redact_targets=True))
+    assert redacted.decisions[0].deterministic_fingerprint == ""
+    assert redacted.policy_traces[0].deterministic_fingerprint == ""
+    assert "customer@example.com" not in redacted.model_dump_json()

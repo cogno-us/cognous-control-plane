@@ -14,7 +14,7 @@ The rules follow the draft ODES ``effect-reversibility`` contract (open-decision
 * A ``reversible_until`` class is treated as ``irreversible`` once its window has passed.
 * A cached "open" purpose snapshot is accepted only for a reversible class, within the class age bound (inclusive), and only while no
   recorded closure of that purpose exists. A recorded closure overrides the cache. The bound is the class bound, raised only by a
-  recorded, signed N3 age extension (never for an irreversible class).
+  recorded N3 age extension named by a configured signer (asserted, unauthenticated) (never for an irreversible class).
 * Every use of a cached snapshot, accepted or refused, is appended as a ``snapshot_use`` row with the epoch and the age.
 
 Limits (read before relying on it):

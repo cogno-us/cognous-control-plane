@@ -1445,3 +1445,46 @@ def test_v01_proposal_without_tenant_state_keeps_historical_binding(tmp_path):
     assert decision.result == "authorized", decision.reasons
     assert type(decision.binding) is AuthorizationBinding
     assert "tenant_id" not in decision.binding.model_dump(mode="json")
+
+
+def _tenant_evidence_flow(tmp_path, p, resolver):
+    return workflow(tmp_path, p, resolver=resolver)
+
+
+def _evidence_of(r):
+    return next(iter(r.evidence.values())) if isinstance(getattr(r, "evidence", None), dict) else None
+
+
+@pytest.mark.parametrize("evidence_tenant, tenant_aware, expect_hold", [
+    ("tenant-other", True, True),
+    (TENANT, True, False),
+    (None, True, False),
+    (TENANT, False, True),
+])
+def test_evidence_tenant_two_branch_check(tmp_path, evidence_tenant, tenant_aware, expect_hold):
+    p = tenant_proposal() if tenant_aware else proposal()
+    r = tenant_resolver_for(p) if tenant_aware else resolver_for(p)
+    items = _evidence_of(r)
+    if items is None:
+        pytest.skip("synthetic resolver has no authorization evidence in this fixture")
+    for ev in r.evidence.values():
+        ev.tenant_id = evidence_tenant
+    flow = workflow(tmp_path, p, resolver=r)
+    decision = flow.decide(p, now=NOW)
+    if expect_hold:
+        assert decision.result == "hold"
+        assert "evidence_binding_mismatch" in decision.reasons or "tenant_proposal_required" in decision.reasons
+    else:
+        assert decision.result == "authorized", decision.reasons
+
+
+def test_effect_limits_empty_dict_still_checks_max_effects(tmp_path):
+    from agent_control_plane.bounded import commitment
+    p = proposal()
+    flow = workflow(tmp_path, p)
+    for action in flow.manifest["actions"]:
+        if action["action_id"] == p.action_id:
+            action["effect_limits"] = {}
+    rebound = p.model_copy(update={"manifest_digest": commitment(flow.manifest)})
+    reasons = flow._manifest_mismatches(rebound, NOW)
+    assert "effect_count_exceeded" in reasons, reasons

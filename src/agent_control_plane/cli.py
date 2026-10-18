@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 from typing import Sequence, TypeVar
@@ -11,7 +10,8 @@ from typing import Sequence, TypeVar
 from pydantic import BaseModel, ValidationError
 
 from agent_control_plane.cli_run import add_run_parser, run_command
-from agent_control_plane.strict_json import strict_loads
+from agent_control_plane.atomic_write import write_bytes_atomic
+from agent_control_plane.strict_json import dumps_bytes, strict_loads
 from agent_control_plane.witness import add_witness_parser, witness_command
 from agent_control_plane.models import (
     RedactionConfig,
@@ -98,11 +98,9 @@ def _load_json_model(path: str | Path, model_type: type[ModelT]) -> ModelT:
 
 def _write_json_model(path: str | Path, model: BaseModel) -> Path:
     output_path = Path(path)
+    data = dumps_bytes(model.model_dump(mode="json"), indent=2)  # refuses before any file is opened
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(
-        json.dumps(model.model_dump(mode="json"), indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    write_bytes_atomic(output_path, data, overwrite=True)
     return output_path
 
 

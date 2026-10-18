@@ -55,6 +55,7 @@ from agent_control_plane.strict_json import (
     INPUT_NON_FINITE_NUMBER,
     INPUT_NOT_UTF8,
     MAX_TEXT,
+    dumps_bytes,
     safe_text,
     strict_loads,
 )
@@ -311,11 +312,11 @@ def _parse_now(value: str | None) -> datetime | None:
 
 def _write_atomic(directory: Path, name: str, document: Any) -> Path:
     target = directory / name
+    data = dumps_bytes(document, indent=2, newline=True)  # refuses before any file is opened
     fd, tmp = tempfile.mkstemp(prefix=name + ".", dir=directory)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as stream:
-            json.dump(document, stream, indent=2, ensure_ascii=False)
-            stream.write("\n")
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(data)
         os.replace(tmp, target)
     finally:
         if os.path.exists(tmp):

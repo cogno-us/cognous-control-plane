@@ -221,3 +221,62 @@ async def test_real_sdk_types_are_supported_when_installed():
     assert runtime.request.snapshot["tool_call"]["id"] == "sdk-call-1"
     assert result.decision == "allow"
     assert result.input_identity == "sdk-input"
+
+
+@pytest.mark.asyncio
+async def test_tenant_mismatch_between_argument_and_proposal_holds_before_agt():
+    from agent_control_plane.bounded import TenantRuntimeProposal
+
+    backend = FakeBackend(AgtDecision(decision="allow"))
+    authority = FakeAuthority("authorized")
+    adapter = MicrosoftAgtPreToolCallAdapter(backend=backend, authority=authority)
+    tenant_proposal = TenantRuntimeProposal(**proposal().model_dump(), tenant_id="tenant-beta")
+
+    result = await adapter.evaluate(
+        tenant_id="tenant-alpha", proposal=tenant_proposal, tool_name="refund_adapter", tool_call_id="call-t"
+    )
+
+    assert result.result == "hold"
+    assert "tenant_mismatch" in result.reasons
+    assert backend.calls == [] and authority.calls == []
+
+
+@pytest.mark.asyncio
+async def test_matching_tenant_proposal_is_evaluated_normally():
+    from agent_control_plane.bounded import TenantRuntimeProposal
+
+    backend = FakeBackend(AgtDecision(decision="allow"))
+    authority = FakeAuthority("authorized")
+    adapter = MicrosoftAgtPreToolCallAdapter(backend=backend, authority=authority)
+    tenant_proposal = TenantRuntimeProposal(**proposal().model_dump(), tenant_id="tenant-alpha")
+
+    result = await adapter.evaluate(
+        tenant_id="tenant-alpha", proposal=tenant_proposal, tool_name="refund_adapter", tool_call_id="call-t2"
+    )
+
+    assert result.result == "authorized"
+
+
+@pytest.mark.asyncio
+async def test_tool_bindings_hold_on_mismatch_and_pass_on_match():
+    backend = FakeBackend(AgtDecision(decision="allow"))
+    authority = FakeAuthority("authorized")
+    bindings = {"urn:cognous:adapter:synthetic-refund-v1": "refund_adapter"}
+    adapter = MicrosoftAgtPreToolCallAdapter(backend=backend, authority=authority, tool_bindings=bindings)
+
+    wrong = await adapter.evaluate(
+        tenant_id="tenant-alpha", proposal=proposal(), tool_name="read_only_lookup", tool_call_id="call-b1"
+    )
+    assert wrong.result == "hold" and "tool_binding_mismatch" in wrong.reasons
+    assert backend.calls == [] and authority.calls == []
+
+    ok = await adapter.evaluate(
+        tenant_id="tenant-alpha", proposal=proposal(), tool_name="refund_adapter", tool_call_id="call-b2"
+    )
+    assert ok.result == "authorized"
+
+    unlisted = MicrosoftAgtPreToolCallAdapter(backend=backend, authority=authority, tool_bindings={})
+    held = await unlisted.evaluate(
+        tenant_id="tenant-alpha", proposal=proposal(), tool_name="refund_adapter", tool_call_id="call-b3"
+    )
+    assert held.result == "hold" and "tool_binding_mismatch" in held.reasons

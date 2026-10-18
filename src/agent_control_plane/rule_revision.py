@@ -1,8 +1,8 @@
-"""Opt-in rule-revision/0.1: digest-pinned rules with append-only, independently signed revision rows.
+"""Opt-in rule-revision/0.1: digest-pinned rules with append-only, independently named revision rows.
 
 One record shape (`RuleRevision`, modelled on `VocabularyChange`) serves four rule kinds: the reason registry, a policy, a gate
 implementation and a merge equivalence rule. A rule version is a name; the digest pins the content. A digest only counts as adopted
-when a revision row for it was signed by a configured principal other than the reviser.
+when a revision row for it names a configured signer other than the reviser (asserted, unauthenticated).
 
 Limits (read before relying on it):
 * Trust moves to the revision signer. It is made explicit here; it is not removed.

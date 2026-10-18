@@ -16,6 +16,7 @@ try:
 except ImportError:  # Unsupported platforms must fail closed, not use thread-only writes.
     fcntl = None
 import uuid
+from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
 from time import monotonic as _monotonic
 from pathlib import Path
@@ -25,7 +26,7 @@ from pydantic import BaseModel, Field
 
 from .runtime_authority import (RuntimeAuthorityProfile, VOCABULARY_VERSION_0_2, reopen_conditions,
                                 vocabulary_for)
-from .strict_json import strict_loads
+from .strict_json import dumps_bytes, strict_loads
 from .time_instant import TIME_INSTANT_NAIVE, InstantError, parse_instant
 from .rule_revision import RuleRevision, RuleRevisionProfile, RuleRevisionRefusal, resolve_rule, rule_identity
 from .operation_identity import (
@@ -167,6 +168,8 @@ class EvidenceStatus(BaseModel):
     source_ref: str
     institution_id: str
     authority_domain: str
+    # Omitted from dumps while unset, so tenantless evidence serialises exactly as before.
+    tenant_id: str | None = Field(default=None, exclude_if=lambda v: v is None)
 
 
 class PolicyStatus(BaseModel):
@@ -454,6 +457,10 @@ def _process_owner() -> dict[str, str]:
     return {"pid": str(os.getpid()), "token": str(uuid.uuid4())}
 
 
+#: Opt-in freshness anchoring: while set, ``BoundedAuthorizationWorkflow._fresh`` appends ``observed_at + bound`` of each judged input.
+_FRESH_DEADLINES: ContextVar[list | None] = ContextVar("_FRESH_DEADLINES", default=None)
+
+
 class _ResolverReadFailure(Exception):
     pass
 
@@ -724,6 +731,8 @@ class BoundedRecordStore:
                        recorded_at: str, evaluated_at: str | None = None) -> OperationRenewalRow:
         """Record a renewal row. Only the issuer recorded at admission may write an accepted one.
 
+        ``written_by`` is an asserted name, compared as a string; it is not an authenticated identity.
+
         Any other writer, an unknown operation or a revision that is not new yields a
         ``refused`` row, which is retained: refusals are recorded, never silent.
         """
@@ -885,6 +894,13 @@ class BoundedRecordStore:
             return next((x for x in self._read_document().get("check_events", [])
                          if x["check_id"] == check_id and x["phase"] == "opened"), None)
 
+    def check_deadline(self, check_id: str) -> str | None:
+        """The earliest deadline carried by any journal event of one check (opt-in input anchoring), or None."""
+        with self._transaction():
+            found = [x["deadline"] for x in self._read_document().get("check_events", [])
+                     if x["check_id"] == check_id and x.get("deadline")]
+        return min(found, key=_fparse) if found else None
+
     def recovery_pass(self, *, trigger: Literal["startup", "interval", "manual"] = "manual",
                       now: datetime | None = None, record_run: bool = False) -> RecoveryReport:
         """freshness/0.1 recovery pass: close abandoned checks, report live checks past their deadline, close nothing alive.
@@ -968,13 +984,18 @@ class BoundedRecordStore:
         raise AgeExtensionRefused(refusal.reasons)
 
     def _write(self, document: dict) -> None:
-        """Replace the JSON document; caller must hold the transaction lock."""
+        """Replace the JSON document; caller must hold the transaction lock.
+
+        The document is serialised and checked (finite numbers, no unpaired surrogate) before any file is opened, so a refused
+        write raises and leaves the stored document intact and readable.
+        """
+        data = dumps_bytes(document, indent=2, ensure_ascii=True)
         directory_fd = os.open(self.path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
         tmp = None
         try:
             fd, tmp = tempfile.mkstemp(prefix=self.path.name + ".", suffix=".tmp", dir=self.path.parent)
-            with os.fdopen(fd, "w", encoding="utf-8") as stream:
-                json.dump(document, stream, indent=2, allow_nan=False)
+            with os.fdopen(fd, "wb") as stream:
+                stream.write(data)
                 stream.flush()
                 os.fsync(stream.fileno())
             os.replace(tmp, self.path)
@@ -1192,12 +1213,13 @@ class LocalRefundDestination:
 
     def _write(self, state: dict) -> None:
         """Persist before acknowledging; caller holds the destination transaction."""
+        data = dumps_bytes(state, indent=2, sort_keys=True, ensure_ascii=True)
         directory_fd = os.open(self.path.parent, os.O_RDONLY | os.O_DIRECTORY)
         temporary = None
         try:
             fd, temporary = tempfile.mkstemp(prefix=self.path.name + ".", dir=self.path.parent)
-            with os.fdopen(fd, "w", encoding="utf-8") as stream:
-                json.dump(state, stream, indent=2, sort_keys=True, allow_nan=False)
+            with os.fdopen(fd, "wb") as stream:
+                stream.write(data)
                 stream.flush()
                 os.fsync(stream.fileno())
             os.replace(temporary, self.path)
@@ -1364,6 +1386,10 @@ class BoundedAuthorizationWorkflow:
         deadline = opening.get("deadline") if opening else None
         if not deadline:
             return None
+        if self._freshness is not None and self._freshness.anchor_deadline_to_inputs:
+            later = self.records.check_deadline(check_id)
+            if later is not None and _fparse(later) < _fparse(deadline):
+                deadline = later
         now = _now()
         if now > _fparse(deadline):
             return deadline
@@ -1535,7 +1561,7 @@ class BoundedAuthorizationWorkflow:
                        now: datetime | None = None) -> OperationRenewalRow:
         """Record that ``to_revision`` of the grant continues ``operation_id``.
 
-        Only the grant issuer recorded at admission writes an accepted renewal. A worker
+        Only the grant issuer recorded at admission (by asserted name, unauthenticated) writes an accepted renewal. A worker
         extending its own envelope is refused: the refusal row is persisted, then raised.
         """
         if self._identity is None:
@@ -1957,6 +1983,9 @@ class BoundedAuthorizationWorkflow:
 
     def _fresh(self, observed_at: str, now: datetime, max_age_seconds: int) -> bool:
         observed = _parse(observed_at)
+        collector = _FRESH_DEADLINES.get()
+        if collector is not None:
+            collector.append(observed + timedelta(seconds=max_age_seconds))
         if observed > now + timedelta(seconds=self.clock_tolerance_seconds):
             return False
         return (now - observed).total_seconds() <= max_age_seconds
@@ -2040,6 +2069,7 @@ class BoundedAuthorizationWorkflow:
         def retain(item):
             self.records.append_check_event(event.model_copy(update={
                 "phase": "input", "input": item, **({"recorded_at": self._svc()} if fr else {})}))
+        anchors = [] if (fr is not None and fr.anchor_deadline_to_inputs) else None
         reads = _JournalInputs([], retain, nonce=nonce, freshness=fr is not None)
         reads.check_id = check_id  # lets a cached-snapshot use (reversibility/0.1) join to its check by id
         try:
@@ -2050,7 +2080,12 @@ class BoundedAuthorizationWorkflow:
             elif not getattr(self.resolver, "authenticated", False) and not profile.allow_synthetic_resolver:
                 reasons, binding = ["resolver_not_authenticated"], None
             else:
-                reasons, binding = self._resolve_inputs(proposal, now, inputs=reads)
+                token = _FRESH_DEADLINES.set(anchors) if anchors is not None else None
+                try:
+                    reasons, binding = self._resolve_inputs(proposal, now, inputs=reads)
+                finally:
+                    if token is not None:
+                        _FRESH_DEADLINES.reset(token)
                 if reads.mismatches:  # a replayed or foreign response: its age cannot be bound to this check
                     reasons, binding = sorted(set(reasons + ["status_nonce_mismatch"])), None
         except _ResolverReadFailure:
@@ -2061,16 +2096,25 @@ class BoundedAuthorizationWorkflow:
         finally:
             if inputs is not None:
                 inputs.extend(reads)
+        tightened = {}
+        if anchors and clocks.get("deadline"):
+            earliest = min(anchors)
+            if earliest < _fparse(clocks["deadline"]):
+                tightened = {"deadline": _iso(earliest)}
+                mono = self._mono_open.get(check_id)
+                if mono is not None:
+                    remaining = max(0.0, (earliest - opened).total_seconds())
+                    self._mono_open[check_id] = (mono[0], min(mono[1], remaining))
         self.records.append_check_event(event.model_copy(update={
             "phase": "completed", "reasons": reasons, "reason_vocabulary_version": vocabulary_for(reasons),
-            **({"recorded_at": self._svc()} if fr else {})}))
+            **tightened, **({"recorded_at": self._svc()} if fr else {})}))
         return reasons, binding
 
     def _cached_purpose(self, purpose: dict, ref: str, cl, proposal, now: datetime, inputs):
         """reversibility/0.1: may a cached "open" purpose snapshot stand in for an unreadable purpose status?
 
         Returns ``(accepted PurposeStatus or None, specific reason codes, observed extras)`` and appends a ``snapshot_use`` row
-        either way. Accepted only for a reversible class, within its age bound (a signed N3 extension may raise the bound for a
+        either way. Accepted only for a reversible class, within its age bound (an N3 extension named by a configured signer, asserted and unauthenticated, may raise the bound for a
         reversible class only), with no recorded closure of this purpose.
         """
         from .runtime_authority import PurposeStatus
@@ -2443,6 +2487,15 @@ class BoundedAuthorizationWorkflow:
             ):
                 reasons.append("evidence_binding_mismatch")
                 current = None
+            if current is not None:
+                # Compatibility: tenantless evidence is still accepted for a tenant-aware proposal (documented limit);
+                # evidence that names a tenant must match, and a tenantless proposal cannot consume tenant-bearing evidence.
+                if tenant_aware and current.tenant_id is not None and current.tenant_id != tenant_id:
+                    reasons.append("evidence_binding_mismatch")  # registered code; tenant is part of the binding
+                    current = None
+                elif not tenant_aware and current.tenant_id is not None:
+                    reasons.append("tenant_proposal_required")
+                    current = None
 
             if obligation["required"] and obligation["kind"] == "authorization":
                 if current is None or current.state != "current":
@@ -2559,7 +2612,9 @@ class BoundedAuthorizationWorkflow:
                 mismatches.append("undeclared_payload_field")
 
         limits = action.get("effect_limits")
-        if limits:
+        if limits is not None:  # an empty or malformed limits object grants zero effects; it is not "no limit"
+            if not isinstance(limits, dict):
+                limits = {}
             if proposal.effects > int(limits.get("max_effects", 0)):
                 mismatches.append("effect_count_exceeded")
             if limits.get("max_amount") is not None and proposal.amount > float(limits["max_amount"]):
