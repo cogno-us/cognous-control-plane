@@ -200,3 +200,78 @@ def test_removed_operation_rows_let_a_revision_2_decision_authorize_but_the_dest
     assert attempt2.status == "failed" and attempt2.error == "operation_already_committed"
     state = f.destination.snapshot()
     assert set(state["effects"]) == {d1.effect_id} and state["operations"] == {OPERATION: d1.effect_id}
+
+
+# ---------------------------------------------------------------- (g) provisioned claim and identity / mandate status
+
+class _ClaimOnlyStore:
+    """Stands in for a participating local store that validates only the provisioned claim (as the profile document describes)
+    and consumes it once. It re-reads no resolver input, so it sees exactly the state the claim carries."""
+
+    def __init__(self):
+        self.claims = {}
+        self.consumed = []
+
+    def provision(self, claim):
+        self.claims[claim.claim_id] = claim
+
+    def consume(self, claim_id, *, now):
+        from agent_control_plane.local_authority_effect import verify_local_execution_claim
+        claim = self.claims[claim_id]
+        assert verify_local_execution_claim(claim)
+        assert bounded._parse(claim.not_before) <= now < bounded._parse(claim.expires_at)
+        assert claim_id not in self.consumed and len(self.consumed) < claim.max_effects
+        self.consumed.append(claim_id)
+        return claim.effect_id
+
+
+@pytest.mark.parametrize(
+    ("table", "key", "field"),
+    [("identities", None, "authenticated"), ("mandates", "issuer:1|role:issuer", "mandate_valid")],
+)
+def test_claim_consumption_does_not_see_identity_or_mandate_status_change_known_limit(tmp_path, monkeypatch, table, key, field):
+    """Profile ``local-authority-effect``: the claim projects grant, approval, policy and evidence state. Identity
+    authentication and mandate validity are read at issuance only. With a valid provisioned claim and only that one status
+    changed to false (grant, approval, policy and evidence unchanged), a store that validates the claim alone still consumes it.
+    Controls: issuing a new claim and the default ``execute`` path both re-read the status and refuse. This matches the
+    boundary stated in docs/local-authority-effect-profile.md. A later change (more dependencies in the claim, or refusing such
+    provisioning) must be deliberate and rewrites this test."""
+    from tests import test_local_authority_effect_profile as profile
+    from agent_control_plane.local_authority_effect import (
+        materialize_local_execution_claim, provision_local_execution_claim, verify_local_execution_claim)
+
+    monkeypatch.setattr(bounded, "_now", lambda: profile.NOW)
+    p, resolver, flow, decision = profile.setup(tmp_path)
+    store = _ClaimOnlyStore()
+    claim = provision_local_execution_claim(flow, p, decision, now=profile.NOW, provision=store.provision, claim_id="c1")
+    assert verify_local_execution_claim(claim)
+
+    registry = getattr(resolver, table)
+    name = key or profile.ACTOR
+    registry[name] = registry[name].model_copy(update={field: False})
+    assert getattr(registry[name], field) is False
+
+    # the claim has no member for either status
+    assert not any(member in claim.model_dump(mode="json") for member in ("identity", "authenticated", "mandate", "mandate_valid"))
+    assert verify_local_execution_claim(claim)
+    # known limit: the claim-only store still consumes the claim
+    assert store.consume("c1", now=profile.NOW) == decision.effect_id
+    # controls: issuance and the default execute path both re-read the status and refuse
+    with pytest.raises(PermissionError, match="authorization-critical inputs changed before claim issuance"):
+        materialize_local_execution_claim(flow, p, decision, now=profile.NOW)
+    with pytest.raises(PermissionError, match="authorization-critical inputs changed before effect"):
+        flow.execute(p, decision, adapter_id=p.adapter_id, now=profile.NOW)
+
+
+def test_claim_consumption_with_unchanged_status_is_the_valid_producer_control(tmp_path, monkeypatch):
+    """Control for the test above: with nothing changed the same store consumes the claim and the default path executes."""
+    from tests import test_local_authority_effect_profile as profile
+    from agent_control_plane.local_authority_effect import provision_local_execution_claim
+
+    monkeypatch.setattr(bounded, "_now", lambda: profile.NOW)
+    p, resolver, flow, decision = profile.setup(tmp_path)
+    store = _ClaimOnlyStore()
+    provision_local_execution_claim(flow, p, decision, now=profile.NOW, provision=store.provision, claim_id="c1")
+    assert store.consume("c1", now=profile.NOW) == decision.effect_id
+    attempt, observation = flow.execute(p, decision, adapter_id=p.adapter_id, now=profile.NOW)
+    assert attempt.status == "acknowledged" and observation.state == "applied"
