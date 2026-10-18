@@ -8,6 +8,9 @@
 ### Added — rule-revision/0.1 (opt-in, N2)
 - `RuleRevision` records, digest-pinned rules and independently signed revision rows for registry, policy, gate and merge rules; `rule_identity` on decision and refusal rows; trend adoption flags, measured arity and derived recomputability helpers. Off unless configured; reason registry version unchanged. See `docs/rule-revision-profile.md`.
 
+### Fixed — rule-revision recomputability (N2b, opt-in helpers only)
+- `derive_recomputability` returns `underivable` (not `typed_only`) when operands are not retained, and `recomputability_flags` reports `derivation_unavailable` instead of a false `declared_overclaim` for a real `grant_revoked` hold. `declared_overclaim` is reserved for rows with operands present. Registry and its version unchanged.
+
 ### Fixed — F5b security repairs
 - A historical 0.1 `RuntimeProposal` now holds with `tenant_proposal_required` when the Authority Context, grant, grant status, approval or policy carries a `tenant_id`; tenantless 0.1 behaviour is unchanged.
 - `FileSystemPersistenceAdapter` rejects run and replay-bundle identifiers whose resolved path leaves the store directory.

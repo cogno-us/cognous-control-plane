@@ -25,8 +25,11 @@ One record shape, `RuleRevision`, modelled on `VocabularyChange`, covers four ru
   A version with no adoption row (the pinned default) is not flagged.
 - Arity: declared at signing (`declared_arity`) and measured (`measured_arity`: distinct operand shapes per code over a period, "as of T").
   Both are kept; `arity_flags` flags `measured_exceeds_declared` and `arity_undeclared`.
-- Recomputability is derived per row (`derive_recomputability`: operands retained or not). `reason_kind` stays the declared expectation;
-  `recomputability_flags` marks disagreements (`declared_overclaim` is the integrity-relevant direction).
+- Recomputability is derived per row (`derive_recomputability`): `underivable` when the operands are not retained (a real decision row keeps only
+  allow-listed scalars plus a commitment, so this is the usual case), `typed_only` when operands are present but do not reproduce a refusal,
+  `recomputable` otherwise. `reason_kind` stays the declared expectation. `recomputability_flags` reports `derivation_unavailable` where a code
+  declared `recomputable` is `underivable` (not a verdict on the declaration), `declared_overclaim` only where operands are present and the
+  derivation shows the declared kind cannot hold (the integrity-relevant direction), and `declared_underclaim` (informational).
 
 ## Limits
 This moves trust to the revision signer; it does not remove it. All of it is a join over rows in the record store, and a holder of the

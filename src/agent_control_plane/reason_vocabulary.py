@@ -143,25 +143,45 @@ def arity_flags(declared: dict[str, int], measured: dict) -> list[dict]:
     return out
 
 
+def _operands_present(inputs: list[dict]) -> bool:
+    """True only if the retained row carries the operands: at least one resolution input, each either explicitly missing or
+    carrying a record commitment and observed values. The retained record keeps allow-listed scalars plus a commitment, so a
+    real decision row usually has `observed == {}` and this is False."""
+    return bool(inputs) and all(x.get("missing") or (x.get("record_commitment") and x.get("observed")) for x in inputs)
+
+
 def derive_recomputability(row) -> str:
-    """`recomputable` only if the row retains its operands: at least one resolution input, each either explicitly missing or
-    carrying a record commitment and observed values. Otherwise `typed_only`."""
+    """Derived from retained row content only.
+    `underivable`: the operands needed to recompute are not retained (nothing can be said either way).
+    `typed_only`: operands ARE present, but every recorded expectation is met and none is missing, so they do not reproduce a refusal.
+    `recomputable`: operands are present and are consistent with the refusal."""
     inputs = [_d(x) for x in _d(row).get("resolution_inputs", [])]
-    if inputs and all(x.get("missing") or (x.get("record_commitment") and x.get("observed")) for x in inputs):
-        return "recomputable"
-    return "typed_only"
+    if not _operands_present(inputs):
+        return "underivable"
+    expecting = [x for x in inputs if x.get("expected")]
+    if expecting and not any(x.get("missing") for x in inputs) and all(
+            all(x.get("observed", {}).get(k) == v for k, v in x["expected"].items()) for x in expecting):
+        return "typed_only"
+    return "recomputable"
 
 
 def recomputability_flags(rows: list, registry_codes: dict) -> list[dict]:
-    """Per row and code: `reason_kind` stays the declared expectation; flag where it disagrees with the derived value.
-    `declared_overclaim` (declared recomputable, operands absent) is the integrity-relevant direction; `declared_underclaim`
-    is informational."""
+    """Per row and code: `reason_kind` stays the declared expectation.
+    When the derivation is `underivable` and the code declares `recomputable`, the flag is `derivation_unavailable` (no claim is
+    made that the declaration is wrong; the operands were not retained). When operands are present and the derived kind disagrees:
+    `declared_overclaim` (declared recomputable, derived typed_only) is the integrity-relevant direction; `declared_underclaim`
+    is informational. A declared `typed_only` code makes no recomputation claim, so an `underivable` row is not flagged."""
     out = []
     for i, row in enumerate(map(_d, rows)):
         derived = derive_recomputability(row)
         for code in sorted(set(row.get("reasons", []))):
             declared = (registry_codes.get(code) or {}).get("reason_kind")
-            if declared and declared != derived:
-                out.append({"row": i, "code": code, "declared": declared, "derived": derived,
-                            "flag": "declared_overclaim" if declared == "recomputable" else "declared_underclaim"})
+            if not declared or declared == derived:
+                continue
+            if derived == "underivable":
+                if declared == "recomputable":
+                    out.append({"row": i, "code": code, "declared": declared, "derived": derived, "flag": "derivation_unavailable"})
+                continue
+            out.append({"row": i, "code": code, "declared": declared, "derived": derived,
+                        "flag": "declared_overclaim" if declared == "recomputable" else "declared_underclaim"})
     return out
