@@ -89,7 +89,7 @@ See [docs/local-authority-effect-profile.md](docs/local-authority-effect-profile
 
 ## Other opt-in profiles
 
-The runtime-authority and rule-revision profiles, operation identity, freshness, witness and holder inventory, merge record, reversibility and dedupe-ttl are all optional, `0.1.0-draft` and off unless a host configures them; the pinned default path is unchanged. The reason registry has two labels (`runtime-authority-reasons/0.1`, the original 121 codes, and `/0.2`, the full 157), and operator-supplied and stored JSON is read strictly. See [docs/opt-in-profiles.md](docs/opt-in-profiles.md).
+The runtime-authority and rule-revision profiles, operation identity, freshness, witness and holder inventory, merge record, reversibility, dedupe-ttl and terminal revocation are all optional, `0.1.0-draft` and off unless a host configures them; the pinned default path is unchanged. The reason registry has two labels (`runtime-authority-reasons/0.1`, the original 121 codes, and `/0.2`, the full 158), and operator-supplied and stored JSON is read strictly. See [docs/opt-in-profiles.md](docs/opt-in-profiles.md).
 
 ## Repository guide
 

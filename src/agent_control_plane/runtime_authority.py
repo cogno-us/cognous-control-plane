@@ -57,7 +57,11 @@ CODES_ADDED_IN_0_2 = frozenset({
     "attempt_unresolved_past_horizon",
     "escalation_after_key_ttl",
     "dedupe_operation_effect_applied",
+    "grant_revocation_recorded",
 })
+
+#: terminal-revocation/0.1: a retained check already observed this (grant_id, revision) revoked.
+CODE_REVOCATION_RECORDED = "grant_revocation_recorded"
 
 
 def vocabulary_for(reasons) -> str:
@@ -123,6 +127,18 @@ class PurposeStatus(BaseModel):
     epoch_capability: Literal["authoritative", "lossless_closure_log", "status_only"]
 
 
+class TerminalRevocationProfile(BaseModel):
+    """Opt-in terminal-revocation/0.1: revocation is terminal for a grant revision.
+
+    With it, a grant whose retained resolution checks already observed ``revoked`` for the same ``(grant_id, revision)`` is
+    refused (``grant_revocation_recorded``) at decision and at effect time, even when the status read now says ``active``. A
+    new grant revision is the way back. ``suspended`` stays reversible. The memory is this control plane's own record store:
+    a revocation it never observed cannot be remembered, and the store has no keyed integrity check.
+    """
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    version: Literal["terminal-revocation/0.1"] = "terminal-revocation/0.1"
+
+
 class RuntimeAuthorityProfile(BaseModel):
     """Trusted host configuration. Public keys are never selected by evidence."""
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -142,6 +158,8 @@ class RuntimeAuthorityProfile(BaseModel):
     merge: MergeProfile | None = Field(default=None, exclude_if=lambda v: v is None)
     reversibility: ReversibilityProfile | None = Field(default=None, exclude_if=lambda v: v is None)
     dedupe: DedupeProfile | None = Field(default=None, exclude_if=lambda v: v is None)
+    # Opt-in terminal-revocation/0.1. Same omission rule.
+    terminal_revocation: TerminalRevocationProfile | None = Field(default=None, exclude_if=lambda v: v is None)
 
     @model_validator(mode="after")
     def _profiles_compose(self):
@@ -359,6 +377,13 @@ def reopen_conditions(reasons: list[str], inputs: list) -> list[dict]:
         if item.input_type == "grant" and item.observed.get("status") == "revoked":
             out.append({"kind":"successor_grant_revision", "input_id":item.input_id,
                         "previous_revision":item.observed.get("revision")})
+    if CODE_REVOCATION_RECORDED in reasons:  # terminal-revocation/0.1: only a new revision can reopen
+        listed = {x["input_id"] for x in out}
+        for item in inputs:
+            if item.input_type == "grant" and item.input_id not in listed:
+                out.append({"kind":"successor_grant_revision", "input_id":item.input_id,
+                            "previous_revision":item.observed.get("revision")})
+                listed.add(item.input_id)
     if "status_unreadable" in reasons:
         out.append({"kind":"readable_authority_status"})
     return out

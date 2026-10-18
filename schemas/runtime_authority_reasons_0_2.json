@@ -632,6 +632,10 @@
     "dedupe_operation_effect_applied": {
       "reason_kind": "typed_only",
       "description": "the operation already has an applied effect under another effect id; refused by the control plane's own ledger, whether or not the destination still remembers the key (dedupe-ttl/0.1 only)"
+    },
+    "grant_revocation_recorded": {
+      "reason_kind": "typed_only",
+      "description": "a retained resolution check already observed this grant revoked at this same revision; revocation is terminal for that revision and a later active status for it does not count (terminal-revocation/0.1 only)"
     }
   }
 }

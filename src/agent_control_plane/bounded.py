@@ -1414,6 +1414,22 @@ class BoundedAuthorizationWorkflow:
         return profile.reversibility if profile is not None else None
 
     @property
+    def _terminal_revocation(self):
+        """The opt-in terminal-revocation/0.1 configuration, or None on the default path."""
+        profile = self.runtime_authority_profile
+        return profile.terminal_revocation if profile is not None else None
+
+    def _recorded_grant_denial(self, grant_id: str, revisions, states) -> bool:
+        """Whether a retained resolution check observed this grant in one of ``states`` at one of ``revisions``."""
+        revisions = set(revisions)
+        return any(
+            item.input_type == "grant" and item.input_id == grant_id
+            and item.observed.get("revision") in revisions
+            and item.observed.get("status") in states
+            for check in self.records.load().resolution_checks for item in check.inputs
+        )
+
+    @property
     def _dedupe(self):
         """The opt-in dedupe-ttl/0.1 configuration, or None on the default path."""
         profile = self.runtime_authority_profile
@@ -2100,12 +2116,8 @@ class BoundedAuthorizationWorkflow:
                     candidate = cached(grant_id)
                 except Exception:
                     candidate = None
-                known_denial = (candidate is not None and any(
-                    item.input_type == "grant" and item.input_id == grant_id
-                    and item.observed.get("revision") == candidate.revision
-                    and item.observed.get("status") in {"revoked", "suspended"}
-                    for check in self.records.load().resolution_checks for item in check.inputs
-                ))
+                known_denial = (candidate is not None and self._recorded_grant_denial(
+                    grant_id, {candidate.revision}, {"revoked", "suspended"}))
                 if candidate is not None and candidate.status == "active" and not known_denial:
                     status = candidate
                     inputs.read_states[("grant", grant_id)] = "cached_positive"
@@ -2300,6 +2312,9 @@ class BoundedAuthorizationWorkflow:
                                if self.runtime_authority_profile else "grant_not_active")
             if status.revision != grant["revision"]:
                 reasons.append("grant_revision_stale")
+            if self._terminal_revocation is not None and self._recorded_grant_denial(
+                    grant["grant_id"], {str(grant["revision"]), status.revision}, {"revoked"}):
+                reasons.append("grant_revocation_recorded")  # terminal-revocation/0.1 (runtime_authority.CODE_REVOCATION_RECORDED)
             if self._freshness is not None:
                 bound, _, defects = self._class_age_bound(proposal.action_id, now)
                 if not self._fresh(status.observed_at, now, bound):

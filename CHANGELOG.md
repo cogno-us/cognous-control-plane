@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Added — terminal-revocation/0.1 (opt-in)
+- `RuntimeAuthorityProfile.terminal_revocation` (`TerminalRevocationProfile`): when a retained resolution check already observed `revoked` for the same `(grant_id, revision)`, decision and execution are refused with `grant_revocation_recorded` even if the status read now says `active`; the row carries a `successor_grant_revision` reopen condition. It reuses the retained-check lookup of the cached-positive denial rule (now one helper, `_recorded_grant_denial`, same behaviour). `suspended` stays reversible. One reason code added to label 0.2 only (registry 0.2: 158 codes; 0.1 byte-identical). Omitted from profile dumps while unset, so the default path and every commitment over the profile are unchanged (default `acp run` examples byte-identical before/after).
+
 ### Fixed — strict JSON: out-of-range numbers and unpaired surrogates
 - `strict_json.strict_loads` now also refuses a number that overflows to a non-finite float (`input_json_non_finite_number`, the same code as `NaN`/`Infinity`) and a string or member name holding an unpaired UTF-16 surrogate (new code `input_json_lone_surrogate`). `acp run` reports both as invalid input (exit 2) instead of an internal error (exit 4); nothing was applied before either. Applies at every strict read site. Valid input parses exactly as before (the float hook is `float`; the surrogate walk runs only when the text holds a surrogate escape or code point). Default `acp run` examples byte-identical before/after.
 
