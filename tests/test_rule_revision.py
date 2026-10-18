@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from agent_control_plane.bounded import commitment
-from agent_control_plane.reason_vocabulary import (VocabularyChange, arity_flags, measured_arity, recomputability_flags,
+from agent_control_plane.reason_vocabulary import (VocabularyChange, arity_flags, measured_arity, recomputability_flags, derive_recomputability,
                                                    refusal_trends)
 from agent_control_plane.rule_revision import (RuleRevision, RuleRevisionProfile, RuleRevisionRefused, append_rule_revision,
                                                resolve_rule)
@@ -154,16 +154,40 @@ def test_reused_code_raises_measured_arity_declared_and_measured_both_kept():
     assert revision.model_dump(mode="json")["declared_arity"] == {"policy_stale_or_changed": 1}
 
 
-def test_declared_recomputable_without_operands_flagged():
-    bare = {"reasons": ["grant_revoked"], "resolution_inputs": []}
+REAL_HOLD = {"reasons": ["grant_revoked"], "resolution_inputs": [  # real retained shape: operands absent, commitment kept
+    {"input_type": "grant", "input_id": "g", "observed": {}, "record_commitment": D1}]}
+
+
+def test_real_grant_revoked_hold_with_absent_operands_is_derivation_unavailable():
+    for row in (REAL_HOLD, {"reasons": ["grant_revoked"], "resolution_inputs": []}):
+        assert derive_recomputability(row) == "underivable"
+        assert recomputability_flags([row], REGISTRY["codes"]) == [
+            {"row": 0, "code": "grant_revoked", "declared": "recomputable", "derived": "underivable", "flag": "derivation_unavailable"}]
+    assert REGISTRY["codes"]["grant_revoked"]["reason_kind"] == "recomputable"  # reason_kind stays the declared expectation
+    typed = {"reasons": ["status_unreadable"], "resolution_inputs": []}
+    assert recomputability_flags([typed], REGISTRY["codes"]) == []  # declared typed_only makes no recomputation claim
+
+
+def test_operands_present_consistent_is_unflagged_and_mismatch_is_overclaim():
     full = {"reasons": ["grant_revoked"], "resolution_inputs": [
         {"input_type": "grant", "input_id": "g", "observed": {"status": "revoked"}, "record_commitment": D1}]}
-    flags = recomputability_flags([bare, full], REGISTRY["codes"])
-    assert flags[0] == {"row": 0, "code": "grant_revoked", "declared": "recomputable", "derived": "typed_only",
-                        "flag": "declared_overclaim"}
-    assert not any(x["flag"] == "declared_overclaim" and x["row"] == 1 for x in flags)
-    typed = {"reasons": ["status_unreadable"], "resolution_inputs": []}
-    assert recomputability_flags([typed], REGISTRY["codes"]) == []  # declared typed_only, derived typed_only: agree
+    assert derive_recomputability(full) == "recomputable" and recomputability_flags([full], REGISTRY["codes"]) == []
+    mismatch = {"reasons": ["grant_revoked"], "resolution_inputs": [
+        {"input_type": "grant", "input_id": "g", "observed": {"status": "active"}, "expected": {"status": "active"},
+         "record_commitment": D1}]}
+    assert derive_recomputability(mismatch) == "typed_only"
+    assert recomputability_flags([full, mismatch], REGISTRY["codes"]) == [
+        {"row": 1, "code": "grant_revoked", "declared": "recomputable", "derived": "typed_only", "flag": "declared_overclaim"}]
+    under = {"reasons": ["status_unreadable"], "resolution_inputs": full["resolution_inputs"]}
+    assert recomputability_flags([under], REGISTRY["codes"])[0]["flag"] == "declared_underclaim"
+
+
+def test_mutation_operand_presence_test_removed_fails_the_absent_operand_test(monkeypatch):
+    import agent_control_plane.reason_vocabulary as rv
+    monkeypatch.setattr(rv, "_operands_present", lambda inputs: True)  # mutation: drop the operand-presence test
+    flags = rv.recomputability_flags([REAL_HOLD], REGISTRY["codes"])
+    assert flags != [{"row": 0, "code": "grant_revoked", "declared": "recomputable", "derived": "underivable",
+                      "flag": "derivation_unavailable"}]  # the first test's assertion would fail under the mutation
 
 
 def test_existing_registry_version_unchanged():
