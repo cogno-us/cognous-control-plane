@@ -5,6 +5,9 @@
 ### Added — `acp run`
 - New CLI subcommand that executes one declared bounded operation (synthetic resolver from JSON, real `BoundedAuthorizationWorkflow`, local throwaway store and `LocalRefundDestination`), writes a native bounded record, a `RunRecord` projection accepted by `acp validate-run`, and a result envelope. Exit codes 0/1/2/4. No network; confined writes. Library behaviour unchanged. See `docs/concepts.md`.
 
+### Added — freshness/0.1 (opt-in, N3)
+- `RuntimeAuthorityProfile.freshness`: three named clocks in the records (`evaluated_at`, `recorded_at` stamped at each write, `observed_at` from the source), a deadline fixed at opening (`opened_at` plus the class age bound), a re-read of the service clock immediately before `destination.apply` (`check_expired_before_dispatch`, check closed `expired`), a recovery pass that reports live checks past their deadline as `check_overdue` without closing them, a `Reaper` (start-up and declared interval) with counts for the report, a non-blocking check lease with an acquisition deadline, nonce-bound or source-asserted `age_basis` per read, and outage extensions of an age bound recorded with a signer from the rule-revision signer set. Observation "future" is judged against the re-read service clock under the profile. Off unless configured; 10 reason codes added (registry 138). See `src/agent_control_plane/freshness.py`.
+
 ### Added — rule-revision/0.1 (opt-in, N2)
 - `RuleRevision` records, digest-pinned rules and independently signed revision rows for registry, policy, gate and merge rules; `rule_identity` on decision and refusal rows; trend adoption flags, measured arity and derived recomputability helpers. Off unless configured; reason registry version unchanged. See `docs/rule-revision-profile.md`.
 

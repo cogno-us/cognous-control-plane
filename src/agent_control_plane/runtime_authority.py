@@ -7,6 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
+from .freshness import FreshnessProfile
 from .operation_identity import OperationIdentityProfile, valid_operation_id
 
 PROFILE_VERSION = "runtime-authority/0.1"
@@ -58,6 +59,8 @@ class RuntimeAuthorityProfile(BaseModel):
     # Opt-in operation-identity/0.1. Omitted from dumps (and so from every commitment
     # that hashes the profile) while unset, which keeps the default path byte-identical.
     operation_identity: OperationIdentityProfile | None = Field(default=None, exclude_if=lambda v: v is None)
+    # Opt-in freshness/0.1 (three clocks, deadline at opening, overdue state, reaper, age basis). Same omission rule.
+    freshness: FreshnessProfile | None = Field(default=None, exclude_if=lambda v: v is None)
 
     def snapshot(self) -> RuntimeAuthorityProfile:
         """Detach trusted configuration from caller-owned mutable dictionaries."""

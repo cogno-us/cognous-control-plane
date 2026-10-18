@@ -61,6 +61,7 @@ class OperationAdmissionRow(BaseModel):
     grant_id: str
     first_grant_revision: str
     admitted_at: str
+    evaluated_at: str | None = Field(default=None, exclude_if=lambda v: v is None)  # freshness/0.1 only
 
 
 class OperationRenewalRow(BaseModel):
@@ -76,6 +77,7 @@ class OperationRenewalRow(BaseModel):
     outcome: Literal["accepted", "refused"]
     refusal_code: str | None = None
     recorded_at: str
+    evaluated_at: str | None = Field(default=None, exclude_if=lambda v: v is None)  # freshness/0.1 only
 
 
 class AttemptJoin(BaseModel):
@@ -98,6 +100,7 @@ class AttemptJoin(BaseModel):
     #: the surviving ``operation_id``, never an attempt id.
     merged_into: str | None = None
     recorded_at: str
+    evaluated_at: str | None = Field(default=None, exclude_if=lambda v: v is None)  # freshness/0.1 only
     time_source: Literal["control_plane", "test_override"]
 
 

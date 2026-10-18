@@ -516,6 +516,46 @@
     "renewal_revision_not_new": {
       "reason_kind": "typed_only",
       "description": "renewal names a grant revision that already licenses the operation (operation-identity/0.1 only)"
+    },
+    "check_expired_before_dispatch": {
+      "reason_kind": "typed_only",
+      "description": "the check's deadline (opened_at plus the class age bound) had passed when the service clock was re-read immediately before dispatch; nothing was sent (freshness/0.1 only)"
+    },
+    "check_overdue": {
+      "reason_kind": "typed_only",
+      "description": "a live check is past its deadline; reported by the recovery pass and not closed (freshness/0.1 only)"
+    },
+    "check_lease_unavailable": {
+      "reason_kind": "typed_only",
+      "description": "the per-check lease could not be taken before the profile's acquisition deadline (freshness/0.1 only)"
+    },
+    "status_nonce_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "a resolver response echoed a nonce other than the one this check sent (replayed or foreign response; freshness/0.1 only)"
+    },
+    "age_extension_unsigned": {
+      "reason_kind": "typed_only",
+      "description": "an age-bound extension carries no signer (freshness/0.1 only)"
+    },
+    "age_extension_self_signed": {
+      "reason_kind": "typed_only",
+      "description": "an age-bound extension is signed by its requester (freshness/0.1 only)"
+    },
+    "age_extension_signer_not_configured": {
+      "reason_kind": "typed_only",
+      "description": "the signer of an age-bound extension is not in the configured rule-revision signer set (freshness/0.1 only)"
+    },
+    "age_extension_exceeds_limit": {
+      "reason_kind": "typed_only",
+      "description": "an age-bound extension exceeds the freshness profile's declared maximum (freshness/0.1 only)"
+    },
+    "age_extension_invalid": {
+      "reason_kind": "typed_only",
+      "description": "an age-bound extension is malformed, has an empty window or outage reference, or duplicates a recorded id (freshness/0.1 only)"
+    },
+    "age_extension_authority_unconfigured": {
+      "reason_kind": "typed_only",
+      "description": "no rule-revision profile is configured, so no signer set can authorise an age-bound extension (freshness/0.1 only)"
     }
   }
 }
