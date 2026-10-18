@@ -201,7 +201,9 @@ Compatibility limit: evidence that carries no `tenant_id` is still accepted for
 a tenant-aware proposal, so if tenants share an institution/domain and reuse
 obligation or source identifiers, tenantless evidence from one tenant can satisfy
 another tenant's obligation unless the trusted resolver returns only the
-evaluating tenant's evidence. The opt-in runtime-authority profile's evidence
+evaluating tenant's evidence. Deployment rule: where the engine keys evidence by
+obligation id alone, use one engine database per tenant, or tenant-unique obligation
+ids. The opt-in runtime-authority profile's evidence
 statements (named by a configured signer: asserted, unauthenticated) include
 `tenant_id` and are compared with the Authority Context tenant.
 
