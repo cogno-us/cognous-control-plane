@@ -204,7 +204,9 @@ _REASON_NAMES = {"reasons", "mismatches", "result", "refusal_reasons"}
 # Non-literal values that are known to carry reasons produced elsewhere in the
 # scanned sources (and therefore already enumerated by this walk).
 _DELEGATED = {"extra_reasons", "validate_evidence(status, criterion, profile, context)",
-              "defects"}  # defects: age-extension defect codes from freshness.extension_defects (checked by tests/test_freshness.py)
+              "defects",  # defects: age-extension defect codes from freshness.extension_defects (checked by tests/test_freshness.py)
+              "merge_code",  # merge_code: merge.merge_gate result (checked by tests/test_merge_record.py)
+              "cache_reasons"}  # cache_reasons: reversibility.judge_cached_purpose refusals (checked by tests/test_reversibility.py)
 
 
 def _reason_literals(node, grant_states):
