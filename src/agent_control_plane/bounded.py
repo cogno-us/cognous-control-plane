@@ -23,7 +23,8 @@ from typing import Iterator, Literal, Protocol
 
 from pydantic import BaseModel, Field
 
-from .runtime_authority import RuntimeAuthorityProfile, VOCABULARY_VERSION, reopen_conditions
+from .runtime_authority import (RuntimeAuthorityProfile, VOCABULARY_VERSION_0_2, reopen_conditions,
+                                vocabulary_for)
 from .rule_revision import RuleRevision, RuleRevisionProfile, RuleRevisionRefusal, resolve_rule, rule_identity
 from .operation_identity import (
     DESTINATION_CAPABILITY as OPERATION_IDENTITY_CAPABILITY, AttemptJoin, OperationAdmissionRow,
@@ -903,7 +904,8 @@ class BoundedRecordStore:
                     report.overdue.append({"check_id": check_id, "deadline": deadline, "reasons": [_fresh_profile.CODE_OVERDUE],
                                            "overdue_seconds": (at - _parse(deadline)).total_seconds()})
                     if check_id not in overdue_written:
-                        mark = dict(opening, phase="overdue", recorded_at=_iso(at), reasons=["check_overdue"])
+                        mark = dict(opening, phase="overdue", recorded_at=_iso(at), reasons=["check_overdue"],
+                                    reason_vocabulary_version=VOCABULARY_VERSION_0_2)
                         mark.pop("evaluated_at", None)
                         events.append(mark)
                 else:
@@ -1370,11 +1372,12 @@ class BoundedAuthorizationWorkflow:
             check_id=check_id, refusal_id=str(uuid.uuid4()), decision_id=persisted.decision_id, effect_id=persisted.effect_id,
             recorded_at=self._svc(), evaluated_at=_iso(now), deadline=deadline, time_source=self.time_source,
             original_operation_horizon=persisted.operation_horizon, operation_horizon=self._horizon(frozen),
-            reason_vocabulary_version=VOCABULARY_VERSION, rule_identity=self._rule_identity(inputs),
+            reason_vocabulary_version=VOCABULARY_VERSION_0_2, rule_identity=self._rule_identity(inputs),
             reasons=["check_expired_before_dispatch"], changed_inputs=[], resolution_inputs=inputs)
         opening = self.records.check_opening(check_id)
         event = CheckEvent.model_validate(
-            dict(opening, phase="expired", recorded_at=self._svc(), reasons=["check_expired_before_dispatch"], input=None))
+            dict(opening, phase="expired", recorded_at=self._svc(), reasons=["check_expired_before_dispatch"], input=None,
+                 reason_vocabulary_version=VOCABULARY_VERSION_0_2))
         self.records.record_gate_refusal(attempt, refusal, event)  # one write: all three rows or none
         raise PermissionError(code)
 
@@ -1555,7 +1558,7 @@ class BoundedAuthorizationWorkflow:
             decided_at=_iso(now),
             **({"evaluated_at": _iso(now), "recorded_at": self._svc()} if self._freshness else {}),
             time_source=self.time_source, operation_horizon=self._horizon(frozen),
-            reason_vocabulary_version=(VOCABULARY_VERSION if self.runtime_authority_profile else None),
+            reason_vocabulary_version=(vocabulary_for(reasons) if self.runtime_authority_profile else None),
             rule_identity=self._rule_identity(inputs),
             reopen_conditions=(reopen_conditions(reasons, inputs) if self.runtime_authority_profile else []),
             binding=binding if not reasons else None,
@@ -1606,7 +1609,7 @@ class BoundedAuthorizationWorkflow:
                 time_source=self.time_source,
                 original_operation_horizon=persisted.operation_horizon,
                 operation_horizon=self._horizon(frozen),
-                reason_vocabulary_version=(VOCABULARY_VERSION if self.runtime_authority_profile else None),
+                reason_vocabulary_version=(vocabulary_for(refusal_reasons) if self.runtime_authority_profile else None),
                 rule_identity=self._rule_identity(inputs),
                 reopen_conditions=(reopen_conditions(refusal_reasons, inputs) if self.runtime_authority_profile else []),
                 reasons=refusal_reasons,
@@ -2031,7 +2034,8 @@ class BoundedAuthorizationWorkflow:
             if inputs is not None:
                 inputs.extend(reads)
         self.records.append_check_event(event.model_copy(update={
-            "phase": "completed", "reasons": reasons, **({"recorded_at": self._svc()} if fr else {})}))
+            "phase": "completed", "reasons": reasons, "reason_vocabulary_version": vocabulary_for(reasons),
+            **({"recorded_at": self._svc()} if fr else {})}))
         return reasons, binding
 
     def _cached_purpose(self, purpose: dict, ref: str, cl, proposal, now: datetime, inputs):

@@ -22,7 +22,7 @@ from tests.test_bounded_authorization import ISSUER, NOW, POLICY_REF, PROFILE
 from tests.test_operation_identity import IDENTITY, run_document, two_effects, two_effects_manifest
 from tests.test_runtime_authority import bind_approval, setup_flow
 
-REGISTRY = json.loads((pathlib.Path(__file__).resolve().parents[1] / "schemas" / "runtime_authority_reasons_0_1.json").read_text())
+REGISTRY = json.loads((pathlib.Path(__file__).resolve().parents[1] / "schemas" / "runtime_authority_reasons_0_2.json").read_text())
 MERGER, OTHER, SIGNER, POLICY_SIGNER = ("urn:cognous:principal:merger", "urn:cognous:principal:requester",
                                         "urn:cognous:principal:rule-signer", "urn:cognous:principal:policy-signer")
 RULE = "urn:cognous:merge-rule:same-refund-case"

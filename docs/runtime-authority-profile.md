@@ -89,7 +89,9 @@ authority. Existing C0/C1 limits and release holds remain.
 
 ## Refusal vocabulary and consumers
 
-Profile decisions and refusals carry `runtime-authority-reasons/0.1`. The registry
+Profile decisions and refusals carry `runtime-authority-reasons/0.1`, or `runtime-authority-reasons/0.2` when one of their reasons is a
+code that only 0.2 registers (a code emitted by an opt-in profile: operation identity, freshness, holder inventory, merge, reversibility,
+dedupe). 0.2 is a superset of 0.1, because a row mixes codes and carries one label. The registry
 identifies reason kinds; `grant_revoked` is reproducible from its captured status.
 Other reasons are typed classifications unless their registry declares operands.
 `VocabularyChange` records adopted changes without rewriting prior rows.

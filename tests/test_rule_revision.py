@@ -15,7 +15,7 @@ from tests.test_runtime_authority import held, setup_flow
 
 REVISER, SIGNER = "synthetic-principal:reviser", "synthetic-principal:signer"
 D1, D2 = commitment({"policy": "v1"}), commitment({"policy": "v1-edited"})
-REGISTRY = json.loads((Path(__file__).resolve().parents[1] / "schemas" / "runtime_authority_reasons_0_1.json").read_text())
+REGISTRY = json.loads((Path(__file__).resolve().parents[1] / "schemas" / "runtime_authority_reasons_0_2.json").read_text())
 
 
 def rev(rid, to, frm=None, *, signer=SIGNER, reviser=REVISER, ref=POLICY_REF, kind="policy", supersedes=None, **kw):
@@ -190,5 +190,7 @@ def test_mutation_operand_presence_test_removed_fails_the_absent_operand_test(mo
                       "flag": "derivation_unavailable"}]  # the first test's assertion would fail under the mutation
 
 
-def test_existing_registry_version_unchanged():
-    assert REGISTRY["version"] == "runtime-authority-reasons/0.1"
+def test_the_full_registry_carries_its_own_label_and_0_1_is_a_separate_pinned_file():
+    """The registry grew from 121 to 157 codes. The 121 keep label 0.1 in their own, byte-identical file (tests/test_reason_registry_labels.py);
+    the full set is 0.2. Before, the growth happened under the single label 0.1 (review R1 finding 4)."""
+    assert REGISTRY["version"] == "runtime-authority-reasons/0.2"

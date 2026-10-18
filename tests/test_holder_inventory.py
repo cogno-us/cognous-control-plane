@@ -14,7 +14,7 @@ from agent_control_plane.runtime_authority import ActionClass, RuntimeAuthorityP
 from tests.test_bounded_authorization import NOW
 from tests.test_runtime_authority import bind_approval, setup_flow
 
-REGISTRY = json.loads((pathlib.Path(__file__).resolve().parents[1] / "schemas" / "runtime_authority_reasons_0_1.json").read_text(encoding="utf-8"))
+REGISTRY = json.loads((pathlib.Path(__file__).resolve().parents[1] / "schemas" / "runtime_authority_reasons_0_2.json").read_text(encoding="utf-8"))
 
 
 def inventory(*holders):

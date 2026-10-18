@@ -21,7 +21,7 @@ from tests.test_bounded_authorization import ISSUER, NOW
 from tests.test_operation_identity import IDENTITY, OPERATION, enable, renew, run_document, two_effects, two_effects_manifest
 from tests.test_runtime_authority import setup_flow
 
-REGISTRY = json.loads((pathlib.Path(__file__).resolve().parents[1] / "schemas" / "runtime_authority_reasons_0_1.json").read_text())
+REGISTRY = json.loads((pathlib.Path(__file__).resolve().parents[1] / "schemas" / "runtime_authority_reasons_0_2.json").read_text())
 PROFILE = DedupeProfile(dedupe_ttl_seconds=600, provider_horizon_seconds=120, escalation_deadline_seconds=300)
 
 

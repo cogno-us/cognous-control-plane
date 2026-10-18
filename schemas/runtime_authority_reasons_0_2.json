@@ -1,0 +1,637 @@
+{
+  "version": "runtime-authority-reasons/0.2",
+  "codes": {
+    "absence_has_destination_state": {
+      "reason_kind": "typed_only",
+      "description": "absence has destination state"
+    },
+    "action_class_invalid": {
+      "reason_kind": "typed_only",
+      "description": "action class invalid"
+    },
+    "action_class_unknown": {
+      "reason_kind": "typed_only",
+      "description": "action class unknown"
+    },
+    "approval_binding_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "approval binding mismatch"
+    },
+    "approval_grant_binding_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "approval grant binding mismatch"
+    },
+    "approval_independence_violation": {
+      "reason_kind": "typed_only",
+      "description": "approval independence violation"
+    },
+    "approval_not_active": {
+      "reason_kind": "typed_only",
+      "description": "approval not active"
+    },
+    "approval_operation_binding_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "approval operation binding mismatch"
+    },
+    "approval_policy_binding_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "approval policy binding mismatch"
+    },
+    "approval_status_stale_or_future": {
+      "reason_kind": "typed_only",
+      "description": "approval status stale or future"
+    },
+    "approval_tenant_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "approval tenant mismatch"
+    },
+    "authority_conflict_unresolved": {
+      "reason_kind": "typed_only",
+      "description": "authority conflict unresolved"
+    },
+    "authority_context_status_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "authority context status mismatch"
+    },
+    "authority_context_version_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "authority context version mismatch"
+    },
+    "authority_domain_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "authority domain mismatch"
+    },
+    "authority_requirement_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "authority requirement mismatch"
+    },
+    "authorization_binding_changed": {
+      "reason_kind": "typed_only",
+      "description": "authorization binding changed"
+    },
+    "check_interrupted": {
+      "reason_kind": "typed_only",
+      "description": "check interrupted"
+    },
+    "conflict_status_binding_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "conflict status binding mismatch"
+    },
+    "conflict_status_stale_or_future": {
+      "reason_kind": "typed_only",
+      "description": "conflict status stale or future"
+    },
+    "consequence_tier_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "consequence tier mismatch"
+    },
+    "context_unknown_requires_hold": {
+      "reason_kind": "typed_only",
+      "description": "context unknown requires hold"
+    },
+    "delegation_chain_missing": {
+      "reason_kind": "typed_only",
+      "description": "delegation chain missing"
+    },
+    "delegation_profile_unsupported": {
+      "reason_kind": "typed_only",
+      "description": "delegation profile unsupported"
+    },
+    "destination_effect_id_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "destination effect id mismatch"
+    },
+    "destination_state_contradiction": {
+      "reason_kind": "typed_only",
+      "description": "destination state contradiction"
+    },
+    "effective_grant_binding_invalid": {
+      "reason_kind": "typed_only",
+      "description": "effective grant binding invalid"
+    },
+    "evaluation_time_missing": {
+      "reason_kind": "typed_only",
+      "description": "evaluation time missing"
+    },
+    "evaluation_time_timezone_missing": {
+      "reason_kind": "typed_only",
+      "description": "evaluation time timezone missing"
+    },
+    "evidence_binding_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "evidence binding mismatch"
+    },
+    "evidence_criterion_unmet": {
+      "reason_kind": "typed_only",
+      "description": "evidence criterion unmet"
+    },
+    "evidence_criterion_unsupported": {
+      "reason_kind": "typed_only",
+      "description": "evidence criterion unsupported"
+    },
+    "evidence_producer_untrusted": {
+      "reason_kind": "typed_only",
+      "description": "evidence producer untrusted"
+    },
+    "evidence_record_invalid": {
+      "reason_kind": "typed_only",
+      "description": "evidence record invalid"
+    },
+    "evidence_record_version_unsupported": {
+      "reason_kind": "typed_only",
+      "description": "evidence record version unsupported"
+    },
+    "evidence_signature_invalid": {
+      "reason_kind": "typed_only",
+      "description": "evidence signature invalid"
+    },
+    "evidence_subject_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "evidence subject mismatch"
+    },
+    "evidence_unsigned": {
+      "reason_kind": "typed_only",
+      "description": "evidence unsigned"
+    },
+    "evidence_verifier_unavailable": {
+      "reason_kind": "typed_only",
+      "description": "evidence verifier unavailable"
+    },
+    "grant_expiry_required": {
+      "reason_kind": "typed_only",
+      "description": "grant expiry required"
+    },
+    "grant_identity_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "grant identity mismatch"
+    },
+    "grant_not_active": {
+      "reason_kind": "typed_only",
+      "description": "grant not active"
+    },
+    "grant_outside_validity": {
+      "reason_kind": "typed_only",
+      "description": "grant outside validity"
+    },
+    "grant_requirement_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "grant requirement mismatch"
+    },
+    "grant_revision_stale": {
+      "reason_kind": "typed_only",
+      "description": "grant revision stale"
+    },
+    "grant_revoked": {
+      "reason_kind": "recomputable",
+      "description": "captured grant snapshot asserts revoked",
+      "operands": {
+        "input_type": "grant",
+        "observed.status": "revoked"
+      }
+    },
+    "grant_scope_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "grant scope mismatch"
+    },
+    "grant_status_binding_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "grant status binding mismatch"
+    },
+    "grant_status_stale_or_future": {
+      "reason_kind": "typed_only",
+      "description": "grant status stale or future"
+    },
+    "grant_suspended": {
+      "reason_kind": "typed_only",
+      "description": "grant suspended"
+    },
+    "grant_tenant_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "grant tenant mismatch"
+    },
+    "grant_unknown": {
+      "reason_kind": "typed_only",
+      "description": "grant unknown"
+    },
+    "identity_binding_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "identity binding mismatch"
+    },
+    "identity_or_delegation_invalid": {
+      "reason_kind": "typed_only",
+      "description": "identity or delegation invalid"
+    },
+    "identity_status_stale_or_future": {
+      "reason_kind": "typed_only",
+      "description": "identity status stale or future"
+    },
+    "institution_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "institution mismatch"
+    },
+    "issuer_mandate_binding_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "issuer mandate binding mismatch"
+    },
+    "issuer_mandate_invalid": {
+      "reason_kind": "typed_only",
+      "description": "issuer mandate invalid"
+    },
+    "issuer_mandate_stale_or_future": {
+      "reason_kind": "typed_only",
+      "description": "issuer mandate stale or future"
+    },
+    "observation_effect_id_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "observation effect id mismatch"
+    },
+    "observation_policy_missing": {
+      "reason_kind": "typed_only",
+      "description": "observation policy missing"
+    },
+    "observation_stale": {
+      "reason_kind": "typed_only",
+      "description": "observation stale"
+    },
+    "observation_state_unknown": {
+      "reason_kind": "typed_only",
+      "description": "observation state unknown"
+    },
+    "observation_time_future": {
+      "reason_kind": "typed_only",
+      "description": "observation time future"
+    },
+    "observation_time_malformed": {
+      "reason_kind": "typed_only",
+      "description": "observation time malformed"
+    },
+    "observation_time_missing": {
+      "reason_kind": "typed_only",
+      "description": "observation time missing"
+    },
+    "observation_time_timezone_missing": {
+      "reason_kind": "typed_only",
+      "description": "observation time timezone missing"
+    },
+    "policy_binding_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "policy binding mismatch"
+    },
+    "policy_missing": {
+      "reason_kind": "typed_only",
+      "description": "policy missing"
+    },
+    "policy_stale_or_changed": {
+      "reason_kind": "typed_only",
+      "description": "policy stale or changed"
+    },
+    "policy_status_stale_or_future": {
+      "reason_kind": "typed_only",
+      "description": "policy status stale or future"
+    },
+    "policy_status_unknown": {
+      "reason_kind": "typed_only",
+      "description": "policy status unknown"
+    },
+    "policy_superseded": {
+      "reason_kind": "typed_only",
+      "description": "policy superseded"
+    },
+    "policy_tenant_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "policy tenant mismatch"
+    },
+    "policy_version_changed": {
+      "reason_kind": "typed_only",
+      "description": "policy version changed"
+    },
+    "proposal_identity_binding_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "proposal identity binding mismatch"
+    },
+    "purpose_binding_invalid": {
+      "reason_kind": "typed_only",
+      "description": "purpose binding invalid"
+    },
+    "purpose_closed": {
+      "reason_kind": "typed_only",
+      "description": "purpose closed"
+    },
+    "purpose_epoch_capability_unsupported": {
+      "reason_kind": "typed_only",
+      "description": "purpose epoch capability unsupported"
+    },
+    "purpose_epoch_changed": {
+      "reason_kind": "typed_only",
+      "description": "purpose epoch changed"
+    },
+    "purpose_unreadable": {
+      "reason_kind": "typed_only",
+      "description": "purpose unreadable"
+    },
+    "required_approval_missing": {
+      "reason_kind": "typed_only",
+      "description": "required approval missing"
+    },
+    "required_evidence_not_current": {
+      "reason_kind": "typed_only",
+      "description": "required evidence not current"
+    },
+    "required_evidence_stale_or_future": {
+      "reason_kind": "typed_only",
+      "description": "required evidence stale or future"
+    },
+    "required_input_not_read": {
+      "reason_kind": "typed_only",
+      "description": "required input not read"
+    },
+    "required_input_set_invalid": {
+      "reason_kind": "typed_only",
+      "description": "required input set invalid"
+    },
+    "requirement_scope_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "requirement scope mismatch"
+    },
+    "resolution_record_invalid": {
+      "reason_kind": "typed_only",
+      "description": "resolution record invalid"
+    },
+    "resolver_not_authenticated": {
+      "reason_kind": "typed_only",
+      "description": "resolver not authenticated"
+    },
+    "review_requirement_not_resolved": {
+      "reason_kind": "typed_only",
+      "description": "review requirement not resolved"
+    },
+    "role_mapping_invalid": {
+      "reason_kind": "typed_only",
+      "description": "role mapping invalid"
+    },
+    "role_mapping_missing": {
+      "reason_kind": "typed_only",
+      "description": "role mapping missing"
+    },
+    "runtime_authority_approval_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "runtime authority approval mismatch"
+    },
+    "runtime_authority_field_unsupported": {
+      "reason_kind": "typed_only",
+      "description": "runtime authority field unsupported"
+    },
+    "status_unreadable": {
+      "reason_kind": "typed_only",
+      "description": "status unreadable"
+    },
+    "tenant_context_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "tenant context mismatch"
+    },
+    "adapter_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "adapter mismatch"
+    },
+    "amount_exceeded": {
+      "reason_kind": "typed_only",
+      "description": "amount exceeded"
+    },
+    "amount_unit_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "amount unit mismatch"
+    },
+    "authority_context_missing": {
+      "reason_kind": "typed_only",
+      "description": "authority context missing"
+    },
+    "authority_profile_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "authority profile mismatch"
+    },
+    "effect_count_exceeded": {
+      "reason_kind": "typed_only",
+      "description": "effect count exceeded"
+    },
+    "forbidden_payload_field": {
+      "reason_kind": "typed_only",
+      "description": "forbidden payload field"
+    },
+    "input_observation_time_regressed": {
+      "reason_kind": "typed_only",
+      "description": "input observation time regressed"
+    },
+    "issued_grant_missing": {
+      "reason_kind": "typed_only",
+      "description": "issued grant missing"
+    },
+    "manifest_digest_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "manifest digest mismatch"
+    },
+    "manifest_id_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "manifest id mismatch"
+    },
+    "manifest_version_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "manifest version mismatch"
+    },
+    "missing_payload_policy": {
+      "reason_kind": "typed_only",
+      "description": "missing payload policy"
+    },
+    "missing_requested_permission": {
+      "reason_kind": "typed_only",
+      "description": "missing requested permission"
+    },
+    "missing_required_payload_field": {
+      "reason_kind": "typed_only",
+      "description": "missing required payload field"
+    },
+    "observation_unavailable": {
+      "reason_kind": "typed_only",
+      "description": "observation unavailable; emitted as observation_unavailable:<exception type name>"
+    },
+    "payload_commitment_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "payload commitment mismatch"
+    },
+    "proposal_expired": {
+      "reason_kind": "typed_only",
+      "description": "proposal expired"
+    },
+    "proposal_not_yet_valid": {
+      "reason_kind": "typed_only",
+      "description": "proposal not yet valid"
+    },
+    "target_out_of_scope": {
+      "reason_kind": "typed_only",
+      "description": "target out of scope"
+    },
+    "tenant_proposal_required": {
+      "reason_kind": "typed_only",
+      "description": "tenant-bearing authority state requires a tenant-aware proposal"
+    },
+    "undeclared_payload_field": {
+      "reason_kind": "typed_only",
+      "description": "undeclared payload field"
+    },
+    "unknown_action": {
+      "reason_kind": "typed_only",
+      "description": "unknown action"
+    },
+    "unsupported_manifest_version": {
+      "reason_kind": "typed_only",
+      "description": "unsupported manifest version"
+    },
+    "runtime_authority_profile_missing": {
+      "reason_kind": "typed_only",
+      "description": "runtime authority profile missing"
+    },
+    "operation_grant_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "operation id is bound to a different principal, domain, issuer or grant (operation-identity/0.1 only)"
+    },
+    "operation_id_invalid": {
+      "reason_kind": "typed_only",
+      "description": "operation id in the approved extension is malformed (operation-identity/0.1 only)"
+    },
+    "operation_id_missing": {
+      "reason_kind": "typed_only",
+      "description": "approved extension carries no operation id (operation-identity/0.1 only)"
+    },
+    "operation_not_admitted": {
+      "reason_kind": "typed_only",
+      "description": "operation id has no admission row at effect time (operation-identity/0.1 only)"
+    },
+    "operation_renewal_unrecorded": {
+      "reason_kind": "typed_only",
+      "description": "grant revision is not named by an accepted issuer-written renewal (operation-identity/0.1 only)"
+    },
+    "renewal_not_written_by_grant_issuer": {
+      "reason_kind": "typed_only",
+      "description": "renewal written by a principal other than the grant issuer recorded at admission (operation-identity/0.1 only)"
+    },
+    "renewal_revision_not_new": {
+      "reason_kind": "typed_only",
+      "description": "renewal names a grant revision that already licenses the operation (operation-identity/0.1 only)"
+    },
+    "check_expired_before_dispatch": {
+      "reason_kind": "typed_only",
+      "description": "the check's deadline (opened_at plus the class age bound) had passed when the service clock was re-read immediately before dispatch; nothing was sent (freshness/0.1 only)"
+    },
+    "check_overdue": {
+      "reason_kind": "typed_only",
+      "description": "a live check is past its deadline; reported by the recovery pass and not closed (freshness/0.1 only)"
+    },
+    "check_lease_unavailable": {
+      "reason_kind": "typed_only",
+      "description": "the per-check lease could not be taken before the profile's acquisition deadline (freshness/0.1 only)"
+    },
+    "status_nonce_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "a resolver response echoed a nonce other than the one this check sent (replayed or foreign response; freshness/0.1 only)"
+    },
+    "age_extension_unsigned": {
+      "reason_kind": "typed_only",
+      "description": "an age-bound extension carries no signer (freshness/0.1 only)"
+    },
+    "age_extension_self_signed": {
+      "reason_kind": "typed_only",
+      "description": "an age-bound extension is signed by its requester (freshness/0.1 only)"
+    },
+    "age_extension_signer_not_configured": {
+      "reason_kind": "typed_only",
+      "description": "the signer of an age-bound extension is not in the configured rule-revision signer set (freshness/0.1 only)"
+    },
+    "age_extension_exceeds_limit": {
+      "reason_kind": "typed_only",
+      "description": "an age-bound extension exceeds the freshness profile's declared maximum (freshness/0.1 only)"
+    },
+    "age_extension_invalid": {
+      "reason_kind": "typed_only",
+      "description": "an age-bound extension is malformed, has an empty window or outage reference, or duplicates a recorded id (freshness/0.1 only)"
+    },
+    "age_extension_authority_unconfigured": {
+      "reason_kind": "typed_only",
+      "description": "no rule-revision profile is configured, so no signer set can authorise an age-bound extension (freshness/0.1 only)"
+    },
+    "holder_inventory_missing": {
+      "reason_kind": "typed_only",
+      "description": "an action class requires revocation assurance but no holder inventory enumerating at least one authority holder is configured (holder-inventory/0.1 only)"
+    },
+    "merge_operation_ids_invalid": {
+      "reason_kind": "typed_only",
+      "description": "a merge names no folded operation, repeats an id, or names a malformed operation id (merge-record/0.1 only)"
+    },
+    "merge_operation_not_admitted": {
+      "reason_kind": "typed_only",
+      "description": "a merge names an operation id that was never admitted (merge-record/0.1 only)"
+    },
+    "merge_operation_discriminator_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "merged operations are bound to different principals or authority domains (merge-record/0.1 only)"
+    },
+    "merge_operation_already_folded": {
+      "reason_kind": "typed_only",
+      "description": "a folded operation was already folded into another operation (merge-record/0.1 only)"
+    },
+    "merge_survivor_already_folded": {
+      "reason_kind": "typed_only",
+      "description": "the named survivor was itself already folded into another operation (merge-record/0.1 only)"
+    },
+    "merge_authority_unfunded": {
+      "reason_kind": "typed_only",
+      "description": "the merging authority is not in the configured funded set; the merge holds and has no effect (merge-record/0.1 only)"
+    },
+    "merge_rule_unknown": {
+      "reason_kind": "typed_only",
+      "description": "the merge's equivalence-rule digest is not adopted by a signed, independent merge_equivalence_rule revision; the merge has no effect (merge-record/0.1 only)"
+    },
+    "operation_merged_effect_exists": {
+      "reason_kind": "typed_only",
+      "description": "an operation in a merged set already has an applied effect under a different effect id; the second effect is suppressed (merge-record/0.1 only)"
+    },
+    "operation_merged_effect_unresolved": {
+      "reason_kind": "typed_only",
+      "description": "an operation in a merged set has an attempt with no outcome yet under a different effect id; a second effect is held (merge-record/0.1 only)"
+    },
+    "purpose_cache_irreversible_class": {
+      "reason_kind": "typed_only",
+      "description": "a cached purpose snapshot cannot stand in for an unreadable purpose status of an irreversible class, a protected read or an unobservable counterparty (reversibility/0.1 only)"
+    },
+    "purpose_cache_after_reversal_window": {
+      "reason_kind": "typed_only",
+      "description": "the class's reversible_until window has passed, so it is treated as irreversible and a cached purpose snapshot is refused (reversibility/0.1 only)"
+    },
+    "purpose_cache_stale": {
+      "reason_kind": "typed_only",
+      "description": "the cached purpose snapshot is older than the class age bound (reversibility/0.1 only)"
+    },
+    "purpose_closure_recorded": {
+      "reason_kind": "typed_only",
+      "description": "a recorded closure of the purpose overrides a cached open snapshot (reversibility/0.1 only)"
+    },
+    "age_extension_irreversible_class": {
+      "reason_kind": "typed_only",
+      "description": "an age-bound extension does not apply to an irreversible class or one whose reversal window has passed (reversibility/0.1 with freshness/0.1)"
+    },
+    "dedupe_unresolved_attempt_blocks_new_key": {
+      "reason_kind": "typed_only",
+      "description": "an operation has an unresolved or in-progress attempt under another effect id, so no new key is minted for it (dedupe-ttl/0.1 only)"
+    },
+    "attempt_unresolved_past_horizon": {
+      "reason_kind": "typed_only",
+      "description": "an attempt is still unresolved at its escalation deadline, after the provider horizon; recorded as an escalation (dedupe-ttl/0.1 only)"
+    },
+    "escalation_after_key_ttl": {
+      "reason_kind": "typed_only",
+      "description": "an escalation was recorded after the destination's key TTL had passed (dedupe-ttl/0.1 only)"
+    },
+    "dedupe_operation_effect_applied": {
+      "reason_kind": "typed_only",
+      "description": "the operation already has an applied effect under another effect id; refused by the control plane's own ledger, whether or not the destination still remembers the key (dedupe-ttl/0.1 only)"
+    }
+  }
+}
