@@ -17,6 +17,7 @@ except ImportError:  # Unsupported platforms must fail closed, not use thread-on
     fcntl = None
 import uuid
 from datetime import datetime, timedelta, timezone
+from time import monotonic as _monotonic
 from pathlib import Path
 from typing import Iterator, Literal, Protocol
 
@@ -30,7 +31,7 @@ from .operation_identity import (
 )
 from . import freshness as _fresh_profile
 from .freshness import (
-    AgeBoundExtension, AgeBoundExtensionRefusal, AgeExtensionRefused, CheckLeaseUnavailable, RecoveryReport, RecoveryRun,
+    AgeBoundExtension, AgeBoundExtensionRefusal, AgeExtensionRefused, CheckLeaseUnavailable, Reaper, RecoveryReport, RecoveryRun,
     acquire_lease_nonblocking, effective_age_bound, extension_defects, parse_time as _fparse,
 )
 
@@ -746,27 +747,48 @@ class BoundedRecordStore:
             BoundedRunRecord.model_validate(document)
             self._write(document)
 
+    @staticmethod
+    def _enforce_check_event_rules(events: list, event: CheckEvent) -> None:
+        """Journal opening, ownership and terminality rules for one new event over the existing ones."""
+        previous = [x for x in events if x["check_id"] == event.check_id]
+        if event.phase == "opened":
+            if previous:
+                raise ValueError("check already opened")
+        elif not previous or previous[0]["phase"] != "opened":
+            raise ValueError("check opening missing")
+        elif event.phase == "expired":
+            # freshness/0.1: withdraw the licence of a completed (or still open) check, once; never after recovery closed it.
+            if any(x["phase"] in {"interrupted", "expired"} for x in previous):
+                raise ValueError("check already closed")
+        elif any(x["phase"] in {"completed", "interrupted", "expired"} for x in previous):
+            raise ValueError("check already closed")
+        elif event.phase == "overdue" and any(x["phase"] == "overdue" for x in previous):
+            raise ValueError("check already reported overdue")
+        if previous and event.phase != "opened" and event.owner != previous[0]["owner"]:
+            raise ValueError("check owner mismatch")
+
     def append_check_event(self, event: CheckEvent) -> None:
         """Atomically enforce journal opening, ownership and terminality."""
         with self._transaction():
             document = self._read_document()
             events = document.setdefault("check_events", [])
-            previous = [x for x in events if x["check_id"] == event.check_id]
-            if event.phase == "opened":
-                if previous:
-                    raise ValueError("check already opened")
-            elif not previous or previous[0]["phase"] != "opened":
-                raise ValueError("check opening missing")
-            elif event.phase == "expired":
-                # freshness/0.1: withdraw the licence of a completed (or still open) check, once; never after recovery closed it.
-                if any(x["phase"] in {"interrupted", "expired"} for x in previous):
-                    raise ValueError("check already closed")
-            elif any(x["phase"] in {"completed", "interrupted", "expired"} for x in previous):
-                raise ValueError("check already closed")
-            elif event.phase == "overdue" and any(x["phase"] == "overdue" for x in previous):
-                raise ValueError("check already reported overdue")
-            if previous and event.phase != "opened" and event.owner != previous[0]["owner"]:
-                raise ValueError("check owner mismatch")
+            self._enforce_check_event_rules(events, event)
+            events.append(event.model_dump(mode="json"))
+            BoundedRunRecord.model_validate(document)
+            self._write(document)
+
+    def record_gate_refusal(self, attempt: EffectAttempt, refusal: EffectTimeRefusal, event: CheckEvent) -> None:
+        """Persist a dispatch-gate refusal (failed attempt, effect-time refusal, ``expired`` journal event) in ONE write.
+
+        Three separate appends left a record the coupling rules refuse if the process died between them. Here the journal
+        rules are checked first and the document is replaced once, so a reader sees all three rows or none.
+        """
+        with self._transaction():
+            document = self._read_document()
+            events = document.setdefault("check_events", [])
+            self._enforce_check_event_rules(events, event)
+            document.setdefault("attempts", []).append(attempt.model_dump(mode="json"))
+            document.setdefault("refusals", []).append(refusal.model_dump(mode="json"))
             events.append(event.model_dump(mode="json"))
             BoundedRunRecord.model_validate(document)
             self._write(document)
@@ -1139,6 +1161,8 @@ class BoundedAuthorizationWorkflow:
         rule_revision_profile=None,
     ):
         self.allow_test_time = allow_test_time
+        self._reaper = None  # the reaper this workflow handed out; a failed one makes decide/execute refuse
+        self._mono_open: dict[str, tuple[float, int]] = {}  # check_id -> (monotonic at opening, age bound) under freshness/0.1
         self.rule_revision_profile = (RuleRevisionProfile.model_validate(rule_revision_profile)
                                       if rule_revision_profile is not None else None)
         self.runtime_authority_profile = (RuntimeAuthorityProfile.model_validate(runtime_authority_profile).snapshot()
@@ -1252,14 +1276,33 @@ class BoundedAuthorizationWorkflow:
         """The host's recovery runner (start-up pass, then the declared interval). Requires the freshness profile."""
         if self._freshness is None:
             raise PermissionError("freshness profile is not enabled")
-        from .freshness import Reaper
-        return Reaper(self.records, self._freshness, clock=clock)
+        self._reaper = Reaper(self.records, self._freshness, clock=clock)
+        return self._reaper
+
+    def _require_reaper_alive(self) -> None:
+        """Fail closed: once the reaper this workflow started has stopped on an error, no decision or dispatch is made."""
+        if self._reaper is not None:
+            self._reaper.check()
 
     def _expired_before_dispatch(self, check_id: str) -> str | None:
         """The check's deadline if the service clock, re-read now, has passed it; else None."""
         opening = self.records.check_opening(check_id)
         deadline = opening.get("deadline") if opening else None
-        return deadline if deadline and _now() > _fparse(deadline) else None
+        if not deadline:
+            return None
+        now = _now()
+        if now > _fparse(deadline):
+            return deadline
+        # Monotonic guard: the wall clock can be stepped back (NTP, operator, VM restore), which would make a stalled check
+        # look young. The process monotonic clock cannot go back: elapsed time since this process opened the check, and a
+        # wall clock earlier than the recorded opening, both withdraw the licence (fail closed).
+        opened = self._mono_open.get(check_id)
+        if opened is not None and _monotonic() - opened[0] > opened[1]:
+            return deadline
+        recorded = opening.get("recorded_at")
+        if recorded and now < _fparse(recorded) - timedelta(seconds=self.clock_tolerance_seconds):
+            return deadline
+        return None
 
     def _refuse_expired_before_dispatch(self, *, check_id: str, deadline: str, attempt: EffectAttempt,
                                         persisted: RuntimeDecision, frozen, inputs, now: datetime) -> None:
@@ -1268,16 +1311,16 @@ class BoundedAuthorizationWorkflow:
         assert code == "check_expired_before_dispatch"
         attempt.status, attempt.error = "failed", code  # definitive: never dispatched (see prior-attempt filter in execute)
         self._stamp_attempt(attempt, now)
-        self.records.append_attempt(attempt)
-        self.records.append_refusal(EffectTimeRefusal(
+        refusal = EffectTimeRefusal(
             check_id=check_id, refusal_id=str(uuid.uuid4()), decision_id=persisted.decision_id, effect_id=persisted.effect_id,
             recorded_at=self._svc(), evaluated_at=_iso(now), deadline=deadline, time_source=self.time_source,
             original_operation_horizon=persisted.operation_horizon, operation_horizon=self._horizon(frozen),
             reason_vocabulary_version=VOCABULARY_VERSION, rule_identity=self._rule_identity(inputs),
-            reasons=["check_expired_before_dispatch"], changed_inputs=[], resolution_inputs=inputs))
+            reasons=["check_expired_before_dispatch"], changed_inputs=[], resolution_inputs=inputs)
         opening = self.records.check_opening(check_id)
-        self.records.append_check_event(CheckEvent.model_validate(
-            dict(opening, phase="expired", recorded_at=self._svc(), reasons=["check_expired_before_dispatch"], input=None)))
+        event = CheckEvent.model_validate(
+            dict(opening, phase="expired", recorded_at=self._svc(), reasons=["check_expired_before_dispatch"], input=None))
+        self.records.record_gate_refusal(attempt, refusal, event)  # one write: all three rows or none
         raise PermissionError(code)
 
     @property
@@ -1350,6 +1393,7 @@ class BoundedAuthorizationWorkflow:
             recorded_at=self._write_time(now), time_source=self.time_source, **self._eval_stamp(now)))
 
     def decide(self, proposal: RuntimeProposal, *, now: datetime | None = None) -> RuntimeDecision:
+        self._require_reaper_alive()
         now = self._evaluation_time(now)
         frozen = proposal.model_copy(deep=True)
         inputs: list[ResolutionInput] = []
@@ -1391,6 +1435,7 @@ class BoundedAuthorizationWorkflow:
         lose_ack: bool = False,
         partial: bool = False,
     ) -> tuple[EffectAttempt, EffectObservation | None]:
+        self._require_reaper_alive()
         now = self._evaluation_time(now)
         persisted = self.records.decision(decision.decision_id)
         if persisted is None or persisted != decision:
@@ -1504,6 +1549,7 @@ class BoundedAuthorizationWorkflow:
             # freshness/0.1: re-read the service clock immediately before dispatch. A passed deadline refuses and closes the
             # check. This narrows the window between check and commit; it does not close it.
             deadline = self._expired_before_dispatch(check_ref[0])
+            self._mono_open.pop(check_ref[0], None)  # the gate has run for this check
             if deadline is not None:
                 self._refuse_expired_before_dispatch(check_id=check_ref[0], deadline=deadline, attempt=attempt,
                                                      persisted=persisted, frozen=frozen, inputs=inputs, now=now)
@@ -1793,6 +1839,9 @@ class BoundedAuthorizationWorkflow:
             bound, extension_id, _ = self._class_age_bound(proposal.action_id, now)
             clocks = {"evaluated_at": _iso(now), "recorded_at": _iso(opened)}
             if bound is not None:
+                if len(self._mono_open) >= 4096:  # decision-stage checks never reach the gate: keep the map bounded
+                    self._mono_open.pop(next(iter(self._mono_open)))
+                self._mono_open[check_id] = (_monotonic(), bound)
                 clocks.update(deadline=_iso(opened + timedelta(seconds=bound)), age_bound_seconds=bound,
                               **({"extension_id": extension_id} if extension_id else {}))
             nonce = uuid.uuid4().hex if fr.nonce else None

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Fixed — reaper failure, atomic gate refusal, monotonic guard (F1, review R1 findings 4, 6)
+- freshness/0.1 only. A reaper thread that stops on an error (or dies) is now surfaced: `Reaper.failure`, `Reaper.failed`, `Reaper.check()` raising `ReaperFailed`, an error log line, and `decide`/`execute` of the workflow that started it raise `ReaperFailed` (fail closed, nothing written). No new reason code (the registry is untouched).
+- The dispatch-gate refusal (failed attempt, effect-time refusal, `expired` journal event) is one document replacement (`BoundedRecordStore.record_gate_refusal`), so a crash leaves all three rows or none.
+- Monotonic guard at the dispatch gate: the process monotonic clock since opening and a wall clock earlier than the recorded opening both withdraw the licence; the reaper runs when the wall clock was stepped back below its last run.
+- Default path unchanged (default records diffed before/after).
+
 ### Fixed — age-extension base, store-integrity wording, 2x age (F1, review R1 findings 2, 3, 5)
 - Age-extension limits are measured from the host profile's class bound, not the base the stored row records about itself; a row whose recorded base differs from the class bound is `age_extension_invalid` (fail closed). Only affects freshness/0.1 (opt-in); rows written by `record_age_extension` are unchanged.
 - Docs and docstrings no longer mention an HMAC key protecting the record store: there is none. The store is a plain JSON file under a same-host lock; `signer`/`reviser` are asserted names unless a keyed proof is configured (none is built). No code path changed for this item.
