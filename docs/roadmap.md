@@ -16,7 +16,7 @@ This roadmap describes the planned phases for Agent Control Plane.
 
 ---
 
-## MVP extensions *(current)*
+## MVP extensions *(shipped; the current scope also includes the bounded authorization workflow, the record store and the opt-in profiles listed in opt-in-profiles.md)*
 
 - Optional signed replay bundles using HMAC-SHA256.
 - Policy evaluation traces for ordered policy rule paths.

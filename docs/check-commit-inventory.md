@@ -14,7 +14,7 @@ Status: qualification artifact for issue #19. No release selection, grant issuan
 
 C0 is the behavior of the selected/default bounded execution path.
 
-1. Load and verify the immutable persisted authorization decision.
+1. Load and verify the persisted (append-only, unkeyed) authorization decision.
 2. Resolve current decision-critical authority, policy, approval, and evidence.
 3. Require the resolved binding to equal the persisted authorization binding.
 4. Validate adapter identity.

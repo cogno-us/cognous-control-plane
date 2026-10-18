@@ -81,7 +81,7 @@ Review original artifacts and their exact source revisions before extending a cl
 
 ## Opt-in local authority/effect claim profile
 
-Worker 21 adds a proposed, opt-in claim contract for a same-host SQLite authority/effect boundary. The legacy bounded execution path is unchanged.
+Worker 21 adds a proposed, opt-in claim contract for a same-host SQLite authority/effect boundary. The legacy bounded execution path is unchanged (for well-formed input; see [docs/opt-in-profiles.md](docs/opt-in-profiles.md)).
 
 The enforceable profile uses an explicit trusted authority handoff, not merely another pre-effect check. While the authority source excludes its own invalidating writers, the Control Plane performs a final resolve, captures and validates one coherent active/current authority projection, and provisions the exact claim into the participating local store. Only then does that store become authoritative for later profile mutations. The claim binds institution/domain, actor/principal, grant identity/revision/status, the fully materialized operation, approvals, policy state, evidence state, effect limits and a bounded validity interval. Possession remains non-authorizing.
 
@@ -89,7 +89,7 @@ See [docs/local-authority-effect-profile.md](docs/local-authority-effect-profile
 
 ## Other opt-in profiles
 
-The runtime-authority and rule-revision profiles, operation identity, freshness, witness and holder inventory, merge record, reversibility, dedupe-ttl and terminal revocation are all optional, `0.1.0-draft` and off unless a host configures them; the pinned default path is unchanged. The reason registry has two labels (`runtime-authority-reasons/0.1`, the original 121 codes, and `/0.2`, the full 158), and operator-supplied and stored JSON is read strictly. See [docs/opt-in-profiles.md](docs/opt-in-profiles.md).
+The runtime-authority and rule-revision profiles, operation identity, freshness, witness and holder inventory, merge record, reversibility, dedupe-ttl and terminal revocation are all optional, `0.1.0-draft` and off unless a host configures them; the pinned default path is unchanged for well-formed input (malformed JSON and instants are refused, and record files are written `0600` atomically). The reason registry has two labels (`runtime-authority-reasons/0.1`, the original 121 codes, and `/0.2`, the full 158), and operator-supplied and stored JSON is read strictly. See [docs/opt-in-profiles.md](docs/opt-in-profiles.md).
 
 ## Repository guide
 

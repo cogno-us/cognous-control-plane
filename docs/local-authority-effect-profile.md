@@ -8,11 +8,11 @@ Profile: `urn:cognous:profiles:local-authority-effect:0.1.0-proposed`.
 
 This contract is the Control Plane side of a bounded same-host profile that can
 order authorization-critical invalidation against one protected SQLite effect.
-The legacy `BoundedAuthorizationWorkflow.execute()` path is unchanged.
+The legacy `BoundedAuthorizationWorkflow.execute()` path is unchanged (for well-formed input; see opt-in-profiles.md).
 
 A claim is materialized only from:
 
-- an immutable persisted `authorized` decision;
+- a persisted (append-only, unkeyed) `authorized` decision;
 - the exact `AuthorizationBinding`;
 - a fresh resolution of the same trusted workflow;
 - the institution/domain and grant from the trusted Authority Context;

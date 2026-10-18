@@ -76,8 +76,7 @@ A grant may contain `purpose_ref` with owning `system`, `record_id` and `epoch`.
 The trusted adapter implements `purpose_status(ref)` and returns PurposeStatus.
 Resolve at decision and effect time. Closure, epoch change or unreadability holds;
 status-only sources cannot establish epoch protection. No push notification alone
-suffices. The current implementation refuses purpose outages for all classes;
-only fresh positive purpose snapshots are accepted. Grants without a purpose still
+suffices. Without the reversibility profile, purpose outages refuse for every class and only fresh positive purpose snapshots are accepted; with the opt-in `reversibility/0.1` profile, a cached open snapshot is accepted for reversible classes within the age bound (see reversibility.py). Grants without a purpose still
 require expiry; no expiry is synthesized for legacy grants.
 
 An optional approval-bound `expected_effective_grant_digest` with derivation
@@ -98,6 +97,28 @@ Other reasons are typed classifications unless their registry declares operands.
 `VocabularyChange` records adopted changes without rewriting prior rows.
 `refusal_trends` preserves unknown versions and reports per-code shares with
 explicit exposure; disappearance is only an investigation signal.
+
+### Reading a blocked count
+
+The registry (`runtime-authority-reasons/0.1` and `/0.2`) classifies a code only as `typed_only` or `recomputable`. It does not separate
+"an input the decision needs was unavailable" from "the inputs were read and the rule withheld". The workflow emits `authorized` or `hold`; the
+`deny` result is declared but emitted only by the Microsoft AGT adapter. A count of blocked decisions must therefore not be read as a
+count of denials. The lists below are a reading of the emission sites in this repository; they are not declared in the registry.
+
+- Unavailable-class codes (a needed input was missing, unreadable or not read): `status_unreadable`, `authority_context_missing`,
+  `role_mapping_missing`, `issued_grant_missing`, `required_input_not_read`, `purpose_unreadable`, `evidence_verifier_unavailable`,
+  `check_lease_unavailable`, `holder_inventory_missing`, `operation_id_missing`.
+- Policy-class codes (inputs were read and a rule was not met), for example: `target_out_of_scope`, `amount_exceeded`,
+  `effect_count_exceeded`, `forbidden_payload_field`, `undeclared_payload_field`, `missing_required_payload_field`,
+  `missing_requested_permission`, `grant_revoked`, `grant_suspended`, `purpose_closed`, `approval_not_active`,
+  `required_approval_missing`, `delegation_profile_unsupported`.
+- Codes that cover both: `required_evidence_not_current` (no evidence record, or a record whose state is not current),
+  `context_unknown_requires_hold` (missing, non-current or stale evidence under `hold_effect`), `policy_status_unknown` (policy status
+  not readable or not active, and an unadopted rule digest), `grant_not_active` (with the runtime-authority profile off: an unreadable or a
+  non-active grant status; with it on the two split into `status_unreadable` and the `grant_*` codes) and `purpose_unreadable` (also
+  emitted for a readable snapshot older than the class bound). For these, read `resolution_inputs` (`missing`, `read_state`) on the decision.
+
+A typed unavailable/withheld class member in the registry is a freeze item (a registry change).
 
 New optional fields serialize only when present, preserving historical empty
 shapes. This requires Pydantic 2.12 or newer. Old readers can silently discard new

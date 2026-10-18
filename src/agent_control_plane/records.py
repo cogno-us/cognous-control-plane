@@ -337,8 +337,9 @@ class RunRecorder:
         :meth:`complete_run`; ``allow_incomplete=True`` explicitly produces a snapshot of a run that is
         still open (the bundle carries no completion marker, so a reader cannot tell the difference).
 
-        The bundle is self-contained and includes all data required to
-        replay or audit the run.  The ``replay_bundle_id`` is stored on
+        The bundle contains the frame, proposals, decisions, traces, authority, reliance
+        and blocked records and the final output; it omits tool attempts and results
+        and completion status.  The ``replay_bundle_id`` is stored on
         the recorder so subsequent calls to :meth:`to_run_record` include it.
 
         Returns:

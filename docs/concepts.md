@@ -129,7 +129,7 @@ produce the final output.
 
 ## ReplayBundle
 
-A **ReplayBundle** is a self-contained, portable snapshot of a completed run.
+A **ReplayBundle** is a portable snapshot of a completed run. It omits tool attempts and results and carries no completion marker.
 
 It contains:
 
@@ -216,9 +216,10 @@ It supports optional integrity verification for exported bundles. It does not
 provide production key management or claim to be a complete security boundary.
 
 The HMAC covers only the canonical JSON of `replay_bundle`. The wrapper fields
-`signed_bundle_id`, `signed_at` and `signature_algorithm` are not signed: they
-can be changed without invalidating the signature, so a relabelled or
-backdated export still verifies. Treat them as unauthenticated metadata.
+`signed_bundle_id` and `signed_at` are not signed: they can be changed without
+invalidating the signature, so a relabelled or backdated export still verifies.
+Treat them as unauthenticated metadata. `signature_algorithm` must equal
+`HMAC-SHA256` or verification fails.
 
 The `acp sign-replay` and `acp verify-signed-replay` commands take the shared
 secret as a `--secret` command-line argument. Command-line arguments are

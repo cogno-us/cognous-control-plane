@@ -1477,8 +1477,8 @@ class BoundedAuthorizationWorkflow:
         """Fold ``folded_operation_ids`` into ``survivor_operation_id`` (operation ids only, never attempt ids).
 
         Always appends a row and returns it; only an ``outcome == "merged"`` row has effect. A merge by an authority that is not
-        funded is ``held``; one whose equivalence-rule digest is not adopted by a signed, independent ``merge_equivalence_rule``
-        revision is ``unknown``; a structurally invalid one is ``refused``. The compensation obligation (record only) is written in
+        funded is ``held``; one whose equivalence-rule digest is not adopted by a ``merge_equivalence_rule`` revision naming a configured
+        signer other than the reviser (asserted, unauthenticated) is ``unknown``; a structurally invalid one is ``refused``. The compensation obligation (record only) is written in
         the same transaction when two effects had already been applied.
         """
         profile = self._merge_profile

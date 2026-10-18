@@ -124,3 +124,79 @@ def test_a_hold_has_no_binding_and_a_later_decision_carries_no_link_to_it_known_
     document = json.loads(flow.records.path.read_text(encoding="utf-8"))
     assert [d["result"] for d in document["decisions"]] == ["hold", "authorized"]
     assert not any(key in document for key in ("holds", "hold_events", "lineage"))
+
+
+# ---------------------------------------------------------------- (e) manifest action without an authority_context
+
+def test_action_without_authority_context_does_not_pin_the_context_ref_known_limit(tmp_path):
+    """The ``authority_context_ref`` pin (``authority_profile_mismatch``) is compared only when the manifest action declares an
+    ``authority_context``. For an action without one the proposal's ref is not compared to anything declared. The decision still
+    holds, because the institution, domain and tier comparisons against an empty declaration refuse, and a ref the host does not
+    hold is unresolvable. A later change (pin the ref unconditionally) must be deliberate; the freeze list tracks it."""
+    import tempfile
+    from pathlib import Path
+    from agent_control_plane.bounded import (BoundedAuthorizationWorkflow, BoundedRecordStore, ObservationPolicy)
+    from tests.test_bounded_authorization import manifest
+
+    def decide(*, declared, ref):
+        p = proposal()
+        r = resolver_for(p)
+        if ref != PROFILE:
+            r.contexts[ref] = r.contexts[PROFILE]  # the host also holds a context under the other name
+        m = manifest()
+        if not declared:
+            for action in m["actions"]:
+                action.pop("authority_context", None)
+        p = p.model_copy(update={"authority_context_ref": ref})
+        root = Path(tempfile.mkdtemp(dir=tmp_path))
+        flow = BoundedAuthorizationWorkflow(
+            allow_test_time=True, manifest=m, resolver=r, destination=LocalRefundDestination(root / "d.json"),
+            records=BoundedRecordStore(root / "r.json", "run-1"), observation_policy=ObservationPolicy(max_age_seconds=300, clock_tolerance_seconds=5))
+        return flow.decide(p, now=NOW)
+
+    # control: with the declaration the ref is pinned
+    assert "authority_profile_mismatch" in decide(declared=True, ref="urn:other").reasons
+    # without the declaration the pin is not applied, and the decision does not authorize
+    undeclared = decide(declared=False, ref="urn:other")
+    assert "authority_profile_mismatch" not in undeclared.reasons
+    assert undeclared.result == "hold"
+    assert {"institution_mismatch", "authority_domain_mismatch", "consequence_tier_mismatch"} <= set(undeclared.reasons)
+    # valid producer control: the declared action with the matching ref authorizes
+    assert decide(declared=True, ref=PROFILE).result == "authorized"
+
+
+# ---------------------------------------------------------------- (f) operation-identity ledger has no retention rule
+
+def test_removed_operation_rows_let_a_revision_2_decision_authorize_but_the_destination_refuses_known_limit(tmp_path, monkeypatch):
+    """The operation-identity ledger has no retention rule. With its ``operations`` rows removed from the run record, a
+    revision-2 decision whose renewal is unrecorded gives ``authorized`` (the id is admitted again as a first admission) where
+    the intact ledger gives ``hold`` / ``operation_renewal_unrecorded``. The destination still refuses the second effect
+    (``operation_already_committed``). A retention rule is a freeze item; the record-level check of the independent verifier
+    rejects the pruned record."""
+    from tests.test_operation_identity import OPERATION, enable, renew, two_effects, two_effects_manifest
+    from tests.test_runtime_authority import setup_flow
+
+    two_effects_manifest(monkeypatch)
+    p, r, f, c = setup_flow(tmp_path)
+    two_effects(r)
+    cfg = enable(r, f, c)
+    d1 = f.decide(p, now=NOW)
+    assert d1.result == "authorized", d1.reasons
+    attempt, observation = f.execute(p, d1, adapter_id=p.adapter_id, now=NOW)
+    assert attempt.status == "acknowledged" and observation.state == "applied"
+
+    renew(r, cfg, "2")
+    intact = f.decide(p, now=NOW)  # control: the ledger is intact, the renewal is unrecorded
+    assert intact.result == "hold" and "operation_renewal_unrecorded" in intact.reasons
+
+    document = json.loads(f.records.path.read_text(encoding="utf-8"))
+    assert document["operations"], "the ledger rows exist before removal"
+    document["operations"] = []
+    f.records.path.write_text(json.dumps(document), encoding="utf-8")
+
+    pruned = f.decide(p, now=NOW)
+    assert pruned.result == "authorized" and pruned.reasons == []
+    attempt2, _ = f.execute(p, pruned, adapter_id=p.adapter_id, now=NOW)
+    assert attempt2.status == "failed" and attempt2.error == "operation_already_committed"
+    state = f.destination.snapshot()
+    assert set(state["effects"]) == {d1.effect_id} and state["operations"] == {OPERATION: d1.effect_id}

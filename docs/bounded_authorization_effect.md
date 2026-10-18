@@ -96,6 +96,27 @@ returns an authenticated valid chain and the child grant itself remains within
 the exact finite operation envelope. Production delegation must authenticate and
 evaluate every ancestor; the synthetic resolver does not perform cryptography.
 
+### Delegation entry conditions
+
+Delegation stays refused: a grant that names `delegation.parent_grant_id` is held with `delegation_profile_unsupported`, and no ancestor is
+walked. Before it is enabled the following are required (recorded here and in the non-broadening-delegation README of the contracts
+repository): (a) a delegator binding over the exact child grant, checked at acceptance; (b) an ancestor status walk at decision time, with
+its own refusal code; (c) a fixture in which the child names a real parent that never endorsed it, and is refused.
+
+### Approval, payload policy and the operation ledger: stated limits
+
+- An approval record, where one exists, proves the approver's identity and commitment to the operation commitment. It does not prove what
+  the approver was shown. A human step-up profile (the digest of the displayed content equal to the dispatched operation commitment) is a
+  freeze item.
+- The payload policy checks field names (`required_fields`, `optional_fields`, `forbidden_fields`), not values. A payload field that
+  selects a recipient, a resource or an amount belongs in `target` or `amount`, which are checked against the grant; a field left in the
+  payload is in scope by name whatever its value. A per-field value constraint is a freeze item.
+- The operation-identity ledger has no retention rule. If its rows are removed from a run record, a revision-2 decision that would hold as
+  `operation_renewal_unrecorded` is `authorized`; the destination still refuses the second effect (`operation_already_committed`), and the
+  independent verifier rejects the pruned record. A retention rule is a freeze item. Pinned by `tests/test_known_limits.py`.
+- A manifest action without an `authority_context` declaration does not pin the proposal's `authority_context_ref`; the decision still holds
+  through the institution, domain and tier comparisons. Pinned by `tests/test_known_limits.py`.
+
 ## Effect and recovery records
 
 The bounded record store keeps linked:
@@ -128,10 +149,9 @@ Manifest v1.1 max_amount and max_effects are first checked per proposal. That
 alone is not a cumulative budget guarantee.
 
 For this isolated local pilot only, LocalRefundDestination additionally enforces
-max_effects cumulatively per grant while holding a process-local lock. Concurrent
-threads sharing that destination cannot both consume a one-effect grant. This is
-not a distributed budget service and does not protect multiple processes or
-remote destinations. Production shared budgets require destination-side atomic
+max_effects cumulatively per grant while holding a process lock and a same-host inter-process `flock`. Concurrent
+threads and cooperating processes on one host sharing that destination cannot both consume a one-effect grant. This is
+not a distributed budget service and is not for remote destinations. Production shared budgets require destination-side atomic
 reservation/commit or another reviewed consistency boundary.
 
 ## TOCTOU and destination guarantees
@@ -204,7 +224,7 @@ another tenant's obligation unless the trusted resolver returns only the
 evaluating tenant's evidence. Deployment rule: where the engine keys evidence by
 obligation id alone, use one engine database per tenant, or tenant-unique obligation
 ids. The opt-in runtime-authority profile's evidence
-statements (named by a configured signer: asserted, unauthenticated) include
+statements (Ed25519-verified against host-admitted producer keys; attribution, not validator correctness) include
 `tenant_id` and are compared with the Authority Context tenant.
 
 Grant, policy, conflict, identity, mandate and approval observations use explicit maximum
