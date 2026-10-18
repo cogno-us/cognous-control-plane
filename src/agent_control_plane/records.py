@@ -148,7 +148,7 @@ class RunRecorder:
             expires_at=expires_at,
         )
         self._authority_records.append(record)
-        return record
+        return record.model_copy(deep=True)  # the recorded authority is not reachable from the caller's copy
 
     def propose_action(
         self,
@@ -239,12 +239,12 @@ class RunRecorder:
             )
             self._blocked_actions.append(blocked)
 
-        return decision, blocked
+        return decision.model_copy(deep=True), (blocked.model_copy(deep=True) if blocked is not None else None)
 
     def get_policy_traces(self) -> list[PolicyEvaluationTrace]:
         """Return recorded policy traces."""
 
-        return list(self._policy_traces)
+        return [item.model_copy(deep=True) for item in self._policy_traces]
 
     def record_reliance(
         self,
@@ -276,7 +276,7 @@ class RunRecorder:
             referenced_action_id=referenced_action_id,
         )
         self._reliance_records.append(record)
-        return record
+        return record.model_copy(deep=True)  # the recorded reliance is not reachable from the caller's copy
 
     def complete_run(self, final_output: Optional[str] = None) -> None:
         """Mark the run as completed and record the final output.
