@@ -63,6 +63,7 @@ From a fresh repository checkout, use Python 3.11+ and an activated virtual envi
 python -m pip install -e ".[dev]"
 acp --help
 acp validate-run examples/sample_run_record.json
+acp run --help   # run one declared bounded operation locally; see docs/concepts.md
 python examples/policy_config_demo.py
 ```
 

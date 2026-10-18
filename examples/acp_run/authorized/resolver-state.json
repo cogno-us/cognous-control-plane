@@ -1,0 +1,125 @@
+{
+  "statuses": {
+    "urn:cognous:grant:routine-1": {
+      "grant_id": "urn:cognous:grant:routine-1",
+      "revision": "1",
+      "status": "active",
+      "observed_at": "2026-10-05T19:00:00+00:00",
+      "version": "status-v1",
+      "status_ref": "urn:cognous:status:grant-1",
+      "authority_basis_ref": "urn:cognous:authority-basis:synthetic",
+      "institution_id": "urn:cognous:institution:synthetic-customer-service",
+      "authority_domain": "customer-refunds",
+      "tenant_id": null,
+      "superseded_by": null
+    }
+  },
+  "identities": {
+    "urn:cognous:identity:refund-agent-1": {
+      "identity": "urn:cognous:identity:refund-agent-1",
+      "principal": "urn:cognous:principal:refund-service",
+      "authenticated": true,
+      "delegation_valid": true,
+      "observed_at": "2026-10-05T19:00:00+00:00",
+      "institution_id": "urn:cognous:institution:synthetic-customer-service",
+      "authority_domain": "customer-refunds",
+      "chain": []
+    }
+  },
+  "mandates": {
+    "urn:cognous:principal:synthetic-governor|urn:cognous:role:refund-governor": {
+      "issuer": "urn:cognous:principal:synthetic-governor",
+      "issuer_role": "urn:cognous:role:refund-governor",
+      "issuance_record_ref": "urn:cognous:issuance:1",
+      "mandate_valid": true,
+      "observed_at": "2026-10-05T19:00:00+00:00",
+      "institution_id": "urn:cognous:institution:synthetic-customer-service",
+      "authority_domain": "customer-refunds"
+    }
+  },
+  "approvals": {
+    "urn:cognous:approval:t1-1": {
+      "approval_ref": "urn:cognous:approval:t1-1",
+      "role_id": "urn:cognous:role:customer-service-supervisor",
+      "approver": "urn:cognous:principal:reviewer-1",
+      "grant_id": "urn:cognous:grant:routine-1",
+      "grant_revision": "1",
+      "proposal_commitment": "sha256:133c4baa21d85e41ae7f75af45a96810aa1a175ee3e693913585568630aea96b",
+      "policy_versions": [
+        {
+          "ref": "urn:cognous:policy:refund-policy",
+          "version": "1.0"
+        }
+      ],
+      "status": "active",
+      "observed_at": "2026-10-05T19:00:00+00:00",
+      "institution_id": "urn:cognous:institution:synthetic-customer-service",
+      "authority_domain": "customer-refunds",
+      "tenant_id": null
+    }
+  },
+  "policies": {
+    "urn:cognous:policy:refund-policy": {
+      "ref": "urn:cognous:policy:refund-policy",
+      "version": "1.0",
+      "status": "active",
+      "observed_at": "2026-10-05T19:00:00+00:00",
+      "institution_id": "urn:cognous:institution:synthetic-customer-service",
+      "authority_domain": "customer-refunds",
+      "tenant_id": null
+    }
+  },
+  "conflicts": {
+    "urn:cognous:authority-requirement:refund-routine-v1": {
+      "requirement_id": "urn:cognous:authority-requirement:refund-routine-v1",
+      "state": "clear",
+      "observed_at": "2026-10-05T19:00:00+00:00",
+      "institution_id": "urn:cognous:institution:synthetic-customer-service",
+      "authority_domain": "customer-refunds",
+      "conflict_refs": [
+        "urn:cognous:policy:refund-policy"
+      ]
+    }
+  },
+  "evidence": {
+    "urn:cognous:evidence:refund-entitlement": {
+      "obligation_id": "urn:cognous:evidence:refund-entitlement",
+      "state": "current",
+      "observed_at": "2026-10-05T19:00:00+00:00",
+      "source_ref": "urn:cognous:source:entitlement",
+      "institution_id": "urn:cognous:institution:synthetic-customer-service",
+      "authority_domain": "customer-refunds"
+    },
+    "urn:cognous:evidence:refund-approval": {
+      "obligation_id": "urn:cognous:evidence:refund-approval",
+      "state": "current",
+      "observed_at": "2026-10-05T19:00:00+00:00",
+      "source_ref": "urn:cognous:source:approval",
+      "institution_id": "urn:cognous:institution:synthetic-customer-service",
+      "authority_domain": "customer-refunds"
+    },
+    "urn:cognous:evidence:optional-context": {
+      "obligation_id": "urn:cognous:evidence:optional-context",
+      "state": "unknown",
+      "observed_at": "2026-10-05T19:00:00+00:00",
+      "source_ref": "urn:cognous:source:optional",
+      "institution_id": "urn:cognous:institution:synthetic-customer-service",
+      "authority_domain": "customer-refunds"
+    }
+  },
+  "role_mappings": {
+    "urn:cognous:institution:synthetic-customer-service": {
+      "institution_id": "urn:cognous:institution:synthetic-customer-service",
+      "version": "roles-v1",
+      "digest": "sha256:f8a8db156df7087ddf34be1ed77fc86fa20ba7668deb87a9b3a5bd0a6ace496d",
+      "aliases": {
+        "customer-service-supervisor": [
+          "urn:cognous:role:customer-service-supervisor"
+        ],
+        "refund-authorizer": [
+          "urn:cognous:role:refund-authorizer"
+        ]
+      }
+    }
+  }
+}

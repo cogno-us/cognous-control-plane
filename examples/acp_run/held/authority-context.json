@@ -1,0 +1,130 @@
+{
+  "schema_version": "0.1.0",
+  "interface_status": "proposed_pending_governor_review",
+  "context_id": "urn:cognous:authority-context:pilot-1",
+  "institution": {
+    "institution_id": "urn:cognous:institution:synthetic-customer-service",
+    "authority_domain": "customer-refunds",
+    "authority_basis_ref": "urn:cognous:authority-basis:synthetic",
+    "authority_mode": "principle_inspired"
+  },
+  "principal": "urn:cognous:principal:refund-service",
+  "acting_identity": "urn:cognous:identity:refund-agent-1",
+  "accountable_human_role": {
+    "role_id": "urn:cognous:role:accountable-human",
+    "human_principal": "urn:cognous:principal:human-1",
+    "mandate_ref": "urn:cognous:mandate:human-1"
+  },
+  "requirement": {
+    "requirement_id": "urn:cognous:authority-requirement:refund-routine-v1",
+    "governing_sources": [
+      {
+        "ref": "urn:cognous:policy:refund-policy",
+        "version": "1.0",
+        "provision": "refund",
+        "standing": "local_policy"
+      }
+    ],
+    "permissions": [
+      {
+        "action": "refund_issue_routine",
+        "targets": [
+          "urn:cognous:synthetic-account:customer-001"
+        ],
+        "data_scopes": [
+          "refund.issue.routine"
+        ],
+        "max_amount": 100.0,
+        "unit": "USD",
+        "max_effects": 1
+      }
+    ],
+    "approvals": [
+      {
+        "role_id": "urn:cognous:role:customer-service-supervisor",
+        "independent_of_actor": true
+      }
+    ],
+    "evidence": [
+      {
+        "obligation_id": "urn:cognous:evidence:refund-entitlement",
+        "kind": "authorization",
+        "source_ref": "urn:cognous:source:entitlement",
+        "max_age_seconds": 300,
+        "required": true,
+        "unknown_behavior": "hold_effect"
+      },
+      {
+        "obligation_id": "urn:cognous:evidence:optional-context",
+        "kind": "context",
+        "source_ref": "urn:cognous:source:optional",
+        "max_age_seconds": 300,
+        "required": false,
+        "unknown_behavior": "preserve_if_other_basis_suffices"
+      }
+    ],
+    "consequence": {
+      "tier": "T1",
+      "rationale": "Synthetic test tier.",
+      "profile_ref": "urn:cognous:consequence:T1"
+    }
+  },
+  "conflicts": {
+    "precedence_refs": [
+      "urn:cognous:policy:refund-policy"
+    ],
+    "incompatible_role_pairs": [],
+    "escalation_ref": "urn:cognous:procedure:escalation",
+    "appeal_ref": "urn:cognous:procedure:appeal",
+    "continuity_ref": "urn:cognous:procedure:continuity",
+    "remedy_ref": "urn:cognous:procedure:remedy"
+  },
+  "supporting_evidence_refs": [],
+  "change": {
+    "kind": "none",
+    "proposal_ref": null,
+    "adoption_record_ref": null
+  },
+  "grant": {
+    "grant_id": "urn:cognous:grant:routine-1",
+    "revision": "1",
+    "requirement_id": "urn:cognous:authority-requirement:refund-routine-v1",
+    "issuer": "urn:cognous:principal:synthetic-governor",
+    "issuer_role": "urn:cognous:role:refund-governor",
+    "issuance_record_ref": "urn:cognous:issuance:1",
+    "grantee": "urn:cognous:principal:refund-service",
+    "acting_identity": "urn:cognous:identity:refund-agent-1",
+    "issued_at": "2026-10-05T18:00:00+00:00",
+    "not_before": "2026-10-05T18:30:00+00:00",
+    "expires_at": "2026-10-05T20:00:00+00:00",
+    "status_ref": "urn:cognous:status:grant-1",
+    "policy_versions": [
+      {
+        "ref": "urn:cognous:policy:refund-policy",
+        "version": "1.0"
+      }
+    ],
+    "permissions": [
+      {
+        "action": "refund_issue_routine",
+        "targets": [
+          "urn:cognous:synthetic-account:customer-001"
+        ],
+        "data_scopes": [
+          "refund.issue.routine"
+        ],
+        "max_amount": 100.0,
+        "unit": "USD",
+        "max_effects": 1
+      }
+    ],
+    "delegation": {
+      "parent_grant_id": null,
+      "may_delegate": false,
+      "remaining_depth": 0
+    },
+    "approval_refs": [
+      "urn:cognous:approval:t1-1"
+    ]
+  }
+}

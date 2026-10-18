@@ -227,6 +227,49 @@ secret obtained from a protected source.
 
 ---
 
+## acp run
+
+`acp run` executes one declared bounded operation. It builds a
+`SyntheticResolver` from JSON files, runs the real `BoundedAuthorizationWorkflow`
+(decide, effect-time revalidation, execute, reconcile) against the repository's
+`LocalRefundDestination` in a throwaway store directory, and writes the result.
+It never contacts a network and writes only inside `--store-dir` and `--out-dir`
+(both must be new or empty; their parent must exist; symlink components, hard-linked
+inputs and paths containing CR/LF are refused with exit 2).
+
+```bash
+acp run --manifest examples/acp_run/manifest.json \
+  --proposal examples/acp_run/authorized/proposal.json \
+  --authority-context examples/acp_run/authorized/authority-context.json \
+  --resolver-state examples/acp_run/authorized/resolver-state.json \
+  --store-dir /tmp/acp-store --out-dir /tmp/acp-out --now 2026-10-05T19:00:00Z
+acp validate-run /tmp/acp-out/run-record.json
+```
+
+| Exit | Meaning |
+|---|---|
+| 0 | authorized and applied to the local synthetic destination |
+| 1 | held at decision time, refused at effect time, or definitively rejected by the destination |
+| 2 | invalid input or refused path |
+| 4 | internal error, or an authorized effect whose outcome is not a confirmed application |
+
+Outputs in `--out-dir`: `bounded-run-record.json` (the native `BoundedRunRecord`:
+decision, refusal, attempt and reconciliation rows), `run-record.json` (a
+`RunRecord` projection that `acp validate-run` accepts; the native record is not
+a `RunRecord` and is not accepted by that command), `result.json` (envelope with
+`reason_codes`, `verdict_source`, `does_not_prove`) and, on a nonzero exit,
+`ci-diagnostics.json`. `--format json` prints the envelope on standard output.
+
+`--now` takes a timezone-aware time, is recorded as `time_source: test_override`,
+and also stamps the destination's observations; without it the real clock is used
+and the declared observation times must be fresh. The resolver is synthetic and
+unauthenticated, the destination is a local file, and a validated run record is
+internal consistency only. A passing run does not prove institutional authority,
+a real-world effect, exactly-once delivery or the authenticity of the input files.
+The library default behaviour is unchanged.
+
+---
+
 ## PolicyConfig
 
 A **PolicyConfig** is a lightweight JSON configuration model that can be used
