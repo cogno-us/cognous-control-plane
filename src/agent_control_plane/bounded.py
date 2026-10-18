@@ -106,9 +106,11 @@ class RuntimeProposal(BaseModel):
     payload: dict
     payload_commitment: str
     requested_permissions: list[str] = Field(default_factory=list)
-    amount: float = Field(default=0, ge=0, allow_inf_nan=False)
+    # Strict: a JSON number only (an integer is accepted as its float value); a string or boolean is refused, not coerced.
+    amount: float = Field(default=0, ge=0, allow_inf_nan=False, strict=True)
     unit: str = ""
-    effects: int = Field(default=1, ge=0)
+    # Strict: a JSON integer only; a boolean, a float (even 1.0) or a string is refused, not coerced.
+    effects: int = Field(default=1, ge=0, strict=True)
     authority_context_ref: str | None = None
     requirement_id: str | None = None
     risk_metadata: dict = Field(default_factory=dict)

@@ -5,6 +5,8 @@ The members read by the target, payload-field and data-scope checks (`allowed_ta
 equality. Any other shape is malformed: it declares nothing, so the check it feeds refuses with its existing registered reason
 (`target_out_of_scope`, `missing_payload_policy`, `requirement_scope_mismatch`, `grant_scope_mismatch`) and nothing is applied.
 Well-formed inputs are unchanged (see the byte-identity tests in test_cli_run.py).
+
+The numeric members of a RuntimeProposal are read strictly as well: `amount` must be a JSON number and `effects` a JSON integer.
 """
 
 from __future__ import annotations
@@ -14,7 +16,7 @@ import json
 import pytest
 
 from agent_control_plane.bounded import RuntimeProposal, _exact_strings, commitment
-from tests.test_cli_run import _inputs, _run
+from tests.test_cli_run import EXAMPLES, _inputs, _run
 
 TARGET = "urn:cognous:synthetic-account:customer-001"  # the target of the authorized example
 
@@ -124,3 +126,31 @@ def test_exact_strings_accepts_only_collections_of_strings():
     assert _exact_strings([]) == frozenset()
     for bad in ("ab", b"ab", {"a": 1}, 1, None, ["a", None], [["a"]]):
         assert _exact_strings(bad) is None, bad
+
+
+# -- RuntimeProposal numeric members are not coerced from other JSON types ---------------------------------------------
+
+@pytest.mark.parametrize("member,value", [
+    ("amount", "50.0"), ("amount", True), ("amount", None), ("amount", [50.0]),
+    ("effects", True), ("effects", 1.0), ("effects", "1"), ("effects", None),
+])
+def test_proposal_numeric_members_of_another_json_type_are_invalid_input(tmp_path, member, value):
+    inputs = _inputs(tmp_path, "authorized")
+    proposal = _read(inputs["proposal"])
+    proposal[member] = value
+    inputs["proposal"].write_text(json.dumps(proposal), encoding="utf-8")
+    code, _, _ = _run(tmp_path, inputs=inputs)
+    assert code == 2
+    destination = tmp_path / "store" / "destination.json"
+    assert not destination.exists() or not _read(destination).get("effects")
+
+
+def test_proposal_numbers_keep_their_values_and_commitment():
+    base = json.loads((EXAMPLES / "authorized" / "proposal.json").read_text(encoding="utf-8"))
+    reference = RuntimeProposal.model_validate(base)
+    for amount in (50.0, 50, 5e1):
+        same = RuntimeProposal.model_validate({**base, "amount": amount})
+        assert same.amount == 50.0 and isinstance(same.amount, float)
+        assert commitment(same.model_dump(mode="json", exclude_none=False)) == commitment(
+            reference.model_dump(mode="json", exclude_none=False))
+    assert RuntimeProposal.model_validate({**base, "effects": 1}).effects == 1

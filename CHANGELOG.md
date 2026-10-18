@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Changed — RuntimeProposal numeric members read strictly
+- `RuntimeProposal.amount` accepts a JSON number only (an integer becomes its float value, as before) and `effects` a JSON integer only; a string, boolean, `null` or (for `effects`) a float such as `1.0` is refused instead of coerced (`acp run`: exit 2). Valid proposals validate to the same values and the same commitment; the full test suite passed unchanged and the default `acp run` examples are byte-identical before/after.
+
 ### Added — terminal-revocation/0.1 (opt-in)
 - `RuntimeAuthorityProfile.terminal_revocation` (`TerminalRevocationProfile`): when a retained resolution check already observed `revoked` for the same `(grant_id, revision)`, decision and execution are refused with `grant_revocation_recorded` even if the status read now says `active`; the row carries a `successor_grant_revision` reopen condition. It reuses the retained-check lookup of the cached-positive denial rule (now one helper, `_recorded_grant_denial`, same behaviour). `suspended` stays reversible. One reason code added to label 0.2 only (registry 0.2: 158 codes; 0.1 byte-identical). Omitted from profile dumps while unset, so the default path and every commitment over the profile are unchanged (default `acp run` examples byte-identical before/after).
 
