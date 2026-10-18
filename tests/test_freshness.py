@@ -425,6 +425,194 @@ def test_report_counts_sit_next_to_refusal_counts(tmp_path, clock):
     assert freshness_counts([], as_of=NOW)["oldest_open_age_seconds"] is None
 
 
+# ------------------------------------------------------------------------------------------------ F1: reaper failure, atomic gate
+def _wait_until(predicate, timeout=8.0):
+    import time as _t
+    end = _t.monotonic() + timeout
+    while _t.monotonic() < end:
+        if predicate():
+            return True
+        _t.sleep(0.05)
+    return predicate()
+
+
+def _fast_clock():
+    state = {"t": NOW}
+
+    def clock():
+        state["t"] = state["t"] + timedelta(seconds=10)  # every call is "an interval later": every run_due is due
+        return state["t"]
+    return clock
+
+
+def test_reaper_thread_failure_is_surfaced_and_fails_closed(tmp_path, clock, caplog):
+    """R1 finding 4. The thread used to die silently on any exception while decisions went on as if recovery ran."""
+    from agent_control_plane.freshness import ReaperFailed
+
+    p, r, f, c = setup_flow(tmp_path)
+    enable(r, f, c, reaper_interval_seconds=1)
+    reaper = f.reaper(clock=_fast_clock())
+    original, calls = f.records.recovery_pass, []
+
+    def flaky(**kw):
+        calls.append(kw["trigger"])
+        if len(calls) > 1:
+            raise RuntimeError("store unreadable")
+        return original(**kw)
+    f.records.recovery_pass = flaky
+    reaper.start()
+    try:
+        assert _wait_until(lambda: reaper.failed), "the failure must become visible"
+        assert isinstance(reaper.failure, RuntimeError) and "store unreadable" in str(reaper.failure)
+        assert "freshness reaper stopped: RuntimeError" in caplog.text
+        with pytest.raises(ReaperFailed):
+            reaper.check()
+        before = f.records.load()
+        with pytest.raises(ReaperFailed):
+            f.decide(p, now=NOW)
+        assert f.records.load() == before, "a refused decide writes nothing"
+    finally:
+        reaper.stop()
+
+
+def test_reaper_failure_also_blocks_execute(tmp_path, clock):
+    from agent_control_plane.freshness import ReaperFailed
+
+    p, r, f, c = setup_flow(tmp_path)
+    enable(r, f, c, reaper_interval_seconds=1)
+    d = f.decide(p, now=NOW)                 # decided before the reaper existed
+    reaper = f.reaper()
+    reaper.failure = RuntimeError("boom")
+    with pytest.raises(ReaperFailed):
+        execute(f, p, d)
+    assert f.destination.snapshot()["effects"] == {}
+
+
+def test_a_healthy_or_stopped_reaper_does_not_block(tmp_path, clock):
+    p, r, f, c = setup_flow(tmp_path)
+    enable(r, f, c, reaper_interval_seconds=1)
+    reaper = f.reaper()
+    reaper.start()
+    try:
+        assert not reaper.failed and f.decide(p, now=NOW).result == "authorized"
+    finally:
+        reaper.stop()
+    assert not reaper.failed, "an orderly stop is not a failure"
+    assert f.decide(p, now=NOW).result == "authorized"
+
+
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
+def test_reaper_thread_that_ends_without_an_exception_counts_as_failed(tmp_path, clock):
+    p, r, f, c = setup_flow(tmp_path)
+    enable(r, f, c, reaper_interval_seconds=1)
+    reaper = f.reaper(clock=_fast_clock())
+    reaper.run_due = lambda: (_ for _ in ()).throw(SystemExit)   # BaseException: not caught by the loop, the thread just ends
+    reaper.start()
+    assert _wait_until(lambda: reaper.failed)
+    with pytest.raises(Exception, match="reaper stopped"):
+        f.decide(p, now=NOW)
+
+
+def test_reaper_runs_when_the_wall_clock_was_stepped_back(tmp_path, clock):
+    p, r, f, c = setup_flow(tmp_path)
+    enable(r, f, c, reaper_interval_seconds=30)
+    now = {"t": NOW}
+    reaper = f.reaper(clock=lambda: now["t"])
+    assert reaper.run_due() is not None and reaper.run_due() is None      # within the interval: nothing
+    now["t"] = NOW - timedelta(seconds=500)                               # clock stepped back below the last run
+    assert reaper.run_due() is not None, "a step back must not stall recovery"
+
+
+def test_gate_refusal_is_one_write_all_rows_or_none(tmp_path, clock):
+    """R1 finding 6. Failed attempt, effect-time refusal and the `expired` journal event were three writes."""
+    p, r, f, c = setup_flow(tmp_path)
+    enable(r, f, c)
+    d = f.decide(p, now=NOW)
+    stall_before_dispatch(f, clock, 61, pin_observation=True)
+    real_write = f.records._write
+
+    def crash_when_refusal_lands(document):
+        if document.get("refusals"):
+            raise OSError("simulated crash while writing the gate refusal")
+        real_write(document)
+    f.records._write = crash_when_refusal_lands
+    with pytest.raises(OSError, match="simulated crash"):
+        execute(f, p, d)
+    f.records._write = real_write
+    rec = f.records.load()
+    assert [a.status for a in rec.attempts] == ["attempted"], "no half-written gate refusal: no second (failed) attempt row"
+    assert not rec.refusals and not any(e.phase == "expired" for e in rec.check_events)
+    assert f.destination.snapshot()["effects"] == {}
+
+
+def test_gate_refusal_writes_all_three_rows_in_one_document_replacement(tmp_path, clock):
+    p, r, f, c = setup_flow(tmp_path)
+    enable(r, f, c)
+    d = f.decide(p, now=NOW)
+    stall_before_dispatch(f, clock, 61, pin_observation=True)
+    writes = []
+    real_write = f.records._write
+    f.records._write = lambda document: (writes.append((len(document.get("attempts", [])), len(document.get("refusals", [])),
+                                                        sum(e["phase"] == "expired" for e in document.get("check_events", [])))),
+                                         real_write(document))[1]
+    with pytest.raises(PermissionError, match="check_expired_before_dispatch"):
+        execute(f, p, d)
+    gate_writes = [w for w in writes if w[1] or w[2]]
+    assert len(gate_writes) == 1 and gate_writes[0][1:] == (1, 1), writes
+
+
+def _stall_second_observation(f, clock, *, wall=0, mono=None):
+    original, calls = f.destination.observe, []
+
+    def stalled(effect_id):
+        calls.append(1)
+        if len(calls) == 1:                    # the observation between the effect check and the dispatch gate
+            clock.tick(wall)
+            if mono is not None:
+                mono[0] += mono_step[0]
+        return original(effect_id).model_copy(update={"observed_at": NOW.isoformat()})
+    f.destination.observe = stalled
+
+
+mono_step = [0.0]
+
+
+def test_monotonic_guard_catches_a_wall_clock_that_did_not_move(tmp_path, clock, monkeypatch):
+    """The dispatch gate compared wall clocks only: a frozen or stepped-back wall clock made a stalled check look young."""
+    p, r, f, c = setup_flow(tmp_path)
+    enable(r, f, c)
+    mono = [1000.0]
+    monkeypatch.setattr(bounded, "_monotonic", lambda: mono[0])
+    d = f.decide(p, now=NOW)
+    mono_step[0] = 61.0                                    # 61 s really passed (monotonic) ...
+    _stall_second_observation(f, clock, wall=0, mono=mono)  # ... while the wall clock did not move
+    with pytest.raises(PermissionError, match="check_expired_before_dispatch"):
+        execute(f, p, d)
+    assert f.destination.snapshot()["effects"] == {}
+
+
+def test_monotonic_guard_allows_a_check_within_the_bound(tmp_path, clock, monkeypatch):
+    p, r, f, c = setup_flow(tmp_path)
+    enable(r, f, c)
+    mono = [1000.0]
+    monkeypatch.setattr(bounded, "_monotonic", lambda: mono[0])
+    d = f.decide(p, now=NOW)
+    mono_step[0] = 59.0
+    _stall_second_observation(f, clock, wall=0, mono=mono)
+    attempt, _ = execute(f, p, d)
+    assert attempt.status == "acknowledged"
+
+
+def test_wall_clock_stepped_back_before_the_opening_withdraws_the_licence(tmp_path, clock):
+    p, r, f, c = setup_flow(tmp_path)
+    enable(r, f, c)
+    d = f.decide(p, now=NOW)
+    _stall_second_observation(f, clock, wall=-1000)
+    with pytest.raises(PermissionError, match="check_expired_before_dispatch"):
+        execute(f, p, d)
+    assert f.destination.snapshot()["effects"] == {}
+
+
 # ------------------------------------------------------------------------------------------------ age basis
 def basis_of(f):
     return {(i.input_type): i.age_basis for ch in f.records.load().resolution_checks for i in ch.inputs}
@@ -622,12 +810,12 @@ def test_status_age_at_dispatch_can_reach_twice_the_bound(tmp_path, clock):
 
     def stalled(effect_id):
         calls.append(clock.now)
-        if len(calls) == 2:                   # the observation after the effect check: the stall sits before dispatch
+        if len(calls) == 1:                   # the observation between the effect check and the dispatch gate
             clock.tick(59)
         return original(effect_id).model_copy(update={"observed_at": NOW.isoformat()})
     f.destination.observe = stalled
     attempt, _ = execute(f, p, d)
-    assert attempt.status == "acknowledged" and len(calls) == 2
+    assert attempt.status == "acknowledged"
     status_age_at_dispatch = (clock.now - (NOW - timedelta(seconds=60))).total_seconds()
     assert status_age_at_dispatch == 119 and 60 < status_age_at_dispatch <= 2 * 60
 

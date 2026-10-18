@@ -23,6 +23,7 @@ Limits (read before relying on it):
 """
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -62,6 +63,10 @@ class FreshnessProfile(BaseModel):
     nonce: bool = True
     #: Largest extension of a class age bound a signer may record. 0 refuses every extension.
     max_age_extension_seconds: int = Field(default=0, ge=0)
+
+
+class ReaperFailed(RuntimeError):
+    """The reaper thread stopped on an error (or died). Recovery is not running, so the workflow refuses to decide or dispatch."""
 
 
 class CheckLeaseUnavailable(RuntimeError):
@@ -244,13 +249,29 @@ class Reaper:
         self.last_run: datetime | None = None
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+        #: The error that stopped the background thread, if any. Never cleared: a failed reaper stays failed until replaced.
+        self.failure: BaseException | None = None
+
+    @property
+    def failed(self) -> bool:
+        """True after the thread raised, or when it ended without ``stop()`` having been called (it died)."""
+        if self.failure is not None:
+            return True
+        return self._thread is not None and not self._thread.is_alive() and not self._stop.is_set()
+
+    def check(self) -> None:
+        """Raise ``ReaperFailed`` when the background recovery is no longer running (fail closed)."""
+        if self.failed:
+            raise ReaperFailed(f"freshness reaper stopped: {type(self.failure).__name__ if self.failure else 'thread ended'}")
 
     def run_startup(self) -> RecoveryReport:
         return self._run("startup")
 
     def run_due(self) -> RecoveryReport | None:
         now = self.clock()
-        if self.last_run is not None and (now - self.last_run).total_seconds() < self.profile.reaper_interval_seconds:
+        # A wall clock stepped back below the last run would otherwise stall the reaper for the size of the step: run instead.
+        if (self.last_run is not None and now >= self.last_run
+                and (now - self.last_run).total_seconds() < self.profile.reaper_interval_seconds):
             return None
         return self._run("interval" if self.last_run is not None else "startup")
 
@@ -265,7 +286,12 @@ class Reaper:
 
         def loop():
             while not self._stop.wait(min(1.0, self.profile.reaper_interval_seconds)):
-                self.run_due()
+                try:
+                    self.run_due()
+                except Exception as exc:  # noqa: BLE001 - surfaced, never swallowed: the pass is the recovery guarantee
+                    self.failure = exc
+                    logging.getLogger(__name__).error("freshness reaper stopped: %s: %s", type(exc).__name__, exc)
+                    return
         self._thread = threading.Thread(target=loop, name="acp-freshness-reaper", daemon=True)
         self._thread.start()
         return report
