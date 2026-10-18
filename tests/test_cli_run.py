@@ -222,3 +222,181 @@ def test_effect_time_refusal_exit_1(tmp_path, monkeypatch):
     assert native["refusals"] and "grant_not_active" in native["refusals"][0]["reasons"]
     assert _json(tmp_path / "store" / "destination.json")["effects"] == {}
     assert _invoke("validate-run", str(tmp_path / "out" / "run-record.json"))[0] == 0
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# F1 (independent review R1): untrusted names, path-character refusal, hard links, nesting, and check-to-use races.
+# Each test below fails on main 128eaa5 (or kills a mutant R1 showed surviving) and passes with the hardening.
+# ---------------------------------------------------------------------------------------------------------------------
+from agent_control_plane import cli_run  # noqa: E402
+
+
+def _argv(inputs, store, out, *, now=NOW):
+    return ["run", "--manifest", str(inputs["manifest"]), "--proposal", str(inputs["proposal"]),
+            "--authority-context", str(inputs["authority-context"]), "--resolver-state", str(inputs["resolver-state"]),
+            "--store-dir", str(store), "--out-dir", str(out), "--now", now]
+
+
+def test_untrusted_member_names_are_escaped_and_truncated_on_stderr(tmp_path):
+    """R1: an unknown member named 'x\\nacp run: pass (exit 0)\\x1b[2J' forged a stderr line and an ANSI sequence."""
+    inputs = _inputs(tmp_path, "authorized")
+    doc = _json(inputs["proposal"])
+    doc["x\nacp run: pass (exit 0)\x1b[2J"] = 1
+    doc["‮txt.exe"] = 2           # bidi override
+    doc["A" * 5000] = 3                # unbounded name
+    inputs["proposal"].write_text(json.dumps(doc), encoding="utf-8")
+    code, stdout, stderr = _run(tmp_path, inputs=inputs)
+    assert code == 2 and stdout == ""
+    assert stderr.count("\n") == 1, repr(stderr)                     # one line: the newline in the name did not forge another
+    assert "\x1b" not in stderr and "‮" not in stderr and "\r" not in stderr
+    assert "\\x0a" in stderr and "\\x1b" in stderr and "\\u202e" in stderr
+    assert len(stderr) < 600                                          # 5000-character name truncated
+
+
+def test_untrusted_resolver_keys_are_escaped_on_stderr(tmp_path):
+    inputs = _inputs(tmp_path, "authorized")
+    doc = _json(inputs["resolver-state"])
+    doc["statuses"] = {"k\ney\x1b[31m": {"bogus": 1}}
+    inputs["resolver-state"].write_text(json.dumps(doc), encoding="utf-8")
+    code, _, stderr = _run(tmp_path, inputs=inputs)
+    assert code == 2 and stderr.count("\n") == 1 and "\x1b" not in stderr
+
+
+def test_safe_escapes_controls_and_truncates():
+    assert cli_run._safe("a\nb\x00c\x1b") == "a\\x0ab\\x00c\\x1b"
+    assert cli_run._safe("é") == "é"
+    assert cli_run._safe("z" * 300, 20) == "z" * 17 + "..."
+    names = [f"n{i}" for i in range(9)]
+    assert cli_run._names(names).endswith("(+4 more)")
+
+
+def test_cr_lf_in_the_name_of_an_existing_path_is_refused_for_that_reason(tmp_path):
+    """R1 mutant 'crlf check removed' survived: the old test named a path that did not exist, so another check refused it."""
+    inputs = _inputs(tmp_path, "authorized")
+    for bad in ("p\nq.json", "p\rq.json"):
+        existing = tmp_path / "inputs" / bad
+        shutil.copy(inputs["proposal"], existing)
+        assert existing.is_file()
+        code, _, stderr = _run(tmp_path, inputs=dict(inputs, proposal=existing))
+        assert code == 2 and "CR, LF or NUL" in stderr, stderr
+        assert not (tmp_path / "store").exists()
+
+
+def test_nul_in_a_path_is_refused_for_that_reason(tmp_path):
+    inputs = _inputs(tmp_path, "authorized")
+    code, _, stderr = _run(tmp_path, inputs=dict(inputs, proposal=Path(str(inputs["proposal"]) + "\0x")))
+    assert code == 2 and "CR, LF or NUL" in stderr, stderr
+    with pytest.raises(cli_run.InvalidInput, match="CR, LF or NUL"):
+        cli_run._lexical_abs("a\0b")
+    code, _, stderr = _invoke(*_argv(inputs, tmp_path / "s\0", tmp_path / "o"))
+    assert code == 2 and "CR, LF or NUL" in stderr
+
+
+def test_hard_linked_input_is_refused_for_that_reason(tmp_path):
+    """R1 mutant 'hardlink check removed' survived: no test created a real hard link."""
+    import os
+    inputs = _inputs(tmp_path, "authorized")
+    os.link(inputs["proposal"], tmp_path / "second-name.json")
+    assert os.stat(inputs["proposal"]).st_nlink == 2
+    code, _, stderr = _run(tmp_path, inputs=inputs)
+    assert code == 2 and "hard-linked" in stderr, stderr
+    assert not (tmp_path / "store").exists() and not (tmp_path / "out").exists()
+
+
+@pytest.mark.parametrize("store_rel,out_rel", [("a", "a/b"), ("a/b", "a")])
+def test_nested_store_and_out_dirs_refused_in_both_directions_with_an_existing_parent(tmp_path, store_rel, out_rel):
+    """R1: with `a` absent the old test failed on the missing parent and never reached the nesting rule."""
+    inputs = _inputs(tmp_path, "authorized")
+    (tmp_path / "a").mkdir()
+    code, _, stderr = _invoke(*_argv(inputs, tmp_path / store_rel, tmp_path / out_rel))
+    assert code == 2 and "non-nested" in stderr, stderr
+    assert list((tmp_path / "a").iterdir()) == []
+
+
+@pytest.mark.parametrize("which", ["store", "out"])
+def test_input_inside_either_output_dir_is_refused(tmp_path, monkeypatch, which):
+    """The emptiness rule makes 'input inside an output dir' unreachable for a real directory (an input inside it would make it
+    non-empty), so R1's out-dir mutant is equivalent in practice. This test removes the emptiness rule to exercise the
+    containment rule itself, for both directories."""
+    inputs = _inputs(tmp_path, "authorized")
+    original = cli_run._output_dir
+
+    def no_emptiness(raw, label):
+        return cli_run._lexical_abs(raw), None
+    monkeypatch.setattr(cli_run, "_output_dir", no_emptiness)
+    inside = tmp_path / "inputs"
+    store, out = (inside, tmp_path / "o") if which == "store" else (tmp_path / "s", inside)
+    code, _, stderr = _invoke(*_argv(inputs, store, out))
+    assert code == 2 and "must not live inside" in stderr, stderr
+    monkeypatch.setattr(cli_run, "_output_dir", original)
+
+
+def test_output_dir_that_appears_after_validation_is_not_reused(tmp_path, monkeypatch):
+    """TOCTOU: a new output directory is created without exist_ok; one that appeared since validation is refused."""
+    inputs = _inputs(tmp_path, "authorized")
+    original = cli_run._output_dir
+
+    def racing(raw, label):
+        path, seen = original(raw, label)
+        if label == "--out-dir":
+            path.mkdir()                       # an attacker (or another process) creates it between check and use
+            (path / "planted.txt").write_text("x")
+        return path, seen
+    monkeypatch.setattr(cli_run, "_output_dir", racing)
+    code, _, stderr = _invoke(*_argv(inputs, tmp_path / "store", tmp_path / "out"))
+    assert code == 2 and "appeared after validation" in stderr, stderr
+    assert [p.name for p in (tmp_path / "out").iterdir()] == ["planted.txt"]
+
+
+def test_empty_output_dir_swapped_for_a_symlink_after_validation_is_refused(tmp_path, monkeypatch):
+    inputs = _inputs(tmp_path, "authorized")
+    (tmp_path / "out").mkdir()
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    original = cli_run._output_dir
+
+    def racing(raw, label):
+        path, seen = original(raw, label)
+        if label == "--out-dir":
+            path.rmdir()
+            path.symlink_to(elsewhere)
+        return path, seen
+    monkeypatch.setattr(cli_run, "_output_dir", racing)
+    code, _, stderr = _invoke(*_argv(inputs, tmp_path / "store", tmp_path / "out"))
+    assert code == 2 and "symlink" in stderr, stderr
+    assert list(elsewhere.iterdir()) == []
+
+
+def test_empty_output_dir_replaced_by_another_directory_after_validation_is_refused(tmp_path, monkeypatch):
+    inputs = _inputs(tmp_path, "authorized")
+    (tmp_path / "out").mkdir()
+    original = cli_run._output_dir
+
+    def racing(raw, label):
+        path, seen = original(raw, label)
+        if label == "--out-dir":
+            path.rename(path.with_name("out.old"))   # keep the old inode alive so the new one cannot reuse its number
+            path.mkdir()                       # a different directory at the same name
+        return path, seen
+    monkeypatch.setattr(cli_run, "_output_dir", racing)
+    code, _, stderr = _invoke(*_argv(inputs, tmp_path / "store", tmp_path / "out"))
+    assert code == 2 and "changed after validation" in stderr, stderr
+
+
+def test_input_swapped_for_a_symlink_after_validation_is_not_read(tmp_path, monkeypatch):
+    import os
+    inputs = _inputs(tmp_path, "authorized")
+    secret = tmp_path / "secret.json"
+    secret.write_text("{}")
+    original = cli_run._input_file
+
+    def racing(raw, label):
+        path = original(raw, label)
+        if label == "--proposal":
+            os.unlink(path)
+            os.symlink(secret, path)           # swapped after the lstat/stat checks
+        return path
+    monkeypatch.setattr(cli_run, "_input_file", racing)
+    code, _, stderr = _invoke(*_argv(inputs, tmp_path / "store", tmp_path / "out"))
+    assert code == 2 and "cannot open input safely" in stderr, stderr
+    assert not (tmp_path / "store").exists() and not (tmp_path / "out").exists()
