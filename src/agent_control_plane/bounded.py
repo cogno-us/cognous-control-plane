@@ -80,6 +80,19 @@ def commitment(value: object) -> str:
     return "sha256:" + hashlib.sha256(_canonical_bytes(value)).hexdigest()
 
 
+def _exact_strings(value: object) -> frozenset[str] | None:
+    """The members of a declared string list, or None when the value is not a list (or tuple or set) of strings.
+
+    Membership against the result is exact string equality. Any other shape (a single string, a mapping, a number, a list with
+    a non-string item) is malformed, and callers treat it as declaring nothing, so the check it feeds refuses.
+    """
+    if not isinstance(value, (list, tuple, set, frozenset)):
+        return None
+    if not all(isinstance(item, str) for item in value):
+        return None
+    return frozenset(value)
+
+
 class RuntimeProposal(BaseModel):
     """Historical bounded-authorization-effect/0.1 proposal."""
     manifest_id: str
@@ -2506,21 +2519,25 @@ class BoundedAuthorizationWorkflow:
             mismatches.append("adapter_mismatch")
 
         target_policy = action.get("target_policy")
+        allowed_targets = (_exact_strings(target_policy.get("allowed_targets", []))
+                           if isinstance(target_policy, dict) else None)
         if (
             not target_policy
+            or allowed_targets is None  # malformed target policy: declares no target
             or target_policy.get("allow_any_target")
-            or proposal.target not in target_policy.get("allowed_targets", [])
+            or proposal.target not in allowed_targets
         ):
             mismatches.append("target_out_of_scope")
 
         payload_policy = action.get("payload_policy")
-        if payload_policy is None:
-            mismatches.append("missing_payload_policy")
+        payload_fields = ([_exact_strings(payload_policy.get(name, [])) for name in
+                           ("required_fields", "optional_fields", "forbidden_fields")]
+                          if isinstance(payload_policy, dict) else [None])
+        if payload_policy is None or any(item is None for item in payload_fields):
+            mismatches.append("missing_payload_policy")  # absent or malformed: no usable payload policy
         else:
             keys = set(proposal.payload)
-            required = set(payload_policy.get("required_fields", []))
-            optional = set(payload_policy.get("optional_fields", []))
-            forbidden = set(payload_policy.get("forbidden_fields", []))
+            required, optional, forbidden = (set(item) for item in payload_fields)
             if required - keys:
                 mismatches.append("missing_required_payload_field")
             if keys & forbidden:
@@ -2565,13 +2582,18 @@ class BoundedAuthorizationWorkflow:
         )
         if action is None:
             return None
-        for permission in container.get("permissions", []):
-            if permission["action"] != action["action_name"]:
+        permissions = container.get("permissions", [])
+        if not isinstance(permissions, list):
+            return None
+        for permission in permissions:
+            if not isinstance(permission, dict) or permission.get("action") != action["action_name"]:
                 continue
-            if proposal.target not in permission["targets"]:
-                continue
-            if not set(proposal.requested_permissions).issubset(set(permission["data_scopes"])):
-                continue
+            targets = _exact_strings(permission.get("targets"))
+            if targets is None or proposal.target not in targets:
+                continue  # a malformed target list grants nothing
+            data_scopes = _exact_strings(permission.get("data_scopes"))
+            if data_scopes is None or not set(proposal.requested_permissions).issubset(data_scopes):
+                continue  # a malformed data-scope list grants nothing
             if proposal.amount > float(permission["max_amount"]):
                 continue
             if proposal.unit != permission["unit"]:
