@@ -488,6 +488,34 @@
     "runtime_authority_profile_missing": {
       "reason_kind": "typed_only",
       "description": "runtime authority profile missing"
+    },
+    "operation_grant_mismatch": {
+      "reason_kind": "typed_only",
+      "description": "operation id is bound to a different principal, domain, issuer or grant (operation-identity/0.1 only)"
+    },
+    "operation_id_invalid": {
+      "reason_kind": "typed_only",
+      "description": "operation id in the approved extension is malformed (operation-identity/0.1 only)"
+    },
+    "operation_id_missing": {
+      "reason_kind": "typed_only",
+      "description": "approved extension carries no operation id (operation-identity/0.1 only)"
+    },
+    "operation_not_admitted": {
+      "reason_kind": "typed_only",
+      "description": "operation id has no admission row at effect time (operation-identity/0.1 only)"
+    },
+    "operation_renewal_unrecorded": {
+      "reason_kind": "typed_only",
+      "description": "grant revision is not named by an accepted issuer-written renewal (operation-identity/0.1 only)"
+    },
+    "renewal_not_written_by_grant_issuer": {
+      "reason_kind": "typed_only",
+      "description": "renewal written by a principal other than the grant issuer recorded at admission (operation-identity/0.1 only)"
+    },
+    "renewal_revision_not_new": {
+      "reason_kind": "typed_only",
+      "description": "renewal names a grant revision that already licenses the operation (operation-identity/0.1 only)"
     }
   }
 }

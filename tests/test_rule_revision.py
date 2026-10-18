@@ -33,7 +33,7 @@ def flow(tmp_path, digest=D1):
 
 def test_registry_counts_as_checked():
     kinds = [v["reason_kind"] for v in REGISTRY["codes"].values()]
-    assert (len(kinds), kinds.count("typed_only"), kinds.count("recomputable")) == (121, 120, 1)
+    assert (len(kinds), kinds.count("typed_only"), kinds.count("recomputable")) == (128, 127, 1)  # 121 + 7 operation-identity/0.1 codes (N1)
     assert REGISTRY["codes"]["grant_revoked"]["reason_kind"] == "recomputable"
 
 

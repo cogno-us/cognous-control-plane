@@ -24,6 +24,10 @@ from pydantic import BaseModel, Field
 
 from .runtime_authority import RuntimeAuthorityProfile, VOCABULARY_VERSION, reopen_conditions
 from .rule_revision import RuleRevision, RuleRevisionProfile, RuleRevisionRefusal, resolve_rule, rule_identity
+from .operation_identity import (
+    DESTINATION_CAPABILITY as OPERATION_IDENTITY_CAPABILITY, AttemptJoin, OperationAdmissionRow,
+    OperationRenewalRow, licensed_revisions, operation_status,
+)
 
 MANIFEST_VERSION = "1.1"
 AUTHORITY_CONTEXT_VERSION = "0.1.0"
@@ -317,6 +321,7 @@ class EffectTimeRefusal(BaseModel):
     reason_vocabulary_version: str | None = Field(default=None, exclude_if=lambda v: v is None)
     rule_identity: dict | None = Field(default=None, exclude_if=lambda v: v is None)
     reopen_conditions: list[dict] = Field(default_factory=list, exclude_if=lambda v: not v)
+    check_id: str | None = Field(default=None, exclude_if=lambda v: v is None)
     refusal_id: str
     decision_id: str
     effect_id: str
@@ -421,6 +426,10 @@ from .reason_vocabulary import VocabularyChange
 
 
 class BoundedRunRecord(BaseModel):
+    # operation-identity/0.1 ledgers; omitted from the document while empty (default path unchanged).
+    operations: list[OperationAdmissionRow] = Field(default_factory=list, exclude_if=lambda v: not v)
+    operation_renewals: list[OperationRenewalRow] = Field(default_factory=list, exclude_if=lambda v: not v)
+    attempt_joins: list[AttemptJoin] = Field(default_factory=list, exclude_if=lambda v: not v)
     vocabulary_changes: list[VocabularyChange] = Field(default_factory=list, exclude_if=lambda v: not v)
     rule_revisions: list[RuleRevision] = Field(default_factory=list, exclude_if=lambda v: not v)
     rule_revision_refusals: list[RuleRevisionRefusal] = Field(default_factory=list, exclude_if=lambda v: not v)
@@ -520,7 +529,7 @@ class BoundedRecordStore:
         self, *, inputs: list[ResolutionInput], now: datetime,
         stage: Literal["decision", "effect", "claim"],
         time_source: Literal["control_plane", "test_override"],
-        reasons: list[str], tolerance_seconds: int,
+        reasons: list[str], tolerance_seconds: int, check_id: str | None = None,
     ) -> list[str]:
         """Compare and advance local per-input time floors in one transaction."""
         with self._transaction():
@@ -542,7 +551,7 @@ class BoundedRecordStore:
                     floors[key] = _iso(observed)
             result = sorted(set(result))
             check = ResolutionCheck(
-                check_id=str(uuid.uuid4()), stage=stage, evaluated_at=_iso(now),
+                check_id=check_id or str(uuid.uuid4()), stage=stage, evaluated_at=_iso(now),
                 time_source=time_source, inputs=inputs, reasons=result,
             )
             document.setdefault("resolution_checks", []).append(check.model_dump(mode="json"))
@@ -608,6 +617,71 @@ class BoundedRecordStore:
                 return True
         finally:
             os.close(fd)
+
+    def admit_operation(self, row: OperationAdmissionRow) -> str:
+        """Admit an operation on its first authorized decision, or judge a later binding.
+
+        Atomic. Returns ``ok``, ``collision`` (the id is bound to another principal,
+        domain, issuer or grant) or ``renewal_unrecorded`` (a new grant revision that no
+        accepted renewal row names).
+        """
+        with self._transaction():
+            document = self._read_document()
+            status = operation_status(
+                document, operation_id=row.operation_id, principal_id=row.principal_id,
+                authority_domain=row.authority_domain, issuer=row.issuer, grant_id=row.grant_id,
+                grant_revision=row.first_grant_revision)
+            if status != "not_admitted":
+                return status
+            document.setdefault("operations", []).append(row.model_dump(mode="json"))
+            BoundedRunRecord.model_validate(document)
+            self._write(document)
+            return "ok"
+
+    def operation_status(self, **binding) -> str:
+        """Read-only ledger judgement of a binding (see ``operation_identity.operation_status``)."""
+        with self._transaction():
+            return operation_status(self._read_document(), **binding)
+
+    def record_renewal(self, *, operation_id: str, to_revision: str, written_by: str,
+                       recorded_at: str) -> OperationRenewalRow:
+        """Record a renewal row. Only the issuer recorded at admission may write an accepted one.
+
+        Any other writer, an unknown operation or a revision that is not new yields a
+        ``refused`` row, which is retained: refusals are recorded, never silent.
+        """
+        from .operation_identity import CODE_NOT_ADMITTED, CODE_NOT_BY_ISSUER, CODE_REVISION_NOT_NEW
+        with self._transaction():
+            document = self._read_document()
+            admitted = next((x for x in document.get("operations", []) if x["operation_id"] == operation_id), None)
+            code = None
+            if admitted is None:
+                code = CODE_NOT_ADMITTED
+            elif written_by != admitted["issuer"]:
+                code = CODE_NOT_BY_ISSUER
+            elif to_revision in licensed_revisions(document, operation_id):
+                code = CODE_REVISION_NOT_NEW
+            accepted = [x["to_revision"] for x in document.get("operation_renewals", [])
+                        if x["operation_id"] == operation_id and x["outcome"] == "accepted"]
+            row = OperationRenewalRow(
+                renewal_id=str(uuid.uuid4()), operation_id=operation_id,
+                grant_id=admitted["grant_id"] if admitted else None,
+                from_revision=(accepted[-1] if accepted else admitted["first_grant_revision"]) if admitted else None,
+                to_revision=to_revision, written_by=written_by,
+                outcome="refused" if code else "accepted", refusal_code=code, recorded_at=recorded_at)
+            document.setdefault("operation_renewals", []).append(row.model_dump(mode="json"))
+            BoundedRunRecord.model_validate(document)
+            self._write(document)
+            return row
+
+    def append_attempt_join(self, value: AttemptJoin) -> None:
+        with self._transaction():
+            document = self._read_document()
+            if any(x["attempt_id"] == value.attempt_id for x in document.get("attempt_joins", [])):
+                raise ValueError("attempt already joined")
+            document.setdefault("attempt_joins", []).append(value.model_dump(mode="json"))
+            BoundedRunRecord.model_validate(document)
+            self._write(document)
 
     def append_vocabulary_change(self, event: VocabularyChange) -> None:
         """Persist a governed change without reinterpreting existing refusal rows."""
@@ -793,7 +867,13 @@ class SyntheticResolver:
 
 
 class LocalRefundDestination:
-    """Durable synthetic destination with effect dedupe and local cumulative cap."""
+    """Durable synthetic destination with effect dedupe and local cumulative cap.
+
+    With ``operation_id`` (operation-identity/0.1 only) the destination also refuses a
+    second effect for the same operation under a different ``effect_id``.
+    """
+
+    operation_identity_capability = OPERATION_IDENTITY_CAPABILITY
 
     def __init__(self, path: str | Path):
         self.path = Path(path)
@@ -805,11 +885,13 @@ class LocalRefundDestination:
 
     def apply(self, *, effect_id: str, grant_id: str, max_effects: int, target: str,
               amount: float, unit: str, payload: dict, lose_ack: bool = False,
-              partial: bool = False) -> dict:
+              partial: bool = False, operation_id: str | None = None) -> dict:
         with self._transaction():
             state = self._load()
             if effect_id in state["effects"]:
                 return {"duplicate": True, "effect": copy.deepcopy(state["effects"][effect_id])}
+            if operation_id is not None and operation_id in state.get("operations", {}):
+                raise DefinitiveDestinationRejection("operation_already_committed")
             used = int(state["grant_effect_counts"].get(grant_id, 0))
             if used >= max_effects:
                 raise DefinitiveDestinationRejection("cumulative_grant_max_effects_exhausted")
@@ -824,6 +906,8 @@ class LocalRefundDestination:
             }
             state["effects"][effect_id] = effect
             state["grant_effect_counts"][grant_id] = used + 1
+            if operation_id is not None:
+                state.setdefault("operations", {})[operation_id] = effect_id
             self._write(state)
             if lose_ack:
                 raise TimeoutError("synthetic acknowledgement lost after commit")
@@ -946,18 +1030,90 @@ class BoundedAuthorizationWorkflow:
         )
 
     def _record_check(self, inputs: list[ResolutionInput], now: datetime,
-                      reasons: list[str], stage: Literal["decision", "effect", "claim"]) -> list[str]:
+                      reasons: list[str], stage: Literal["decision", "effect", "claim"],
+                      check_id: str | None = None) -> list[str]:
         return self.records.record_resolution_check(
             inputs=inputs, now=now, reasons=reasons, stage=stage,
             time_source=self.time_source, tolerance_seconds=self.clock_tolerance_seconds,
+            **({"check_id": check_id} if check_id else {}),
         )
+
+    @property
+    def _identity(self):
+        """The opt-in operation-identity/0.1 configuration, or None on the default path."""
+        profile = self.runtime_authority_profile
+        return profile.operation_identity if profile is not None else None
+
+    def _admit_operation(self, binding: AuthorizationBinding, now: datetime, reasons: list[str]) -> None:
+        extension = binding.runtime_authority or {}
+        outcome = self.records.admit_operation(OperationAdmissionRow(
+            operation_id=extension["operation_id"], principal_id=binding.principal,
+            authority_domain=self._authority_domain(binding), issuer=extension["operation_issuer"],
+            grant_id=binding.grant_id, first_grant_revision=binding.grant_revision, admitted_at=_iso(now)))
+        if outcome == "collision":
+            reasons.append("operation_grant_mismatch")
+        elif outcome == "renewal_unrecorded":
+            reasons.append("operation_renewal_unrecorded")
+
+    def _operation_gate(self, binding: AuthorizationBinding, reasons: list[str]) -> None:
+        extension = binding.runtime_authority or {}
+        outcome = self.records.operation_status(
+            operation_id=extension["operation_id"], principal_id=binding.principal,
+            authority_domain=self._authority_domain(binding), issuer=extension["operation_issuer"],
+            grant_id=binding.grant_id, grant_revision=binding.grant_revision)
+        if outcome == "not_admitted":
+            reasons.append("operation_not_admitted")
+        elif outcome == "collision":
+            reasons.append("operation_grant_mismatch")
+        elif outcome == "renewal_unrecorded":
+            reasons.append("operation_renewal_unrecorded")
+
+    def _authority_domain(self, binding: AuthorizationBinding) -> str:
+        action = next((x for x in self.manifest.get("actions", []) if x.get("action_id") == binding.action_id), {})
+        return (action.get("authority_context") or {}).get("authority_domain", "")
+
+    def record_renewal(self, operation_id: str, *, to_revision: str, written_by: str,
+                       now: datetime | None = None) -> OperationRenewalRow:
+        """Record that ``to_revision`` of the grant continues ``operation_id``.
+
+        Only the grant issuer recorded at admission writes an accepted renewal. A worker
+        extending its own envelope is refused: the refusal row is persisted, then raised.
+        """
+        if self._identity is None:
+            raise PermissionError("operation identity profile is not enabled")
+        row = self.records.record_renewal(operation_id=operation_id, to_revision=to_revision,
+                                          written_by=written_by, recorded_at=_iso(self._evaluation_time(now)))
+        if row.outcome == "refused":
+            raise PermissionError(row.refusal_code)
+        return row
+
+    def _join_attempt(self, attempt: EffectAttempt, persisted: RuntimeDecision,
+                      current: AuthorizationBinding, check_id: str, now: datetime) -> None:
+        """Write-ahead join row: operation, attempt and licensing check share these ids."""
+        identity = self._identity
+        if identity is None:
+            return
+        extension = current.runtime_authority or {}
+        self.records.append_attempt_join(AttemptJoin(
+            join_id=str(uuid.uuid4()), operation_id=extension["operation_id"],
+            attempt_id=attempt.attempt_id, check_id=check_id, effect_id=attempt.effect_id,
+            decision_id=attempt.decision_id, grant_id=current.grant_id,
+            grant_revision=current.grant_revision, resolver_id=identity.resolver_id,
+            resolver_version=identity.resolver_version,
+            class_max_age=self.runtime_authority_profile.actions[current.action_id].max_status_age_seconds,
+            expected_effective_grant_digest=extension.get("expected_effective_grant_digest"),
+            recorded_at=_iso(now), time_source=self.time_source))
 
     def decide(self, proposal: RuntimeProposal, *, now: datetime | None = None) -> RuntimeDecision:
         now = self._evaluation_time(now)
         frozen = proposal.model_copy(deep=True)
         inputs: list[ResolutionInput] = []
-        reasons, binding = self._resolve(frozen, now, inputs=inputs, **({"stage":"decision"} if self.runtime_authority_profile else {}))
-        reasons = self._record_check(inputs, now, reasons, "decision")
+        check_ref: list[str] = []
+        reasons, binding = self._resolve(frozen, now, inputs=inputs, **({"stage":"decision"} if self.runtime_authority_profile else {}),
+                                         **({"check_ref": check_ref} if self._identity else {}))
+        if self._identity and binding is not None and not reasons:
+            self._admit_operation(binding, now, reasons)
+        reasons = self._record_check(inputs, now, reasons, "decision", check_id=check_ref[0] if check_ref else None)
         effect_id = self._effect_id(binding) if binding else commitment({
             "proposal": commitment(frozen.model_dump(mode="json", exclude_none=False)),
             "grant_id": None,
@@ -1000,13 +1156,18 @@ class BoundedAuthorizationWorkflow:
 
         frozen = proposal.model_copy(deep=True)
         inputs: list[ResolutionInput] = []
-        reasons, current = self._resolve(frozen, now, inputs=inputs, **({"stage":"effect", "decision":persisted} if self.runtime_authority_profile else {}))
-        reasons = self._record_check(inputs, now, reasons, "effect")
+        check_ref: list[str] = []
+        reasons, current = self._resolve(frozen, now, inputs=inputs, **({"stage":"effect", "decision":persisted} if self.runtime_authority_profile else {}),
+                                         **({"check_ref": check_ref} if self._identity else {}))
+        if self._identity and current is not None and not reasons:
+            self._operation_gate(current, reasons)
+        reasons = self._record_check(inputs, now, reasons, "effect", check_id=check_ref[0] if check_ref else None)
         if reasons or current is None or current != persisted.binding:
             refusal_reasons = sorted(set(reasons))
             if not refusal_reasons and current != persisted.binding:
                 refusal_reasons = ["authorization_binding_changed"]
             self.records.append_refusal(EffectTimeRefusal(
+                **({"check_id": check_ref[0]} if check_ref else {}),
                 refusal_id=str(uuid.uuid4()),
                 decision_id=persisted.decision_id,
                 effect_id=persisted.effect_id,
@@ -1025,6 +1186,8 @@ class BoundedAuthorizationWorkflow:
         if current.runtime_authority and current.runtime_authority.get("expected_effective_grant_digest"):
             if getattr(self.destination, "runtime_authority_capability", None) != "sqlite-effective-grant/0.1":
                 raise PermissionError("atomic_authority_capability_unavailable")
+        if self._identity is not None and getattr(self.destination, "operation_identity_capability", None) != OPERATION_IDENTITY_CAPABILITY:
+            raise PermissionError("operation_identity_capability_unavailable")
         if adapter_id != current.adapter_id:
             raise PermissionError("adapter substitution detected")
 
@@ -1045,6 +1208,8 @@ class BoundedAuthorizationWorkflow:
                 status="acknowledged",
                 acknowledgement={"reconciled_existing": True},
             )
+            if check_ref:
+                self._join_attempt(attempt, persisted, current, check_ref[0], now)
             self.records.append_attempt(attempt)
             return attempt, existing
         if existing is not None and existing.state == "partial" and rec.observation_accepted:
@@ -1057,6 +1222,8 @@ class BoundedAuthorizationWorkflow:
                 status="partial",
                 acknowledgement={"reconciled_existing": True},
             )
+            if check_ref:
+                self._join_attempt(attempt, persisted, current, check_ref[0], now)
             self.records.append_attempt(attempt)
             return attempt, existing
         if rec.result != "observed_absent":
@@ -1074,6 +1241,8 @@ class BoundedAuthorizationWorkflow:
             time_source=self.time_source,
             status="attempted",
         )
+        if check_ref:
+            self._join_attempt(attempt, persisted, current, check_ref[0], now)
         self.records.append_attempt(attempt)
 
         # No authority-context or grant reread occurs after validation. The destination
@@ -1092,6 +1261,7 @@ class BoundedAuthorizationWorkflow:
                 **({"expected_effective_grant_digest": current.runtime_authority["expected_effective_grant_digest"],
                     "effective_grant_derivation_version": current.runtime_authority["effective_grant_derivation_version"]}
                    if current.runtime_authority and current.runtime_authority.get("expected_effective_grant_digest") else {}),
+                **({"operation_id": current.runtime_authority["operation_id"]} if self._identity else {}),
             )
             attempt.status = "partial" if partial else "acknowledged"
             attempt.acknowledgement = ack
@@ -1318,10 +1488,12 @@ class BoundedAuthorizationWorkflow:
             return None
         return canonical if canonical in required_roles else None
 
-    def _resolve(self, proposal, now, *, inputs=None, stage="decision", decision=None):
+    def _resolve(self, proposal, now, *, inputs=None, stage="decision", decision=None, check_ref=None):
         if self.runtime_authority_profile is None:
             return self._resolve_inputs(proposal, now, inputs=inputs)
         check_id = str(uuid.uuid4())
+        if check_ref is not None:
+            check_ref.append(check_id)  # lets the caller record the ResolutionCheck under the journal id
         with self.records.check_lease(check_id):
             return self._resolve_journal(proposal, now, inputs=inputs, stage=stage,
                                          decision=decision, check_id=check_id)

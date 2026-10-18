@@ -7,6 +7,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
+from .operation_identity import OperationIdentityProfile, valid_operation_id
+
 PROFILE_VERSION = "runtime-authority/0.1"
 VOCABULARY_VERSION = "runtime-authority-reasons/0.1"
 
@@ -53,6 +55,9 @@ class RuntimeAuthorityProfile(BaseModel):
     actions: dict[str, ActionClass]
     producer_keys: dict[str, str] = Field(default_factory=dict)  # Ed25519 hex
     allow_synthetic_resolver: bool = False
+    # Opt-in operation-identity/0.1. Omitted from dumps (and so from every commitment
+    # that hashes the profile) while unset, which keeps the default path byte-identical.
+    operation_identity: OperationIdentityProfile | None = Field(default=None, exclude_if=lambda v: v is None)
 
     def snapshot(self) -> RuntimeAuthorityProfile:
         """Detach trusted configuration from caller-owned mutable dictionaries."""
@@ -133,6 +138,8 @@ def validate_extensions(profile: RuntimeAuthorityProfile, proposal, context: dic
         return ["runtime_authority_profile_missing"], {}
     allowed = {"profile", "required_inputs", "required_inputs_digest", "evidence_criteria",
                "expected_effective_grant_digest", "effective_grant_derivation_version"}
+    if profile.operation_identity is not None:
+        allowed.add("operation_id")
     if set(spec) - allowed:
         reasons.append("runtime_authority_field_unsupported")
     expected_approval = approval_commitment(profile, context)
@@ -214,12 +221,24 @@ def validate_extensions(profile: RuntimeAuthorityProfile, proposal, context: dic
         if (not isinstance(expected_digest, str) or not re.fullmatch(r"sha256:[a-f0-9]{64}", expected_digest)
                 or spec.get("effective_grant_derivation_version") != "effective-grant/0.1"):
             reasons.append("effective_grant_binding_invalid")
+    operation_fields = {}
+    if profile.operation_identity is not None:
+        # The issuer supplies the operation id inside the approved extension; a planner or
+        # worker cannot, because the approval commitment covers the whole extension.
+        operation_id = spec.get("operation_id")
+        if operation_id is None:
+            reasons.append("operation_id_missing")
+        elif not valid_operation_id(operation_id):
+            reasons.append("operation_id_invalid")
+        else:
+            operation_fields = {"operation_id": operation_id, "operation_issuer": grant.get("issuer")}
     extension = {
         "profile": PROFILE_VERSION, "approval_commitment": expected_approval,
         "required_inputs_digest": spec.get("required_inputs_digest"),
         "catalogue_digest": commitment(profile.model_dump(mode="json")),
         "expected_effective_grant_digest": spec.get("expected_effective_grant_digest"),
         "effective_grant_derivation_version": spec.get("effective_grant_derivation_version"),
+        **operation_fields,
     }
     return reasons, extension
 
