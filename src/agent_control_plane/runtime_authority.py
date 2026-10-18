@@ -8,6 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
 from .freshness import FreshnessProfile
+from .holder_inventory import HolderInventory
 from .operation_identity import OperationIdentityProfile, valid_operation_id
 
 PROFILE_VERSION = "runtime-authority/0.1"
@@ -21,6 +22,9 @@ class ActionClass(BaseModel):
     irreversible: bool = True
     max_status_age_seconds: int = Field(default=60, ge=0)
     on_unreadable: Literal["refuse", "bounded_tolerance"] = "refuse"
+    # Opt-in holder-inventory/0.1: a flagged class holds until the profile carries a holder inventory. Omitted from dumps while
+    # False, which keeps the default path (and every commitment that hashes the profile) byte-identical.
+    requires_revocation_assurance: bool = Field(default=False, exclude_if=lambda v: not v)
 
 
 class EvidenceCriterion(BaseModel):
@@ -61,6 +65,8 @@ class RuntimeAuthorityProfile(BaseModel):
     operation_identity: OperationIdentityProfile | None = Field(default=None, exclude_if=lambda v: v is None)
     # Opt-in freshness/0.1 (three clocks, deadline at opening, overdue state, reaper, age basis). Same omission rule.
     freshness: FreshnessProfile | None = Field(default=None, exclude_if=lambda v: v is None)
+    # Opt-in holder-inventory/0.1 (enumerated authority holders). Same omission rule.
+    holder_inventory: HolderInventory | None = Field(default=None, exclude_if=lambda v: v is None)
 
     def snapshot(self) -> RuntimeAuthorityProfile:
         """Detach trusted configuration from caller-owned mutable dictionaries."""
@@ -224,6 +230,11 @@ def validate_extensions(profile: RuntimeAuthorityProfile, proposal, context: dic
         if (not isinstance(expected_digest, str) or not re.fullmatch(r"sha256:[a-f0-9]{64}", expected_digest)
                 or spec.get("effective_grant_derivation_version") != "effective-grant/0.1"):
             reasons.append("effective_grant_binding_invalid")
+    class_ = profile.actions.get(proposal.action_id)
+    if class_ is not None and class_.requires_revocation_assurance:
+        # holder-inventory/0.1: revocation cannot be assured over holders nobody enumerated, so the class holds.
+        if profile.holder_inventory is None or not profile.holder_inventory.exists():
+            reasons.append("holder_inventory_missing")
     operation_fields = {}
     if profile.operation_identity is not None:
         # The issuer supplies the operation id inside the approved extension; a planner or

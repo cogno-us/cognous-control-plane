@@ -556,6 +556,10 @@
     "age_extension_authority_unconfigured": {
       "reason_kind": "typed_only",
       "description": "no rule-revision profile is configured, so no signer set can authorise an age-bound extension (freshness/0.1 only)"
+    },
+    "holder_inventory_missing": {
+      "reason_kind": "typed_only",
+      "description": "an action class requires revocation assurance but no holder inventory enumerating at least one authority holder is configured (holder-inventory/0.1 only)"
     }
   }
 }

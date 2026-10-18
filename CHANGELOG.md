@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added — witness-digest/0.1 and holder-inventory/0.1 (opt-in, N5)
+- `agent_control_plane.witness` (and `acp witness digest|publish|verify`): a hash chain over the rows of every list-valued ledger of a record set, a `Witness` protocol (`publish`, `latest`, optional `history`) with a local append-only file implementation, `verify_against_witness` (rejects a record set whose covered rows were dropped or rewritten after a digest the witness holds, whatever seal the key holder re-applied) and `publish_head` (verifies before publishing). Gives visibility to a reader who holds the witness digest; it is not tamper evidence against the witness holder, and rows appended after the latest digest are not covered. Makes no network call and publishes nothing: where a real witness is held (owner default: a signed tag in the hub repository) is a deployment step the owner triggers. Off unless called.
+- `RuntimeAuthorityProfile.holder_inventory` and `ActionClass.requires_revocation_assurance`: a flagged class holds (`holder_inventory_missing`) until an inventory that enumerates a holder exists; `holder_inventory.classify_holders` reports witnessed refusals vs `coverage_unknown` holders (never "expired"). Both fields are omitted from profile dumps while unset, so every commitment is unchanged. One reason code added (registry 139). Qualification: `suites/outside-holder`.
+
 ### Added — `acp run`
 - New CLI subcommand that executes one declared bounded operation (synthetic resolver from JSON, real `BoundedAuthorizationWorkflow`, local throwaway store and `LocalRefundDestination`), writes a native bounded record, a `RunRecord` projection accepted by `acp validate-run`, and a result envelope. Exit codes 0/1/2/4. No network; confined writes. Library behaviour unchanged. See `docs/concepts.md`.
 
