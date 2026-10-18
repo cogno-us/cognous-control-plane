@@ -10,7 +10,7 @@ keeps them as recorded; redaction is privacy-safe only with the default.
 
 from __future__ import annotations
 
-from agent_control_plane.models import RedactionConfig, ReplayBundle, RunRecord
+from agent_control_plane.models import RedactionConfig, ReplayBundle, RunRecord, ToolExecutionResult
 
 
 def redact_run_record(
@@ -35,6 +35,19 @@ def redact_replay_bundle(
     return redacted
 
 
+def redact_tool_execution_result(
+    result: ToolExecutionResult,
+    config: RedactionConfig | None = None,
+) -> ToolExecutionResult:
+    """Return a deep copy of a tool execution result; ``error`` is replaced under the same flag as targets (it can echo one)."""
+
+    redacted = result.model_copy(deep=True)
+    config = config or RedactionConfig()
+    if config.redact_targets and redacted.error is not None:
+        redacted.error = config.replacement
+    return redacted
+
+
 def _apply_redaction(record_or_bundle: RunRecord | ReplayBundle, config: RedactionConfig) -> None:
     for action in record_or_bundle.actions:
         if config.redact_payloads:
@@ -43,6 +56,11 @@ def _apply_redaction(record_or_bundle: RunRecord | ReplayBundle, config: Redacti
             action.target = config.replacement
         if config.redact_reasons and action.reason is not None:
             action.reason = config.replacement
+
+    if config.redact_targets:
+        # The reliance scope text names the target ("Executed read on <target>").
+        for reliance in record_or_bundle.reliance_records:
+            reliance.scope = config.replacement
 
     if (config.redact_payloads or config.redact_targets) and not config.keep_fingerprints:
         for decision in record_or_bundle.decisions:
