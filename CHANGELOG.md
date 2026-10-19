@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Fixed — decision-step action identity binding
+- Default path: when the manifest declares one `action_id` more than once, the decision binds no action and refuses with the registered reason `unknown_action` (fail closed), whichever declaration comes first. A single declaration decides as before. No reason code added; registry labels unchanged.
+
 ### Fixed — decision-step tool binding
 - Default path: when the manifest declares a tool name more than once, the decision refuses with the registered reason `adapter_mismatch` (fail closed), whichever declaration a request names. The decision still does not run the manifest validator; it no longer binds the first declaration of a repeated name. A manifest that declares each tool name once decides exactly as before. No reason code added; registry labels unchanged.
 

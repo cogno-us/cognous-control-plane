@@ -1561,8 +1561,14 @@ class BoundedAuthorizationWorkflow:
             reasons.append("dedupe_operation_effect_applied")
 
     def _authority_domain(self, binding: AuthorizationBinding) -> str:
-        action = next((x for x in self.manifest.get("actions", []) if x.get("action_id") == binding.action_id), {})
+        action = self._declared_action(binding.action_id) or {}
         return (action.get("authority_context") or {}).get("authority_domain", "")
+
+    def _declared_action(self, action_id: str) -> dict | None:
+        """The single manifest action declared for ``action_id``; None when absent or declared more than once."""
+        actions = self.manifest.get("actions", [])
+        matches = [x for x in actions if isinstance(x, dict) and x.get("action_id") == action_id]
+        return matches[0] if len(matches) == 1 else None
 
     def record_renewal(self, operation_id: str, *, to_revision: str, written_by: str,
                        now: datetime | None = None) -> OperationRenewalRow:
@@ -2264,10 +2270,7 @@ class BoundedAuthorizationWorkflow:
         if context.get("principal") != proposal.principal or context.get("acting_identity") != proposal.actor:
             reasons.append("proposal_identity_binding_mismatch")
 
-        action = next(
-            (x for x in self.manifest.get("actions", []) if x.get("action_id") == proposal.action_id),
-            None,
-        )
+        action = self._declared_action(proposal.action_id)
         declared_auth = (action or {}).get("authority_context") or {}
         if institution_id != declared_auth.get("institution_id"):
             reasons.append("institution_mismatch")
@@ -2577,10 +2580,7 @@ class BoundedAuthorizationWorkflow:
         if proposal.payload_commitment != commitment(proposal.payload):
             mismatches.append("payload_commitment_mismatch")
 
-        action = next(
-            (x for x in self.manifest.get("actions", []) if x.get("action_id") == proposal.action_id),
-            None,
-        )
+        action = self._declared_action(proposal.action_id)
         if action is None:
             return sorted(set(mismatches + ["unknown_action"]))
 
@@ -2653,10 +2653,7 @@ class BoundedAuthorizationWorkflow:
         return sorted(set(mismatches))
 
     def _matching_permission(self, container: dict, proposal: RuntimeProposal) -> dict | None:
-        action = next(
-            (x for x in self.manifest["actions"] if x["action_id"] == proposal.action_id),
-            None,
-        )
+        action = self._declared_action(proposal.action_id)
         if action is None:
             return None
         permissions = container.get("permissions", [])
