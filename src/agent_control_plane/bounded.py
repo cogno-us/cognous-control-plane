@@ -2588,7 +2588,9 @@ class BoundedAuthorizationWorkflow:
             (x for x in self.manifest.get("tools", []) if x.get("tool_name") == action.get("tool_name")),
             None,
         )
-        if tool is None or tool.get("adapter_id") != proposal.adapter_id:
+        declared_names = [x.get("tool_name") for x in self.manifest.get("tools", []) if isinstance(x, dict)]
+        ambiguous_tool = any(declared_names.count(name) > 1 for name in declared_names)  # a name declared twice binds no adapter
+        if tool is None or ambiguous_tool or tool.get("adapter_id") != proposal.adapter_id:
             mismatches.append("adapter_mismatch")
 
         target_policy = action.get("target_policy")
