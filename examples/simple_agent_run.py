@@ -17,7 +17,6 @@ Run from the repository root::
 
 from __future__ import annotations
 
-import json
 import pathlib
 
 from agent_control_plane import RunRecorder
