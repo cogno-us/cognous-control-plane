@@ -23,7 +23,6 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 PROFILE_VERSION = "rule-revision/0.1"
-RULE_KINDS = ("reason_registry", "policy", "gate_implementation", "merge_equivalence_rule")
 RuleKind = Literal["reason_registry", "policy", "gate_implementation", "merge_equivalence_rule"]
 
 # Ordered verification levels. A receipt names the highest level reached before verification stopped.
