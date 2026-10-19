@@ -52,8 +52,6 @@ CODE_EXT_EXCEEDS_LIMIT = "age_extension_exceeds_limit"
 CODE_EXT_INVALID = "age_extension_invalid"
 CODE_EXT_AUTHORITY_UNCONFIGURED = "age_extension_authority_unconfigured"
 
-AgeBasis = Literal["nonce_bound", "source_asserted"]
-
 
 class FreshnessProfile(BaseModel):
     """Trusted host configuration. Covered by the approval commitment once set (it is part of the profile dump)."""

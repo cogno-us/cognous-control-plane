@@ -55,7 +55,6 @@ CODE_CHAIN_INVALID = "witness_chain_invalid"
 CODE_RUN_MISMATCH = "witness_run_mismatch"
 CODE_SHRUNK = "witness_ledger_shrunk"            # a covered row was dropped (fewer rows than the digest covers)
 CODE_HEAD_MISMATCH = "witness_ledger_head_mismatch"  # a covered row was rewritten, or dropped and replaced
-VERDICT_CODES = (CODE_NO_DIGEST, CODE_CHAIN_INVALID, CODE_RUN_MISMATCH, CODE_SHRUNK, CODE_HEAD_MISMATCH)
 
 SCOPE = ("visibility to a reader who holds the witness digest; not tamper evidence against the witness holder, and rows appended "
          "after the latest published digest are not covered")
