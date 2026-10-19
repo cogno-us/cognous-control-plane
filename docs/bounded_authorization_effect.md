@@ -4,13 +4,13 @@ Status: public synthetic pilot; not a production authority, identity, or payment
 
 ## Supported upstream interfaces
 
-This implementation is pinned and tested against the following interface conventions:
+This implementation is tested against the following interface conventions, at the revisions recorded in `src/agent_control_plane/bounded.py`. The hub lock selects the integration:
 
 - Agent Action Manifest v1.1 at commit 46c950bed37fe3812000895430bc0312d29e37ce.
   Manifest, payload, and proposal commitments use SHA-256 over sorted compact UTF-8
   JSON with ensure_ascii=false and allow_nan=false, prefixed with sha256:.
-- Alvorada Authority Context 0.1.0 at commit
-  fb3d97938969a89e149e8ff8db2756091d1233fc. The serialized
+- Alvorada Authority Context 0.1.0 at the governance revision recorded in the hub
+  lock. The serialized
   interface_status value remains proposed_pending_governor_review.
 - BitRep v1 at commit 5b5077dafde232a7801cb425c4efddcffb468723.
   A verification result establishes only the verification assertions defined by
