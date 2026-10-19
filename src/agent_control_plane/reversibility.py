@@ -27,7 +27,7 @@ Limits (read before relying on it):
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 
 from .time_instant import TIME_INSTANT_NAIVE, InstantError, parse_instant
 from typing import Literal

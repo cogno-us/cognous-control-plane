@@ -18,7 +18,7 @@ import os
 import stat
 import tempfile
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -52,10 +52,6 @@ from agent_control_plane.models import (
 from agent_control_plane.atomic_write import narrow_dir_mode
 from agent_control_plane.time_instant import TIME_INSTANT_NAIVE, InstantError, parse_instant
 from agent_control_plane.strict_json import (
-    INPUT_DUPLICATE_MEMBER,
-    INPUT_NON_FINITE_NUMBER,
-    INPUT_NOT_UTF8,
-    MAX_TEXT,
     dumps_bytes,
     safe_text,
     strict_loads,
