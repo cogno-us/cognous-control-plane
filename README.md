@@ -35,7 +35,7 @@ A Python reference implementation (package `agent-control-plane`, import `agent_
 
 <!-- stack-map:start -->
 <!-- Canonical block: identical text in every component README. Source: docs/stack-map.md in the hub. Refresh at the pin round. -->
-The Open Control Stack groups its repositories by responsibility. The groups are a navigation map, not an execution sequence and not a requirement to install every component. The hub [component lock](https://github.com/cogno-us/cognous-open-control-stack/blob/main/component-lock.json) is the only source of selected revisions; [release status](https://github.com/cogno-us/cognous-open-control-stack/blob/main/docs/release-status.md) states their evidence and limits. Last checked against `component-lock.json` at hub commit `dcc9bd7533ef`.
+The Open Control Stack groups its repositories by responsibility. The groups are a navigation map, not an execution sequence and not a requirement to install every component. The hub [component lock](https://github.com/cogno-us/cognous-open-control-stack/blob/main/component-lock.json) is the only source of selected revisions; [release status](https://github.com/cogno-us/cognous-open-control-stack/blob/main/docs/release-status.md) states their evidence and limits. The component revisions selected for the stack are listed in the hub's `component-lock.json`; this repository does not record which hub commit it was last checked against.
 
 | Group | Members |
 | --- | --- |
@@ -98,7 +98,7 @@ Notes on this quick start:
 
 ## What ships
 
-Status labels as defined above. Everything below is in this repository on `main`; the lock pins an older revision (see [compatibility](#compatibility-and-selection)).
+Status labels as defined above. Everything below is in this repository on `main`; the hub lock records the selected revision (see [compatibility](#compatibility-and-selection)).
 
 ### Command line: `acp`
 
@@ -110,8 +110,8 @@ Status labels as defined above. Everything below is in this repository on `main`
 | `acp redact-replay <path> --out <file>` | Write a redacted copy of a replay bundle. | selected |
 | `acp sign-replay <path> --secret <key> --out <file>` | Sign a replay bundle. | selected |
 | `acp verify-signed-replay <path> --secret <key>` | Verify a signed replay bundle. | selected |
-| `acp run --manifest F --proposal F --authority-context F --resolver-state F --store-dir DIR --out-dir DIR [--now T] [--format text\|json]` | Run one declared bounded operation against a local throwaway store ([docs](docs/concepts.md#acp-run)). | merged (added after the lock) |
-| `acp witness digest\|publish\|verify <path>` | Head digest chain of a record store document, local file witness, drop and rewrite detection ([docs](docs/opt-in-profiles.md)). | merged (added after the lock) |
+| `acp run --manifest F --proposal F --authority-context F --resolver-state F --store-dir DIR --out-dir DIR [--now T] [--format text\|json]` | Run one declared bounded operation against a local throwaway store ([docs](docs/concepts.md#acp-run)). | merged |
+| `acp witness digest\|publish\|verify <path>` | Head digest chain of a record store document, local file witness, drop and rewrite detection ([docs](docs/opt-in-profiles.md)). | merged |
 
 That is eight top-level commands. `acp --help` lists them.
 
@@ -167,14 +167,14 @@ The [documentation index](docs/README.md) lists every page in this repository by
 
 ## Compatibility and selection
 
-The [component lock](https://github.com/cogno-us/cognous-open-control-stack/blob/main/component-lock.json) selects the integration; a merge here does not change that selection or approve deployment. The lock pins this repository at `d3dadee70bd3` (bounded authorization/effect 0.1); `main` is ahead of it (the `run` and `witness` commands and the opt-in profiles above were added after the lock). <!-- pin-round: refresh the lock revision and the "after the lock" labels here -->
+The [component lock](https://github.com/cogno-us/cognous-open-control-stack/blob/main/component-lock.json) selects the integration; a merge here does not change that selection or approve deployment. The hub lock records the selected revision of this repository (bounded authorization/effect 0.1); see the lock for that revision. The `run` and `witness` commands and the opt-in profiles above are labelled by their own status, not by the lock.
 Source acceptance, selection and deployment approval remain separate decisions. Contract drafts consumed from [ODES](https://github.com/cogno-us/open-decision-evidence-standard) are vendored under `tests/contracts/`; they are `0.1.0-draft` and are not edited here. The persistence contract covers cooperating local Linux writers; historical persistence qualification commentary is in the central test hub.
 
 ## Run the tests
 
 ```bash
 python -m pip install -e ".[dev]"
-python -m pytest -q   # about five minutes; 936 passed, 1 skipped at the time of writing
+python -m pytest -q   # about five minutes
 ```
 
 The `dev` extra includes `pytest-asyncio`, which the Microsoft AGT compatibility tests need; one test there is skipped unless the pinned third-party SDK is installed.

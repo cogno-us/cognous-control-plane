@@ -5,8 +5,8 @@ Status: qualification artifact for issue #19. No release selection, grant issuan
 ## Source inventory
 
 - Task source main: `99bb62fff879a8d4e87d7badb0d7d8a17501e4c1`.
-- Hub-selected Control Plane supplied by the task: `d3dadee70bd319812b207389ab1e0f6efe511916`.
-- Current source is eight commits ahead of that selected pin. The delta includes W0 tenant/current-authority contract work, the opt-in local authority/effect profile, and optional Microsoft AGT compatibility.
+- Control Plane revision supplied by the task at the time of writing: `d3dadee70bd319812b207389ab1e0f6efe511916`.
+- At the time of writing, current source was eight commits ahead of that revision. The delta includes W0 tenant/current-authority contract work, the opt-in local authority/effect profile, and optional Microsoft AGT compatibility.
 - The selected/default bounded workflow remains `BoundedAuthorizationWorkflow.execute()`; this qualification does not modify that path.
 - The opt-in same-host profile remains `urn:cognous:profiles:local-authority-effect:0.1.0-proposed`; this qualification does not select or activate it.
 

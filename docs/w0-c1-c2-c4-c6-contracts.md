@@ -3,7 +3,7 @@
 Status: W0 candidate contract. No runtime behavior is changed by this document.
 
 ## Baseline
-Inspected Control Plane main: `d3dadee70bd319812b207389ab1e0f6efe511916`.
+Inspected Control Plane main at the time of writing: `d3dadee70bd319812b207389ab1e0f6efe511916`.
 Existing bounded authorization/effect 0.1 remains historical and supported.
 
 ## C1 exact action binding
