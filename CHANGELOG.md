@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Fixed — decision-step tool binding
+- Default path: when the manifest declares a tool name more than once, the decision refuses with the registered reason `adapter_mismatch` (fail closed), whichever declaration a request names. The decision still does not run the manifest validator; it no longer binds the first declaration of a repeated name. A manifest that declares each tool name once decides exactly as before. No reason code added; registry labels unchanged.
+
 ### Fixed — writers now match the strict readers (scan remediation, stream C)
 - Default path: the record store, destination state, `FileSystemPersistenceAdapter`, `RunRecorder.export_json` and the CLI writers serialise with `allow_nan=False`, encode to UTF-8 before any file is opened, and replace atomically (temp file + `os.replace`), so a refused write leaves the existing record intact and readable. Files are created `0600`, directories `0700`. Store and destination bytes are unchanged for valid data (`ensure_ascii` kept). `export_json` uses `mode="json"`, so `acp validate-run` accepts it.
 - Default path: `FileSystemPersistenceAdapter` creates exclusively; pass `overwrite=True` (constructor or per call) to replace.
