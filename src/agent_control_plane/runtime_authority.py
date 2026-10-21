@@ -64,6 +64,8 @@ CODES_ADDED_IN_0_2 = frozenset({
     "missing_amount_limit",
     "effect_limit_malformed",
     "authority_limit_malformed",
+    # Default-path manifest validation (scan 6): the gate runs the action-manifest validator's error rules.
+    "invalid_manifest",
 })
 
 #: terminal-revocation/0.1: a retained check already observed this (grant_id, revision) revoked.

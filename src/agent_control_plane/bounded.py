@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 from .runtime_authority import (RuntimeAuthorityProfile, VOCABULARY_VERSION_0_2, reopen_conditions,
                                 vocabulary_for)
 from .atomic_write import open_private_lock
+from .manifest_validation import manifest_errors
 from .strict_json import dumps_bytes, strict_loads
 from .time_instant import TIME_INSTANT_NAIVE, InstantError, parse_instant
 from .rule_revision import RuleRevision, RuleRevisionProfile, RuleRevisionRefusal, resolve_rule, rule_identity
@@ -2606,6 +2607,8 @@ class BoundedAuthorizationWorkflow:
 
     def _manifest_mismatches(self, proposal: RuntimeProposal, now: datetime) -> list[str]:
         mismatches: list[str] = []
+        if manifest_errors(self.manifest):
+            mismatches.append("invalid_manifest")  # the action-manifest validator rejects this manifest: fail closed (scan 6, CP-5)
         if proposal.manifest_version != MANIFEST_VERSION:
             mismatches.append("unsupported_manifest_version")
         if self.manifest.get("manifest_version") != MANIFEST_VERSION:

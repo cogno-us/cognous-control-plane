@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from agent_control_plane.bounded import RuntimeDecision, RuntimeProposal, commitment
+from agent_control_plane.bounded import AuthorizationBinding, RuntimeDecision, RuntimeProposal, commitment
 from agent_control_plane.microsoft_agt import (
     AgtDecision,
     MicrosoftAgtCompatibilityResult,
@@ -64,7 +64,8 @@ class FakeAuthority:
             result=self.result,
             reasons=[] if self.result == "authorized" else ["authority_not_current"],
             decided_at="2026-10-08T17:00:00+00:00",
-            binding=None,
+            # An authorized decision carries its binding (scan 6, CP-4: a transform without one is held); a refusal carries none.
+            binding=AuthorizationBinding.model_construct(proposal_commitment="sha256:fake") if self.result == "authorized" else None,
         )
 
 

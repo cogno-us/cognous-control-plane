@@ -33,7 +33,7 @@ def flow(tmp_path, digest=D1):
 
 def test_registry_counts_as_checked():
     kinds = [v["reason_kind"] for v in REGISTRY["codes"].values()]
-    assert (len(kinds), kinds.count("typed_only"), kinds.count("recomputable")) == (163, 162, 1)  # 5 default-path manifest-gate codes (scan 3) + 121 + 7 operation-identity/0.1 codes (N1) + 10 freshness/0.1 codes (N3) + 1 holder-inventory/0.1 code (N5) + 18 merge/reversibility/dedupe codes (N4) + 1 terminal-revocation/0.1 code
+    assert (len(kinds), kinds.count("typed_only"), kinds.count("recomputable")) == (164, 163, 1)  # 1 default-path manifest-validation code (scan 6) + 5 default-path manifest-gate codes (scan 3) + 121 + 7 operation-identity/0.1 codes (N1) + 10 freshness/0.1 codes (N3) + 1 holder-inventory/0.1 code (N5) + 18 merge/reversibility/dedupe codes (N4) + 1 terminal-revocation/0.1 code
     assert REGISTRY["codes"]["grant_revoked"]["reason_kind"] == "recomputable"
 
 

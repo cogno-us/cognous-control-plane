@@ -656,6 +656,10 @@
     "authority_limit_malformed": {
       "reason_kind": "typed_only",
       "description": "a requirement or grant permission for this action has a max_amount that is not a finite number or a max_effects that is not an exact integer; the permission grants nothing"
+    },
+    "invalid_manifest": {
+      "reason_kind": "typed_only",
+      "description": "the action-manifest validator reports an error for the manifest the gate holds (for example E008, E014, E023, E025); the decision is refused, never authorized"
     }
   }
 }

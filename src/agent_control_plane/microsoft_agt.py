@@ -213,7 +213,8 @@ class MicrosoftAgtPreToolCallAdapter:
         snapshot: Mapping[str, Any] | None = None,
         now: datetime | None = None,
     ) -> MicrosoftAgtCompatibilityResult:
-        tenant = tenant_id.strip() if isinstance(tenant_id, str) else ""
+        # The tenant is an opaque exact string: never trimmed or case-folded (a padded tenant is passed on, and compared, as given).
+        tenant = tenant_id if isinstance(tenant_id, str) and tenant_id.strip() else ""
         original_commitment = commitment(
             proposal.model_dump(mode="json", exclude_none=False)
         )
@@ -281,7 +282,8 @@ class MicrosoftAgtPreToolCallAdapter:
                 reasons=("capability_unavailable",),
             )
 
-        decision = agt.decision.lower().strip()
+        # The AGT decision is an exact lowercase token: "ALLOW", " allow" and "Transform" are unsupported, not normalised to authority.
+        decision = agt.decision if isinstance(agt.decision, str) else ""
 
         # Warnings are restrictions in this bounded profile. They never become
         # implicit permission merely because the underlying AGT decision allows.
@@ -372,6 +374,21 @@ class MicrosoftAgtPreToolCallAdapter:
                 cognous=None,
                 transformed=transformed,
                 reasons=(f"cognous_evaluation_error:{type(exc).__name__}",),
+            )
+
+        if transformed and cognous.result == "authorized" and cognous.binding is None:
+            # An authorization of a transformed proposal must carry the decision binding that fixes the new commitment.
+            return self._finish(
+                result="hold",
+                tenant_id=tenant,
+                tool_name=tool_name,
+                tool_call_id=tool_call_id,
+                agt=agt,
+                original_commitment=original_commitment,
+                proposal=effective,
+                cognous=cognous,
+                transformed=transformed,
+                reasons=("transform_authorization_unbound",),
             )
 
         if cognous.result != "authorized":
