@@ -4,6 +4,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import math
 import os
 import re
 import threading
@@ -84,6 +85,20 @@ def _canonical_bytes(value: object) -> bytes:
 def commitment(value: object) -> str:
     """Return the Manifest v1.1-compatible SHA-256 commitment."""
     return "sha256:" + hashlib.sha256(_canonical_bytes(value)).hexdigest()
+
+
+def _finite_number(value: object) -> bool:
+    """True only for a JSON number (int or float, never a bool or a string) that is finite.
+
+    A string such as "nan" or "10" is not a number here: ``float("nan")`` makes every ``>`` comparison false, so coercing a
+    declared limit would turn a malformed limit into no limit. Callers treat a False result as a malformed limit and refuse.
+    """
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def _exact_int(value: object) -> bool:
+    """True only for a JSON integer (never a bool, a float such as 1.9 or 1.0, or a string)."""
+    return isinstance(value, int) and not isinstance(value, bool)
 
 
 def _exact_strings(value: object) -> frozenset[str] | None:
@@ -2390,6 +2405,8 @@ class BoundedAuthorizationWorkflow:
 
         requirement_permission = self._matching_permission(requirement, proposal)
         grant_permission = self._matching_permission(grant, proposal)
+        if self._has_malformed_limits(requirement, proposal) or self._has_malformed_limits(grant, proposal):
+            reasons.append("authority_limit_malformed")  # fail closed: a non-numeric or non-finite limit is never a limit
         if requirement_permission is None:
             reasons.append("requirement_scope_mismatch")
         if grant_permission is None:
@@ -2620,13 +2637,32 @@ class BoundedAuthorizationWorkflow:
             if keys - required - optional:
                 mismatches.append("undeclared_payload_field")
 
+        # Port of the action-manifest runtime consumption contract (proposal_mismatches): the same gate, the same codes.
+        if (action.get("default_action") or self.manifest.get("default_action")) == "block" or (
+            tool is not None and tool.get("allowed", True) is not True  # tools[].allowed false (or not boolean true): blocked
+        ):
+            mismatches.append("action_blocked")
+
         limits = action.get("effect_limits")
-        if limits is not None:  # an empty or malformed limits object grants zero effects; it is not "no limit"
+        if limits is None:
+            # No declared limits: only the implicit single effect with no amount is within the declaration.
+            if proposal.amount > 0 or proposal.effects > 1:
+                mismatches.append("missing_effect_limits")
+        else:  # an empty or malformed limits object grants zero effects; it is not "no limit"
             if not isinstance(limits, dict):
                 limits = {}
-            if proposal.effects > int(limits.get("max_effects", 0)):
+            max_effects = limits.get("max_effects", 0)
+            if not _exact_int(max_effects):
+                mismatches.append("effect_limit_malformed")  # not an exact integer: never truncated or coerced
+            elif proposal.effects > max_effects:
                 mismatches.append("effect_count_exceeded")
-            if limits.get("max_amount") is not None and proposal.amount > float(limits["max_amount"]):
+            max_amount = limits.get("max_amount")
+            if max_amount is None:
+                if proposal.amount > 0:
+                    mismatches.append("missing_amount_limit")
+            elif not _finite_number(max_amount):
+                mismatches.append("effect_limit_malformed")  # a string, bool, NaN or infinity is not a limit
+            elif proposal.amount > max_amount:
                 mismatches.append("amount_exceeded")
             if limits.get("unit") is not None and proposal.unit != limits["unit"]:
                 mismatches.append("amount_unit_mismatch")
@@ -2668,11 +2704,27 @@ class BoundedAuthorizationWorkflow:
             data_scopes = _exact_strings(permission.get("data_scopes"))
             if data_scopes is None or not set(proposal.requested_permissions).issubset(data_scopes):
                 continue  # a malformed data-scope list grants nothing
-            if proposal.amount > float(permission["max_amount"]):
+            if not self._permission_limits_valid(permission):
+                continue  # a malformed limit grants nothing; the decision also reports authority_limit_malformed
+            if proposal.amount > permission["max_amount"]:
                 continue
             if proposal.unit != permission["unit"]:
                 continue
-            if proposal.effects > int(permission["max_effects"]):
+            if proposal.effects > permission["max_effects"]:
                 continue
             return permission
         return None
+
+    @staticmethod
+    def _permission_limits_valid(permission: dict) -> bool:
+        """max_amount must be a finite JSON number and max_effects an exact JSON integer; nothing is coerced."""
+        return _finite_number(permission.get("max_amount")) and _exact_int(permission.get("max_effects"))
+
+    def _has_malformed_limits(self, container: dict, proposal: RuntimeProposal) -> bool:
+        """True when any permission this container declares for the proposal's action has a malformed numeric limit."""
+        action = self._declared_action(proposal.action_id)
+        permissions = container.get("permissions", [])
+        if action is None or not isinstance(permissions, list):
+            return False
+        return any(isinstance(item, dict) and item.get("action") == action["action_name"]
+                   and not self._permission_limits_valid(item) for item in permissions)

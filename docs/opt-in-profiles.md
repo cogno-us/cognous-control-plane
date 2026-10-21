@@ -24,7 +24,7 @@ The optional ODES contract drafts for these profiles live in `cogno-us/open-deci
 
 ## Reason registry labels
 
-There are two registry files. `schemas/runtime_authority_reasons_0_1.json` is the original 121 codes (120 `typed_only`, 1 `recomputable`), byte-identical to its pinned form. `schemas/runtime_authority_reasons_0_2.json` is the full set of 158 codes: the 0.1 entries unchanged plus the codes the opt-in profiles emit. A decision, refusal or journal row carries label `runtime-authority-reasons/0.1` unless one of its reasons is a code only 0.2 registers (`vocabulary_for` in `runtime_authority.py`), in which case it carries `runtime-authority-reasons/0.2`. 0.2 is a superset, because one row can mix codes and carries one label. Default-path rows keep 0.1.
+There are two registry files. `schemas/runtime_authority_reasons_0_1.json` is the original 121 codes (120 `typed_only`, 1 `recomputable`), byte-identical to its pinned form. `schemas/runtime_authority_reasons_0_2.json` is the full set of 163 codes: the 0.1 entries unchanged plus the codes the opt-in profiles emit and five default-path manifest-gate codes (`action_blocked`, `missing_effect_limits`, `missing_amount_limit`, `effect_limit_malformed`, `authority_limit_malformed`). A decision, refusal or journal row carries label `runtime-authority-reasons/0.1` unless one of its reasons is a code only 0.2 registers (`vocabulary_for` in `runtime_authority.py`), in which case it carries `runtime-authority-reasons/0.2`. 0.2 is a superset, because one row can mix codes and carries one label. Default-path rows keep 0.1 unless they carry one of those five codes.
 
 ## Strict JSON
 

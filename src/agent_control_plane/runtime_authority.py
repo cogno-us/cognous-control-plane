@@ -17,7 +17,7 @@ from .reversibility import ReversibilityProfile, check_class_members, flatten_x_
 PROFILE_VERSION = "runtime-authority/0.1"
 VOCABULARY_VERSION = "runtime-authority-reasons/0.1"
 VOCABULARY_VERSION_0_2 = "runtime-authority-reasons/0.2"
-#: Codes registered by 0.2 and not by 0.1 (all emitted only by opt-in profiles). ``schemas/runtime_authority_reasons_0_1.json`` is the
+#: Codes registered by 0.2 and not by 0.1 (all but the last five, the scan-3 default-path manifest-gate codes, emitted only by opt-in profiles). ``schemas/runtime_authority_reasons_0_1.json`` is the
 #: original 121 codes, byte-identical to its pinned form; ``..._0_2.json`` is the full set (0.1 plus these) because one row can mix
 #: codes of both, and a row carries exactly one label that must resolve all of its codes. A test pins this set to the two files.
 CODES_ADDED_IN_0_2 = frozenset({
@@ -58,6 +58,12 @@ CODES_ADDED_IN_0_2 = frozenset({
     "escalation_after_key_ttl",
     "dedupe_operation_effect_applied",
     "grant_revocation_recorded",
+    # Default-path manifest-gate and authority-limit refusals (scan 3): not opt-in-profile codes; registered here because 0.1 is pinned.
+    "action_blocked",
+    "missing_effect_limits",
+    "missing_amount_limit",
+    "effect_limit_malformed",
+    "authority_limit_malformed",
 })
 
 #: terminal-revocation/0.1: a retained check already observed this (grant_id, revision) revoked.

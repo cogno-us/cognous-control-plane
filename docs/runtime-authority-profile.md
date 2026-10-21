@@ -111,7 +111,7 @@ count of denials. The lists below are a reading of the emission sites in this re
 - Policy-class codes (inputs were read and a rule was not met), for example: `target_out_of_scope`, `amount_exceeded`,
   `effect_count_exceeded`, `forbidden_payload_field`, `undeclared_payload_field`, `missing_required_payload_field`,
   `missing_requested_permission`, `grant_revoked`, `grant_suspended`, `purpose_closed`, `approval_not_active`,
-  `required_approval_missing`, `delegation_profile_unsupported`.
+  `required_approval_missing`, `delegation_profile_unsupported`, `action_blocked`, `missing_effect_limits`, `missing_amount_limit`, `effect_limit_malformed`, `authority_limit_malformed`.
 - Codes that cover both: `required_evidence_not_current` (no evidence record, or a record whose state is not current),
   `context_unknown_requires_hold` (missing, non-current or stale evidence under `hold_effect`), `policy_status_unknown` (policy status
   not readable or not active, and an unadopted rule digest), `grant_not_active` (with the runtime-authority profile off: an unreadable or a

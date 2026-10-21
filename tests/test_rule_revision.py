@@ -33,7 +33,7 @@ def flow(tmp_path, digest=D1):
 
 def test_registry_counts_as_checked():
     kinds = [v["reason_kind"] for v in REGISTRY["codes"].values()]
-    assert (len(kinds), kinds.count("typed_only"), kinds.count("recomputable")) == (158, 157, 1)  # 121 + 7 operation-identity/0.1 codes (N1) + 10 freshness/0.1 codes (N3) + 1 holder-inventory/0.1 code (N5) + 18 merge/reversibility/dedupe codes (N4) + 1 terminal-revocation/0.1 code
+    assert (len(kinds), kinds.count("typed_only"), kinds.count("recomputable")) == (163, 162, 1)  # 5 default-path manifest-gate codes (scan 3) + 121 + 7 operation-identity/0.1 codes (N1) + 10 freshness/0.1 codes (N3) + 1 holder-inventory/0.1 code (N5) + 18 merge/reversibility/dedupe codes (N4) + 1 terminal-revocation/0.1 code
     assert REGISTRY["codes"]["grant_revoked"]["reason_kind"] == "recomputable"
 
 
@@ -191,6 +191,6 @@ def test_mutation_operand_presence_test_removed_fails_the_absent_operand_test(mo
 
 
 def test_the_full_registry_carries_its_own_label_and_0_1_is_a_separate_pinned_file():
-    """The registry grew from 121 to 158 codes. The 121 keep label 0.1 in their own, byte-identical file (tests/test_reason_registry_labels.py);
+    """The registry grew from 121 to 163 codes. The 121 keep label 0.1 in their own, byte-identical file (tests/test_reason_registry_labels.py);
     the full set is 0.2. Before, the growth happened under the single label 0.1 (review R1 finding 4)."""
     assert REGISTRY["version"] == "runtime-authority-reasons/0.2"

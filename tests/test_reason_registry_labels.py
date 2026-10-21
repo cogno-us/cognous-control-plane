@@ -23,6 +23,10 @@ RAW_0_1 = (SCHEMAS / "runtime_authority_reasons_0_1.json").read_bytes()
 RAW_0_2 = (SCHEMAS / "runtime_authority_reasons_0_2.json").read_bytes()
 R01, R02 = json.loads(RAW_0_1), json.loads(RAW_0_2)
 #: sha256 of the 121-code file as committed at 2936e3f ("Register every emitted runtime-authority reason code"), before N1 added a code.
+#: Default-path manifest-gate and authority-limit codes added after 0.1 was pinned; they belong to no opt-in profile, so a refusal row that
+#: carries one gets label 0.2 (the only file that can register them).
+SCAN3_DEFAULT_PATH_CODES = frozenset({"action_blocked", "missing_effect_limits", "missing_amount_limit",
+                                      "effect_limit_malformed", "authority_limit_malformed"})
 PINNED_0_1_SHA256 = "fbc4df2e02457e294ca1f819d0e507c4452e46691e4f139a66be48967c2096c0"
 
 
@@ -36,16 +40,16 @@ def test_the_0_1_file_is_the_original_121_codes_byte_identical_to_its_pinned_for
 def test_the_0_2_file_is_the_full_superset_of_0_1():
     kinds = [v["reason_kind"] for v in R02["codes"].values()]
     assert R02["version"] == VOCABULARY_VERSION_0_2 == "runtime-authority-reasons/0.2"
-    assert (len(kinds), kinds.count("typed_only"), kinds.count("recomputable")) == (158, 157, 1)
+    assert (len(kinds), kinds.count("typed_only"), kinds.count("recomputable")) == (163, 162, 1)
     assert all(R02["codes"][code] == spec for code, spec in R01["codes"].items()), "every 0.1 entry is unchanged in 0.2"
     assert list(R02["codes"])[:len(R01["codes"])] == list(R01["codes"]), "and keeps its position"
-    assert set(R02["codes"]) - set(R01["codes"]) == CODES_ADDED_IN_0_2 and len(CODES_ADDED_IN_0_2) == 37
+    assert set(R02["codes"]) - set(R01["codes"]) == CODES_ADDED_IN_0_2 and len(CODES_ADDED_IN_0_2) == 42
     assert set(R01["codes"]) <= set(R02["codes"])
 
 
 def test_every_added_code_belongs_to_an_opt_in_profile():
     """The 0.2 additions are only ever emitted by opt-in profiles, which is why the default path never carries label 0.2."""
-    for code in CODES_ADDED_IN_0_2:
+    for code in CODES_ADDED_IN_0_2 - SCAN3_DEFAULT_PATH_CODES:
         assert "/0.1" in R02["codes"][code]["description"], code  # each names its profile, for example freshness/0.1
 
 
