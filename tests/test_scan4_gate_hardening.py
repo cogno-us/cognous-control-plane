@@ -147,3 +147,17 @@ def test_integer_age_bound_still_applies(tmp_path):
     d = _decide(tmp_path, mutate_resolver=_stale)
     assert d.result == "hold" and "required_evidence_stale_or_future" in d.reasons
     assert "authority_limit_malformed" not in d.reasons
+
+
+# Crash-to-hold hardening.
+@pytest.mark.parametrize("delegation", [None, "x", [], 0])
+def test_non_object_delegation_holds_instead_of_crashing(tmp_path, delegation):
+    d = _decide(tmp_path, mutate_ctx=lambda c: c["grant"].update(delegation=delegation))
+    assert d.result == "hold" and "delegation_profile_unsupported" in d.reasons
+
+
+@pytest.mark.parametrize("where", ["requirement", "grant"])
+def test_permission_without_unit_grants_nothing_instead_of_crashing(tmp_path, where):
+    d = _decide(tmp_path, mutate_ctx=lambda c: c[where]["permissions"][0].pop("unit"))
+    expected = "requirement_scope_mismatch" if where == "requirement" else "grant_scope_mismatch"
+    assert d.result == "hold" and expected in d.reasons

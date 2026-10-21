@@ -2420,7 +2420,9 @@ class BoundedAuthorizationWorkflow:
             reasons.append("grant_scope_mismatch")
 
         delegation = grant.get("delegation", {})
-        if delegation.get("parent_grant_id") is not None:
+        if not isinstance(delegation, dict):
+            reasons.append("delegation_profile_unsupported")  # a delegation that is not an object cannot be read: hold, never crash
+        elif delegation.get("parent_grant_id") is not None:
             # No ancestor revocation walk or shared ancestor budget exists in this profile.
             reasons.append("delegation_profile_unsupported")
             if not identity.chain:
@@ -2729,7 +2731,7 @@ class BoundedAuthorizationWorkflow:
                 continue  # a malformed limit grants nothing; the decision also reports authority_limit_malformed
             if proposal.amount > permission["max_amount"]:
                 continue
-            if proposal.unit != permission["unit"]:
+            if proposal.unit != permission.get("unit"):  # a permission without a unit grants nothing
                 continue
             if proposal.effects > permission["max_effects"]:
                 continue
