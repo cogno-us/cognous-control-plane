@@ -73,3 +73,20 @@ def test_shared_action_name_is_not_authorized_by_the_other_actions_grant(tmp_pat
     # the original action is equally ambiguous: a name-keyed permission cannot say which action it grants
     orig = p.model_copy(update={"manifest_digest": commitment(flow.manifest)})
     assert flow.decide(orig, now=NOW).result == "hold"
+
+
+# CP-3: an unrecognised review mode is not "no review".
+@pytest.mark.parametrize("mode", ["HUMAN_REVIEW", "Approval_Required", "human-review", "", "other"])
+def test_unrecognised_review_mode_holds(tmp_path, mode):
+    def mutate(m, a):
+        a["review_requirement"] = {"mode": mode, "reviewer_role": "nonexistent"}
+    d = _decide(tmp_path, mutate_manifest=mutate)
+    assert d.result == "hold" and "review_requirement_not_resolved" in d.reasons
+
+
+@pytest.mark.parametrize("mode", ["none", "draft_first"])
+def test_declared_non_reviewing_modes_are_unchanged(tmp_path, mode):
+    def mutate(m, a):
+        a["review_requirement"] = {"mode": mode}
+    d = _decide(tmp_path, mutate_manifest=mutate)
+    assert "review_requirement_not_resolved" not in d.reasons

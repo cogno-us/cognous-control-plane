@@ -2312,7 +2312,10 @@ class BoundedAuthorizationWorkflow:
             mapping_digest = mapping.digest
 
         review = (action or {}).get("review_requirement") or {}
-        if review.get("mode") in {"human_review", "approval_required"}:
+        review_mode = review.get("mode")
+        if review_mode is not None and review_mode not in {"none", "human_review", "approval_required", "draft_first"}:
+            reasons.append("review_requirement_not_resolved")  # a mode outside the schema enum is not "no review"
+        if review_mode in {"human_review", "approval_required"}:
             required_roles = {
                 x.get("role_id")
                 for x in context.get("requirement", {}).get("approvals", [])
