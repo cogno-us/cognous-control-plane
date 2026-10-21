@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from agent_control_plane.bounded import AuthorizationBinding, RuntimeDecision
+from agent_control_plane.bounded import AuthorizationBinding, RuntimeDecision, commitment
 from agent_control_plane.microsoft_agt import AgtDecision, MicrosoftAgtPreToolCallAdapter
 from tests.test_microsoft_agt import FakeAuthority, FakeBackend, proposal
 
@@ -23,18 +23,25 @@ def _transform():
 @dataclass
 class BoundAuthority:
     binding: object = None
+    bind_evaluated: bool = False  # bind the proposal the adapter passed in, as the real gate does
 
     def __post_init__(self):
         self.calls = []
 
     def authorize(self, *, proposal, tenant_id, now=None):
         self.calls.append((proposal, tenant_id))
+        binding = _binding(proposal) if self.bind_evaluated else self.binding
         return RuntimeDecision(decision_id="d", effect_id="e", result="authorized", reasons=[],
-                               decided_at="2026-10-08T17:00:00+00:00", binding=self.binding)
+                               decided_at="2026-10-08T17:00:00+00:00", binding=binding)
 
 
-def _binding():
-    return AuthorizationBinding.model_construct(proposal_commitment="sha256:x")
+def _binding(proposal=None):
+    """A binding for the proposal the authority evaluated; without one, the legacy presence-only stand-in (wave 7: no longer accepted)."""
+    if proposal is None:
+        return AuthorizationBinding.model_construct(proposal_commitment="sha256:x")
+    return AuthorizationBinding.model_construct(
+        proposal_commitment=commitment(proposal.model_dump(mode="json", exclude_none=False)),
+        payload_commitment=proposal.payload_commitment)
 
 
 @pytest.mark.asyncio
@@ -48,7 +55,7 @@ async def test_a_transform_without_a_binding_is_not_authorized():
 
 @pytest.mark.asyncio
 async def test_a_transform_with_a_binding_is_authorized():
-    adapter = MicrosoftAgtPreToolCallAdapter(backend=FakeBackend(_transform()), authority=BoundAuthority(binding=_binding()))
+    adapter = MicrosoftAgtPreToolCallAdapter(backend=FakeBackend(_transform()), authority=BoundAuthority(bind_evaluated=True))
     result = await adapter.evaluate(tenant_id="tenant-alpha", proposal=proposal(), tool_name="refund_adapter")
     assert result.result == "authorized"
 
