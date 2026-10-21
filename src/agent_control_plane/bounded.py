@@ -2692,6 +2692,9 @@ class BoundedAuthorizationWorkflow:
         action = self._declared_action(proposal.action_id)
         if action is None:
             return None
+        names = [x.get("action_name") for x in self.manifest.get("actions", []) if isinstance(x, dict)]
+        if names.count(action.get("action_name")) > 1:
+            return None  # permissions match on action_name; a name declared twice (E004) names no single action, so it grants nothing
         permissions = container.get("permissions", [])
         if not isinstance(permissions, list):
             return None

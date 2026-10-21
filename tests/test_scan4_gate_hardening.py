@@ -54,3 +54,22 @@ def test_boolean_false_required_scope_is_still_optional(tmp_path):
         a["authority_required"][0]["required"] = False
     flow, p = _gate(tmp_path, mutate, requested_permissions=[])
     assert "missing_requested_permission" not in flow._manifest_mismatches(p, NOW)
+
+
+# CP-2: two declared actions sharing an action_name are ambiguous for name-keyed grants.
+def test_shared_action_name_is_not_authorized_by_the_other_actions_grant(tmp_path):
+    def dup(m, a):
+        twin = copy.deepcopy(a)
+        twin["action_id"] = "urn:cognous:action:twin"
+        m["actions"].append(twin)
+    p = proposal()
+    flow = workflow(tmp_path, p)
+    action = next(a for a in flow.manifest["actions"] if a["action_id"] == p.action_id)
+    dup(flow.manifest, action)
+    twin = p.model_copy(update={"manifest_digest": commitment(flow.manifest), "action_id": "urn:cognous:action:twin"})
+    d = flow.decide(twin, now=NOW)
+    assert d.result == "hold"
+    assert {"grant_scope_mismatch", "requirement_scope_mismatch"} <= set(d.reasons)
+    # the original action is equally ambiguous: a name-keyed permission cannot say which action it grants
+    orig = p.model_copy(update={"manifest_digest": commitment(flow.manifest)})
+    assert flow.decide(orig, now=NOW).result == "hold"
