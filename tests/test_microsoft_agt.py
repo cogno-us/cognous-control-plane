@@ -65,7 +65,11 @@ class FakeAuthority:
             reasons=[] if self.result == "authorized" else ["authority_not_current"],
             decided_at="2026-10-08T17:00:00+00:00",
             # An authorized decision carries its binding (scan 6, CP-4: a transform without one is held); a refusal carries none.
-            binding=AuthorizationBinding.model_construct(proposal_commitment="sha256:fake") if self.result == "authorized" else None,
+            # (wave 7, T2-C: the adapter checks the binding against the proposal it evaluated, so the fake binds that proposal.)
+            binding=AuthorizationBinding.model_construct(
+                proposal_commitment=commitment(proposal.model_dump(mode="json", exclude_none=False)),
+                payload_commitment=proposal.payload_commitment,
+            ) if self.result == "authorized" else None,
         )
 
 

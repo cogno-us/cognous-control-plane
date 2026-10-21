@@ -8,6 +8,8 @@ with the real validator when that package is installed.
 
 Not ported: the Pydantic schema (unknown members, wrong member types). A member of the wrong type is skipped by the rule that would
 read it; the gate's own checks already refuse the shapes they consume. Identity strings are compared exactly, never normalised.
+A member of the wrong type never raises: membership tests are guarded by type, and ``manifest_errors`` maps any unexpected exception to
+``E999`` (a port-internal code, not a validator rule) so the gate fails closed with ``invalid_manifest``.
 Returns codes only; it never authorizes anything.
 """
 from __future__ import annotations
@@ -15,6 +17,7 @@ from __future__ import annotations
 SUPPORTED_VERSIONS = frozenset({"1.0", "1.1"})
 _EFFECTFUL = frozenset({"write", "external_send", "delete", "export", "purchase", "approve"})
 _HIGH_RISK = frozenset({"external_send", "delete", "export", "purchase", "approve"})
+_UNMATCHED = object()  # a tool_name of the wrong type matches no tool (E006)
 _PRIVILEGED = frozenset({"write", "delete", "export", "purchase", "approve"})
 
 
@@ -38,13 +41,35 @@ def _has_required_authority(action: dict) -> bool:
                for item in _dicts(action.get("authority_required")))
 
 
+def _str_or_none(value: object) -> str | None:
+    """The value when it is a string, else None: an unhashable or non-string member never reaches a membership test."""
+    return value if isinstance(value, str) else None
+
+
+def _field_set(value: object) -> set:
+    """A payload-policy field list as a set; a non-list, or a list with a non-string entry, is a schema error this port does not model."""
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return set(value)
+    return set()
+
+
 def manifest_errors(manifest: dict) -> list[str]:
-    """Sorted, de-duplicated validator error codes (``E001``...) for a manifest dict; empty when the validator reports none."""
+    """Sorted, de-duplicated validator error codes (``E001``...) for a manifest dict; empty when the validator reports none.
+
+    Fails closed: an unexpected exception from a malformed manifest is reported as ``E999``, never raised.
+    """
+    try:
+        return _manifest_errors(manifest)
+    except Exception:  # noqa: BLE001 - fail closed on any malformed shape
+        return ["E999"]
+
+
+def _manifest_errors(manifest: dict) -> list[str]:
     errors: set[str] = set()
     version = manifest.get("manifest_version")
     if _blank(version):
         errors.add("E001")
-    elif version not in SUPPORTED_VERSIONS:
+    elif not isinstance(version, str) or version not in SUPPORTED_VERSIONS:
         errors.add("E016")
     if _blank(manifest.get("manifest_id")):
         errors.add("E002")
@@ -60,7 +85,8 @@ def manifest_errors(manifest: dict) -> list[str]:
         errors.add("E005")
     tools_by_name: dict = {}
     for tool in tools:
-        tools_by_name.setdefault(tool.get("tool_name"), tool)
+        if tool.get("tool_name") is None or isinstance(tool.get("tool_name"), str):
+            tools_by_name.setdefault(tool.get("tool_name"), tool)
     manifest_default = manifest.get("default_action", "escalate")
 
     v11 = version == "1.1"
@@ -71,8 +97,10 @@ def manifest_errors(manifest: dict) -> list[str]:
 
     for action in actions:
         default = action.get("default_action") or manifest_default
-        action_type = action.get("action_type")
-        tool = tools_by_name.get(action.get("tool_name"))
+        action_type = _str_or_none(action.get("action_type"))
+        action_tool_name = action.get("tool_name")
+        action_tool_name = action_tool_name if action_tool_name is None or isinstance(action_tool_name, str) else _UNMATCHED
+        tool = tools_by_name.get(action_tool_name)
         if v11:
             if not action.get("action_id"):
                 errors.add("E018")
@@ -106,9 +134,9 @@ def manifest_errors(manifest: dict) -> list[str]:
                     if max_amount is None or not (has_unit or max_amount == 0):
                         errors.add("E023")
 
-        if action.get("tool_name") not in tools_by_name:
+        if action_tool_name not in tools_by_name:
             errors.add("E006")
-        elif tools_by_name[action["tool_name"]].get("allowed", True) is False and default != "block":
+        elif tools_by_name[action_tool_name].get("allowed", True) is False and default != "block":
             errors.add("E015")
 
         if action_type == "external_send" and not _has_required_authority(action) and default != "block":
@@ -118,7 +146,7 @@ def manifest_errors(manifest: dict) -> list[str]:
 
         policy = action.get("payload_policy")
         if isinstance(policy, dict):
-            fields = {name: set(policy.get(name) or []) if isinstance(policy.get(name, []), list) else set()
+            fields = {name: _field_set(policy.get(name))
                       for name in ("required_fields", "optional_fields", "sensitive_fields", "forbidden_fields")}
             if fields["forbidden_fields"] & fields["required_fields"]:
                 errors.add("E009")

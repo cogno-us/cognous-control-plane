@@ -376,8 +376,9 @@ class MicrosoftAgtPreToolCallAdapter:
                 reasons=(f"cognous_evaluation_error:{type(exc).__name__}",),
             )
 
-        if transformed and cognous.result == "authorized" and cognous.binding is None:
-            # An authorization of a transformed proposal must carry the decision binding that fixes the new commitment.
+        if transformed and cognous.result == "authorized" and not self._binding_fixes(cognous.binding, effective):
+            # An authorization of a transformed proposal must carry a decision binding that fixes the new (transformed) proposal and
+            # payload commitments; a missing, stale or foreign binding does not.
             return self._finish(
                 result="hold",
                 tenant_id=tenant,
@@ -417,6 +418,17 @@ class MicrosoftAgtPreToolCallAdapter:
             transformed=transformed,
             reasons=(),
         )
+
+    @staticmethod
+    def _binding_fixes(binding: Any, effective: Any) -> bool:
+        """True when the binding carries the proposal and payload commitments of the effective (transformed) proposal."""
+        if binding is None:
+            return False
+        try:
+            return (getattr(binding, "proposal_commitment", None) == commitment(effective.model_dump(mode="json", exclude_none=False))
+                    and getattr(binding, "payload_commitment", None) == effective.payload_commitment)
+        except Exception:  # noqa: BLE001 - an unreadable binding fixes nothing
+            return False
 
     def _finish(
         self,
