@@ -303,7 +303,9 @@ def _validate_issuance_snapshot(
         if decision_critical and value.state != "current":
             raise PermissionError("evidence projection is not current")
         observed = _utc(value.observed_at)
-        max_age = int(obligation.get("max_age_seconds", 0))
+        max_age = obligation.get("max_age_seconds", 0)
+        if not isinstance(max_age, int) or isinstance(max_age, bool):
+            raise PermissionError("evidence age bound is not an exact integer")  # never coerced from a string, float or null
         if observed > now + timedelta(seconds=workflow.clock_tolerance_seconds):
             # The regular resolver check below remains authoritative for configured
             # tolerance; this branch only rejects obviously future snapshot state.

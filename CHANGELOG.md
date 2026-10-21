@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Fixed — bounded decision gate hardening (2026-10-22, scan 4)
+- Default path (CP-1): a manifest `authority_required[].required` is optional only when it is boolean `false`; `0`, `""`, `null` or `"false"` keep the scope required, so an unrequested scope yields `missing_requested_permission` instead of an authorization with no reasons.
+- Default path (CP-2): permissions match on `action_name`, so an action whose `action_name` is declared more than once (action-manifest rule E004) matches no permission and holds with `requirement_scope_mismatch` and `grant_scope_mismatch`.
+- Default path (CP-3): a `review_requirement.mode` outside `none`, `human_review`, `approval_required`, `draft_first` (for example `HUMAN_REVIEW`) holds with `review_requirement_not_resolved`.
+- Default path (CP-4): an evidence obligation whose `kind` is outside `authorization`, `context`, `post_effect`, or whose `required` is not boolean, holds with `required_evidence_not_current`; an `unknown_behavior` outside `hold_effect`, `preserve_if_other_basis_suffices`, `reconcile_no_blind_retry` holds with `context_unknown_requires_hold`.
+- Default path (CP-5): an obligation `max_age_seconds` that is not an exact JSON integer (string, float, bool, null) holds with `authority_limit_malformed` and is never coerced; `local_authority_effect` claim issuance raises `PermissionError` for the same bound.
+- Default path: a grant `delegation` that is not an object holds with `delegation_profile_unsupported` (was exit 4); a permission without `unit` grants nothing and holds with the scope-mismatch codes (was `KeyError`).
+- No reason code added: the 0.2 registry stays at 163 codes. Hold-only, non-authorizing; no production claim.
+
+### Changed — vendored ODES execution-attempt-lifecycle contract re-synced (2026-10-22)
+- `tests/contracts/execution-attempt-lifecycle` moved from ODES e5fe3822 to 59ca4c79 (ODES #136; `validate.py` and README changed, `schema.json` unchanged, three invalid fixtures added). See `docs/contract-conformance-execution-attempt-lifecycle.md`.
+
 ### Fixed — decision gate parity with the action-manifest contract, strict numeric limits, strict decision-input tool (2026-10-22, scan 3)
 - Default path (CP-1): the decision's manifest gate now applies the action-manifest runtime consumption contract it previously skipped. It refuses with `action_blocked` when the action's effective `default_action` (its own, else the manifest's) is `block` or its tool is not `allowed` (anything other than boolean `true`; absent means allowed, as in the manifest); with `missing_effect_limits` when the action declares no `effect_limits` and the proposal carries an amount above 0 or more than one effect; and with `missing_amount_limit` when `effect_limits` has no `max_amount` and the amount is above 0. The shipped example (amount 50.0, `max_amount` 100.0, `escalate` defaults, tool allowed) is still authorized. Hold-only, non-authorizing; no production claim.
 - Default path (CP-2): a manifest `effect_limits.max_amount` must be a finite JSON number and `max_effects` an exact JSON integer, and a requirement or grant permission `max_amount` / `max_effects` likewise (no bool, no string, no NaN, no `1.9` truncation); otherwise the decision refuses with `effect_limit_malformed` (manifest) or `authority_limit_malformed` (context), and a malformed permission grants nothing. Previously the string `"nan"` made `amount > float(limit)` false, so the limit never applied.
