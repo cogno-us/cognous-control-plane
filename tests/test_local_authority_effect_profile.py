@@ -346,3 +346,13 @@ def test_non_finite_claim_amount_returns_false_without_raising(tmp_path, bad_amo
     raw = claim.model_dump(mode="json", exclude_none=False)
     raw["amount"] = bad_amount
     assert verify_local_execution_claim(raw) is False
+
+
+def test_non_integer_evidence_age_bound_cannot_issue_a_claim(tmp_path):
+    proposal, resolver, flow, decision = setup(tmp_path)
+    obligation = resolver.contexts[PROFILE]["requirement"]["evidence"][0]
+    obligation["max_age_seconds"] = "99999999"  # a string bound is never coerced into a larger window
+    resolver.evidence[EVIDENCE] = resolver.evidence[EVIDENCE].model_copy(
+        update={"observed_at": (NOW - timedelta(hours=9)).isoformat()})
+    with pytest.raises(PermissionError):
+        materialize_local_execution_claim(flow, proposal, decision, now=NOW)

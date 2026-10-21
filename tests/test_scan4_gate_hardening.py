@@ -127,3 +127,23 @@ def test_vocabulary_values_in_the_schema_enums_are_unchanged(tmp_path):
             d = _decide(tmp_path / f"{kind}-{behavior}",
                         mutate_ctx=lambda c: _obligation(c, kind=kind, required=False, unknown_behavior=behavior))
             assert d.result == "authorized", (kind, behavior, d.reasons)
+
+
+# CP-5: the age bound must be an exact integer; it is never coerced.
+@pytest.mark.parametrize("bound", ["99999999", 99999999.9, 300.0, True, None, "300", [300]])
+def test_non_integer_age_bound_holds_instead_of_coercing(tmp_path, bound):
+    d = _decide(tmp_path, mutate_ctx=lambda c: _obligation(c, max_age_seconds=bound), mutate_resolver=_stale)
+    assert d.result == "hold" and "authority_limit_malformed" in d.reasons
+
+
+@pytest.mark.parametrize("bound", ["99999999", 99999999.9, None])
+def test_non_integer_hold_effect_age_bound_holds(tmp_path, bound):
+    d = _decide(tmp_path, mutate_ctx=lambda c: _obligation(c, kind="context", required=False, max_age_seconds=bound),
+                mutate_resolver=_stale)
+    assert d.result == "hold" and "authority_limit_malformed" in d.reasons
+
+
+def test_integer_age_bound_still_applies(tmp_path):
+    d = _decide(tmp_path, mutate_resolver=_stale)
+    assert d.result == "hold" and "required_evidence_stale_or_future" in d.reasons
+    assert "authority_limit_malformed" not in d.reasons

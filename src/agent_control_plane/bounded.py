@@ -2539,14 +2539,18 @@ class BoundedAuthorizationWorkflow:
             elif obligation["required"] and obligation["kind"] == "authorization":
                 if current is None or current.state != "current":
                     reasons.append("required_evidence_not_current")
-                elif not self._fresh(current.observed_at, now, int(obligation["max_age_seconds"])):
+                elif not _exact_int(obligation.get("max_age_seconds")):
+                    reasons.append("authority_limit_malformed")  # the age bound is never coerced from a string, float or null
+                elif not self._fresh(current.observed_at, now, obligation["max_age_seconds"]):
                     reasons.append("required_evidence_stale_or_future")
             elif behavior is not None and behavior not in UNKNOWN_BEHAVIORS:
                 reasons.append("context_unknown_requires_hold")  # an unrecognised unknown_behavior (e.g. "Hold_Effect") holds
             elif behavior == "hold_effect":
-                if current is None or current.state != "current" or not self._fresh(
-                    current.observed_at, now, int(obligation["max_age_seconds"])
-                ):
+                if current is None or current.state != "current":
+                    reasons.append("context_unknown_requires_hold")
+                elif not _exact_int(obligation.get("max_age_seconds")):
+                    reasons.append("authority_limit_malformed")
+                elif not self._fresh(current.observed_at, now, obligation["max_age_seconds"]):
                     reasons.append("context_unknown_requires_hold")
 
         extension = None
