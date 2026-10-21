@@ -2670,7 +2670,7 @@ class BoundedAuthorizationWorkflow:
         needed = {
             x["scope"]
             for x in action.get("authority_required", [])
-            if x.get("required", True)
+            if x.get("required", True) is not False  # only boolean false is optional; 0, "", null or "false" stay required
         }
         if not needed.issubset(set(proposal.requested_permissions)):
             mismatches.append("missing_requested_permission")
