@@ -48,24 +48,27 @@ def test_action_override_of_a_blocked_manifest_default_is_not_blocked(tmp_path):
     assert "action_blocked" not in flow._manifest_mismatches(p, NOW)
 
 
+# Scan 6 (CP-5): the gate also runs the validator, which refuses a write action with missing or incomplete effect_limits (E022, E023,
+# `invalid_manifest`). These three tests exercise the gate's own implicit-ceiling rules, so the action is a non-effectful `read`; the
+# expected mismatches are unchanged.
 def test_missing_effect_limits_refuses_an_amount_or_several_effects(tmp_path):
-    flow, p = _gate(tmp_path, lambda m, a: a.pop("effect_limits"))
+    flow, p = _gate(tmp_path, lambda m, a: (a.pop("effect_limits"), a.update(action_type="read")))
     assert flow._manifest_mismatches(p, NOW) == ["missing_effect_limits"]
     assert flow.decide(p, now=NOW).result == "hold"
-    flow, p = _gate(tmp_path, lambda m, a: a.pop("effect_limits"), amount=0.0, effects=2)
+    flow, p = _gate(tmp_path, lambda m, a: (a.pop("effect_limits"), a.update(action_type="read")), amount=0.0, effects=2)
     assert flow._manifest_mismatches(p, NOW) == ["missing_effect_limits"]
 
 
 def test_missing_effect_limits_allows_the_implicit_zero_amount_single_effect(tmp_path):
-    flow, p = _gate(tmp_path, lambda m, a: a.pop("effect_limits"), amount=0.0, effects=1)
+    flow, p = _gate(tmp_path, lambda m, a: (a.pop("effect_limits"), a.update(action_type="read")), amount=0.0, effects=1)
     assert flow._manifest_mismatches(p, NOW) == []
 
 
 def test_effect_limits_without_max_amount_refuses_an_amount(tmp_path):
-    flow, p = _gate(tmp_path, lambda m, a: a.update(effect_limits={"max_effects": 1}))
+    flow, p = _gate(tmp_path, lambda m, a: a.update(effect_limits={"max_effects": 1}, action_type="read"))
     assert flow._manifest_mismatches(p, NOW) == ["missing_amount_limit"]
     assert flow.decide(p, now=NOW).result == "hold"
-    flow, p = _gate(tmp_path, lambda m, a: a.update(effect_limits={"max_effects": 1}), amount=0.0)
+    flow, p = _gate(tmp_path, lambda m, a: a.update(effect_limits={"max_effects": 1}, action_type="read"), amount=0.0)
     assert flow._manifest_mismatches(p, NOW) == []
 
 

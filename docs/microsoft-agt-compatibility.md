@@ -62,6 +62,11 @@ tool/adapter identity, tenant, amount, permissions, or other commitment-bearing
 fields is unsupported by this profile and must be represented as a new Cognous
 proposal by the caller, followed by fresh authorization.
 
+Exactness (scan 6): the AGT decision string is matched exactly (`allow`, `deny`, `escalate`, `warn`, `transform`); any other spelling, including a
+different case or surrounding whitespace, is held as `unsupported_agt_decision`. The tenant is passed on exactly as supplied; only a blank
+tenant is `tenant_missing`. A transformed proposal whose Cognous authorization carries no decision binding is held with
+`transform_authorization_unbound`.
+
 ## Evidence boundary
 
 The adapter records:
