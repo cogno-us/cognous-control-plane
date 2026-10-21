@@ -1,7 +1,8 @@
 # Contract conformance: execution-attempt lifecycle (producer)
 
 - Contract: `execution-attempt-lifecycle`, version `0.1.0-draft` (not frozen; any ODES change may break).
-- Source: `cogno-us/open-decision-evidence-standard` at commit `e5fe3822a2d3c3f6885fd61acccb4bb6281041be`.
+- Source: `cogno-us/open-decision-evidence-standard` at commit `59ca4c797b4c0700b581815a53b113a60bda1c67`.
+- Refreshed 2026-10-22: the vendored copy moved from ODES e5fe3822 to 59ca4c79 (ODES #136) with `contracts/tools/vendor_contract.py --role producer --level P` (still `0.1.0-draft`; `validate.py` and README digests changed, `schema.json` unchanged; three invalid fixtures added). The suite is unchanged apart from the commit literal.
 - Refreshed 2026-10-19: the vendored copy moved from ODES a9db024c to e5fe3822 with ODES `contracts/tools/vendor_contract.py` (still `0.1.0-draft`; README, schema and `validate.py` digests changed; 24 fixtures added). The suite is unchanged apart from the commit literal; all 21 tests pass.
 - Refreshed 2026-10-17 (P4): the vendored copy moved from ODES d1e17fa1 to a9db024c (still `0.1.0-draft`, schema digest changed). The suite is unchanged apart from the commit literal; all 21 tests pass against the new fixtures and rules.
 - Role: producer. This repo is the Control Plane bounded workflow (`src/agent_control_plane/bounded.py`).
