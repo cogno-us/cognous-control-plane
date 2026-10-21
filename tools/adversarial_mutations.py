@@ -6,9 +6,9 @@ import sys
 import tempfile
 ROOT=Path(__file__).resolve().parents[1]
 CASES=[
- ('delegation','reasons.append("delegation_profile_unsupported")','pass','test_delegated_grant_is_unsupported_even_with_identity_chain'),
+ ('delegation','reasons.append("delegation_profile_unsupported")\n            if not identity.chain:','pass\n            if not identity.chain:','test_delegated_grant_is_unsupported_even_with_identity_chain'),
  ('independence','approval.approver in {proposal.actor, proposal.principal, *identity.chain}','False','test_principal_cannot_supply_independent_approval'),
- ('unknown-context','current is None or current.state != "current" or not self._fresh(','current is None or not self._fresh(','test_explicit_noncurrent_context_holds_when_required'),
+ ('unknown-context','if current is None or current.state != "current":\n                    reasons.append("context_unknown_requires_hold")','if current is None:\n                    reasons.append("context_unknown_requires_hold")','test_explicit_noncurrent_context_holds_when_required'),
 ]
 for name,before,after,test in CASES:
  with tempfile.TemporaryDirectory() as directory:
