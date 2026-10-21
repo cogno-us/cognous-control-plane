@@ -13,13 +13,22 @@ import json
 from pathlib import Path
 
 
-def _load_profile():
-    module_path = Path(__file__).parents[1] / "src" / "agent_control_plane" / "decision_input_profile.py"
-    spec = importlib.util.spec_from_file_location("decision_input_profile", module_path)
+def _load_module(name: str, filename: str):
+    module_path = Path(__file__).parents[1] / "src" / "agent_control_plane" / filename
+    spec = importlib.util.spec_from_file_location(name, module_path)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
     return module
+
+
+def _load_profile():
+    return _load_module("decision_input_profile", "decision_input_profile.py")
+
+
+def _load_strict_json():
+    # strict_json is a leaf module (it imports nothing from the package), so it loads by path like the profile does.
+    return _load_module("_acp_strict_json", "strict_json.py")
 
 
 def main() -> int:
@@ -27,15 +36,17 @@ def main() -> int:
     parser.add_argument("record", type=Path, help="JSON file containing one proposed-profile record")
     args = parser.parse_args()
     profile = _load_profile()
+    strict_json = _load_strict_json()
     try:
-        record = json.loads(args.record.read_text(encoding="utf-8"))
+        # Strict read: UTF-8 only, a duplicate object member, NaN/Infinity and an unpaired surrogate are refused, not last-wins.
+        record = strict_json.strict_loads(args.record.read_bytes())
         result = profile.verify_record(record)
-    except (OSError, json.JSONDecodeError) as exc:
-        print(json.dumps({"valid": False, "code": "INPUT_INVALID", "message": str(exc)}, sort_keys=True))
-        return 2
     except profile.ProfileValidationError as exc:
         print(json.dumps({"valid": False, "code": exc.code, "message": str(exc)}, sort_keys=True))
         return 1
+    except (OSError, ValueError, RecursionError) as exc:  # includes json.JSONDecodeError and the strict refusals
+        print(json.dumps({"valid": False, "code": "INPUT_INVALID", "message": str(exc)}, sort_keys=True))
+        return 2
     print(json.dumps(result, sort_keys=True))
     return 0
 
