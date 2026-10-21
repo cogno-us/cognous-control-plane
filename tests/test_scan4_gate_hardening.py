@@ -90,3 +90,40 @@ def test_declared_non_reviewing_modes_are_unchanged(tmp_path, mode):
         a["review_requirement"] = {"mode": mode}
     d = _decide(tmp_path, mutate_manifest=mutate)
     assert "review_requirement_not_resolved" not in d.reasons
+
+
+# CP-4: evidence kind / unknown_behavior vocabularies are exact.
+def _stale(r):
+    r.evidence[ENTITLEMENT].observed_at = (NOW - STALE).isoformat()
+
+
+def _obligation(ctx, **update):
+    ob = next(o for o in ctx["requirement"]["evidence"] if o["obligation_id"] == ENTITLEMENT)
+    ob.update(update)
+
+
+@pytest.mark.parametrize("kind", ["Authorization", "AUTHORIZATION", "auth", ""])
+def test_unrecognised_evidence_kind_holds_with_stale_evidence(tmp_path, kind):
+    d = _decide(tmp_path, mutate_ctx=lambda c: _obligation(c, kind=kind), mutate_resolver=_stale)
+    assert d.result == "hold" and "required_evidence_not_current" in d.reasons
+
+
+@pytest.mark.parametrize("behavior", ["Hold_Effect", "HOLD_EFFECT", "hold", ""])
+def test_unrecognised_unknown_behavior_holds_with_stale_evidence(tmp_path, behavior):
+    d = _decide(tmp_path, mutate_ctx=lambda c: _obligation(c, kind="context", required=False, unknown_behavior=behavior),
+                mutate_resolver=_stale)
+    assert d.result == "hold" and "context_unknown_requires_hold" in d.reasons
+
+
+@pytest.mark.parametrize("required", [0, 1, "true", None])
+def test_non_boolean_evidence_required_holds(tmp_path, required):
+    d = _decide(tmp_path, mutate_ctx=lambda c: _obligation(c, required=required))
+    assert d.result == "hold" and "required_evidence_not_current" in d.reasons
+
+
+def test_vocabulary_values_in_the_schema_enums_are_unchanged(tmp_path):
+    for kind in ("context", "post_effect"):
+        for behavior in ("preserve_if_other_basis_suffices", "reconcile_no_blind_retry"):
+            d = _decide(tmp_path / f"{kind}-{behavior}",
+                        mutate_ctx=lambda c: _obligation(c, kind=kind, required=False, unknown_behavior=behavior))
+            assert d.result == "authorized", (kind, behavior, d.reasons)

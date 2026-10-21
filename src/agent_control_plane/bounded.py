@@ -96,6 +96,10 @@ def _finite_number(value: object) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
+EVIDENCE_KINDS = frozenset({"authorization", "context", "post_effect"})  # authority-context evidence[].kind enum
+UNKNOWN_BEHAVIORS = frozenset({"hold_effect", "preserve_if_other_basis_suffices", "reconcile_no_blind_retry"})
+
+
 def _exact_int(value: object) -> bool:
     """True only for a JSON integer (never a bool, a float such as 1.9 or 1.0, or a string)."""
     return isinstance(value, int) and not isinstance(value, bool)
@@ -2509,7 +2513,7 @@ class BoundedAuthorizationWorkflow:
         for obligation in requirement.get("evidence", []):
             current = self._read_input(inputs, "evidence", obligation["obligation_id"], self.resolver.evidence_status, obligation["obligation_id"])
             capture("evidence", obligation["obligation_id"], current,
-                    {"state": "current"} if obligation["required"] and obligation["kind"] == "authorization" else {})
+                    {"state": "current"} if obligation["required"] is True and obligation["kind"] == "authorization" else {})
             if current is not None and (
                 current.obligation_id != obligation["obligation_id"]
                 or current.source_ref != obligation["source_ref"]
@@ -2527,12 +2531,19 @@ class BoundedAuthorizationWorkflow:
                     reasons.append("tenant_proposal_required")
                     current = None
 
-            if obligation["required"] and obligation["kind"] == "authorization":
+            behavior = obligation.get("unknown_behavior")
+            if not isinstance(obligation["required"], bool) or obligation["kind"] not in EVIDENCE_KINDS:
+                # a non-boolean `required` or a kind outside the schema enum (a case variant such as "Authorization") is not
+                # "optional" or "not authorization": it cannot be shown current, so it holds
+                reasons.append("required_evidence_not_current")
+            elif obligation["required"] and obligation["kind"] == "authorization":
                 if current is None or current.state != "current":
                     reasons.append("required_evidence_not_current")
                 elif not self._fresh(current.observed_at, now, int(obligation["max_age_seconds"])):
                     reasons.append("required_evidence_stale_or_future")
-            elif obligation.get("unknown_behavior") == "hold_effect":
+            elif behavior is not None and behavior not in UNKNOWN_BEHAVIORS:
+                reasons.append("context_unknown_requires_hold")  # an unrecognised unknown_behavior (e.g. "Hold_Effect") holds
+            elif behavior == "hold_effect":
                 if current is None or current.state != "current" or not self._fresh(
                     current.observed_at, now, int(obligation["max_age_seconds"])
                 ):
