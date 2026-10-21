@@ -129,7 +129,7 @@ The default path is the bounded authorization workflow described in [docs/bounde
 | Operation identity, freshness, witness digest, holder inventory, merge record, reversibility, dedupe-ttl, terminal revocation | `RuntimeAuthorityProfile` fields (witness: host call) | [opt-in-profiles.md](docs/opt-in-profiles.md) (one row each) |
 | Microsoft Agent Governance Toolkit pre-tool-call compatibility | optional extra, not in the lock | [microsoft-agt-compatibility.md](docs/microsoft-agt-compatibility.md) |
 
-The reason registry has two labels: `runtime-authority-reasons/0.1` (the original 121 codes) and `/0.2` (the full 158). Operator-supplied and stored JSON is read strictly.
+The reason registry has two labels: `runtime-authority-reasons/0.1` (the original 121 codes) and `/0.2` (the full 163). Operator-supplied and stored JSON is read strictly.
 
 ### Schemas, modules, examples and tools
 
@@ -157,7 +157,7 @@ Each item is a stated limit that is kept visible. Items marked as pinned have a 
 | `minimum_count` of 0 | An explicit operator declaration; it passes with a count of 0 (pinned). |
 | Record store is not tamper evidence | The store is a plain JSON file under a same-host lock with no keyed integrity check. `signer` and `issuer` members are asserted names. |
 | Credentials | The destination check says nothing about credentials inherited by subprocesses. The hub [guarantees and limits](https://github.com/cogno-us/cognous-open-control-stack/blob/main/docs/guarantees-and-limits.md) page carries the complete wording. |
-| Reason registry classes | The 158-code runtime-authority registry classifies codes only as `typed_only` or `recomputable`; it does not separate unavailable input from withheld policy. A blocked count is not a denial count. |
+| Reason registry classes | The 163-code runtime-authority registry classifies codes only as `typed_only` or `recomputable`; it does not separate unavailable input from withheld policy. A blocked count is not a denial count. |
 
 Review original artifacts and their exact source revisions before extending a claim to a new environment. New dependencies, authority sources, destinations or enforcement mechanisms need their own compatibility and qualification. A passing reference case is not a certification of an enterprise deployment.
 

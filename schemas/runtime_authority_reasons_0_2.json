@@ -636,6 +636,26 @@
     "grant_revocation_recorded": {
       "reason_kind": "typed_only",
       "description": "a retained resolution check already observed this grant revoked at this same revision; revocation is terminal for that revision and a later active status for it does not count (terminal-revocation/0.1 only)"
+    },
+    "action_blocked": {
+      "reason_kind": "typed_only",
+      "description": "the action's effective default_action (the action's own, else the manifest's) is block, or its tool is not allowed (tools[].allowed is not true); mirrors action-manifest proposal_mismatches"
+    },
+    "missing_effect_limits": {
+      "reason_kind": "typed_only",
+      "description": "the action declares no effect_limits and the proposal carries an amount above 0 or more than one effect; the implicit ceiling is amount 0 and one effect"
+    },
+    "missing_amount_limit": {
+      "reason_kind": "typed_only",
+      "description": "the action's effect_limits declares no max_amount and the proposal carries an amount above 0"
+    },
+    "effect_limit_malformed": {
+      "reason_kind": "typed_only",
+      "description": "the manifest's effect_limits max_effects is not an exact integer, or max_amount is not a finite number; nothing is coerced, so the limit is refused"
+    },
+    "authority_limit_malformed": {
+      "reason_kind": "typed_only",
+      "description": "a requirement or grant permission for this action has a max_amount that is not a finite number or a max_effects that is not an exact integer; the permission grants nothing"
     }
   }
 }

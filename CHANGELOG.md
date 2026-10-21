@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Fixed — decision gate parity with the action-manifest contract, strict numeric limits, strict decision-input tool (2026-10-22, scan 3)
+- Default path (CP-1): the decision's manifest gate now applies the action-manifest runtime consumption contract it previously skipped. It refuses with `action_blocked` when the action's effective `default_action` (its own, else the manifest's) is `block` or its tool is not `allowed` (anything other than boolean `true`; absent means allowed, as in the manifest); with `missing_effect_limits` when the action declares no `effect_limits` and the proposal carries an amount above 0 or more than one effect; and with `missing_amount_limit` when `effect_limits` has no `max_amount` and the amount is above 0. The shipped example (amount 50.0, `max_amount` 100.0, `escalate` defaults, tool allowed) is still authorized. Hold-only, non-authorizing; no production claim.
+- Default path (CP-2): a manifest `effect_limits.max_amount` must be a finite JSON number and `max_effects` an exact JSON integer, and a requirement or grant permission `max_amount` / `max_effects` likewise (no bool, no string, no NaN, no `1.9` truncation); otherwise the decision refuses with `effect_limit_malformed` (manifest) or `authority_limit_malformed` (context), and a malformed permission grants nothing. Previously the string `"nan"` made `amount > float(limit)` false, so the limit never applied.
+- Registry: five codes added to `runtime_authority_reasons_0_2.json` (`action_blocked`, `missing_effect_limits`, `missing_amount_limit`, `effect_limit_malformed`, `authority_limit_malformed`; 163 codes). `..._0_1.json` is untouched (byte-identical). These are default-path codes, so a refusal row carrying one now has label 0.2; rows without them keep 0.1.
+- Tool (DIP-1): `tools/verify_decision_input_commitment.py` reads its record with `strict_json.strict_loads` (UTF-8 only; duplicate object members, NaN/Infinity and unpaired surrogates refused with `INPUT_INVALID`, exit 2) instead of `json.loads`, which kept the last duplicate member.
+- Not changed: manifest `authority_context.evidence_obligation_ids` is still not compared with the context's requirement evidence (the contract only says "resolve required evidence", not that the lists must match).
+
 ### Fixed — decision-step action identity binding
 - Default path: when the manifest declares one `action_id` more than once, the decision binds no action and refuses with the registered reason `unknown_action` (fail closed), whichever declaration comes first. A single declaration decides as before. No reason code added; registry labels unchanged.
 
