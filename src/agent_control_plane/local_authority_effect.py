@@ -358,8 +358,14 @@ def _materialize_under_handoff(
     frozen = proposal.model_copy(deep=True)
     with handoff(proposal.authority_context_ref or ""):
         inputs = []
-        reasons, current = workflow._resolve(frozen, now, inputs=inputs)
-        reasons = workflow._record_check(inputs, now, reasons, "claim")
+        check_ref: list[str] = []
+        journal = workflow.runtime_authority_profile is not None
+        reasons, current = workflow._resolve(
+            frozen, now, inputs=inputs,
+            **({"stage": "claim", "decision": decision} if journal else {}),
+            **({"check_ref": check_ref} if (workflow._identity or workflow._freshness) else {}),
+        )
+        reasons = workflow._record_check(inputs, now, reasons, "claim", check_id=check_ref[0] if check_ref else None)
         if reasons or current is None or current != decision.binding:
             raise PermissionError("authorization-critical inputs changed before claim issuance")
 
