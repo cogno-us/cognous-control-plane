@@ -12,11 +12,14 @@ from .freshness import FreshnessProfile
 from .holder_inventory import HolderInventory
 from .merge import MergeProfile
 from .operation_identity import OperationIdentityProfile, valid_operation_id
+from . import policy_binding as _pb
+from .policy_binding import PolicyBinding
 from .reversibility import ReversibilityProfile, check_class_members, flatten_x_reversibility, nest_x_reversibility
 
 PROFILE_VERSION = "runtime-authority/0.1"
 VOCABULARY_VERSION = "runtime-authority-reasons/0.1"
 VOCABULARY_VERSION_0_2 = "runtime-authority-reasons/0.2"
+VOCABULARY_VERSION_0_3 = "runtime-authority-reasons/0.3"
 #: Codes registered by 0.2 and not by 0.1 (all but the last five, the scan-3 default-path manifest-gate codes, emitted only by opt-in profiles). ``schemas/runtime_authority_reasons_0_1.json`` is the
 #: original 121 codes, byte-identical to its pinned form; ``..._0_2.json`` is the full set (0.1 plus these) because one row can mix
 #: codes of both, and a row carries exactly one label that must resolve all of its codes. A test pins this set to the two files.
@@ -68,15 +71,55 @@ CODES_ADDED_IN_0_2 = frozenset({
     "invalid_manifest",
 })
 
+#: Codes registered ONLY by 0.3 (the policy-binding/0.1 opt-in profile). ``schemas/runtime_authority_reasons_0_2.json`` stays frozen at its
+#: 164 codes (git blob a46ef35e7ece5c3a16e50d174000c49e3632eb12); ``schemas/runtime_authority_reasons_0_3.json`` is a NEW immutable file with
+#: those 164 entries unchanged and in order plus these eight (172). The names are PROPOSED and NOT RATIFIED by the owning component.
+CODES_ADDED_IN_0_3 = frozenset(_pb.NEW_CODES)
+
+#: sha256 of the registry file bytes per label: the evidence identity of a label. A test pins each to the file in ``schemas/``.
+REGISTRY_SHA256 = {
+    VOCABULARY_VERSION: "fbc4df2e02457e294ca1f819d0e507c4452e46691e4f139a66be48967c2096c0",
+    VOCABULARY_VERSION_0_2: "c7678fa766f4d67d71ad9533672afdc87b3765ac1d336acae26504fc74ce3be6",
+    VOCABULARY_VERSION_0_3: "58b29ef74b9bd49d3eae7278d8cce73c7cbc6a1095a07f7b9fa44f48a7b8c07f",
+}
+
 #: terminal-revocation/0.1: a retained check already observed this (grant_id, revision) revoked.
 CODE_REVOCATION_RECORDED = "grant_revocation_recorded"
 
 
 def vocabulary_for(reasons) -> str:
-    """The registry label a row's reasons need: 0.1 unless a code only 0.2 registers is present (then 0.2, a superset of 0.1).
+    """The registry label a row's reasons need: 0.1 unless a code only 0.2 registers is present (then 0.2, a superset of 0.1), and 0.3
+    (a superset of 0.2) only when one of the eight policy-binding codes is present.
 
-    Rows that carry no opt-in-profile code keep the pinned 0.1 label, so the default path is unchanged."""
+    Rows that carry no opt-in-profile code keep the pinned 0.1 label and every existing 0.2 row keeps 0.2, so nothing is reinterpreted."""
+    if any(code in CODES_ADDED_IN_0_3 for code in reasons):
+        return VOCABULARY_VERSION_0_3
     return VOCABULARY_VERSION_0_2 if any(code in CODES_ADDED_IN_0_2 for code in reasons) else VOCABULARY_VERSION
+
+
+def registry_identity(label) -> str:
+    """The pinned sha256 of the registry file a label names. Fails closed (``ValueError``) on any unsupported or non-string label:
+    there is no fallback meaning for an unknown label."""
+    if type(label) is not str or label not in REGISTRY_SHA256:
+        raise ValueError(f"unsupported reason registry label: {label!r}")
+    return REGISTRY_SHA256[label]
+
+
+def registry_admits(label, reasons, registry_codes=None) -> bool:
+    """True only when ``label`` is supported and resolves every reason. A 0.3 code under 0.1 or 0.2 is refused, so is an unsupported
+    label, and (when the consumer's loaded registry ``registry_codes`` is given) any code it does not list."""
+    if type(label) is not str or label not in REGISTRY_SHA256:
+        return False
+    if type(reasons) not in (list, tuple) or any(type(code) is not str for code in reasons):
+        return False
+    for code in reasons:
+        if code in CODES_ADDED_IN_0_3 and label != VOCABULARY_VERSION_0_3:
+            return False
+        if code in CODES_ADDED_IN_0_2 and label == VOCABULARY_VERSION:
+            return False
+        if registry_codes is not None and code not in registry_codes:
+            return False
+    return True
 
 
 class ActionClass(BaseModel):
@@ -168,6 +211,9 @@ class RuntimeAuthorityProfile(BaseModel):
     dedupe: DedupeProfile | None = Field(default=None, exclude_if=lambda v: v is None)
     # Opt-in terminal-revocation/0.1. Same omission rule.
     terminal_revocation: TerminalRevocationProfile | None = Field(default=None, exclude_if=lambda v: v is None)
+    # Opt-in policy-binding/0.1 (approval generation, registry freshness ceilings). Same omission rule: absent, every dump and every
+    # commitment is byte-identical to before.
+    policy_binding: PolicyBinding | None = Field(default=None, exclude_if=lambda v: v is None)
 
     @model_validator(mode="after")
     def _profiles_compose(self):
@@ -176,6 +222,9 @@ class RuntimeAuthorityProfile(BaseModel):
         declared = [a for a in self.actions.values() if a.reversibility is not None]
         if declared and self.reversibility is None:
             raise ValueError("reversibility values need the reversibility/0.1 profile")
+        defects = _pb.policy_binding_defects(self)
+        if defects:
+            raise ValueError("policy_binding: " + ",".join(defects))
         return self
 
     def snapshot(self) -> RuntimeAuthorityProfile:
@@ -186,12 +235,19 @@ class RuntimeAuthorityProfile(BaseModel):
 def approval_commitment(profile: RuntimeAuthorityProfile, context: dict) -> str:
     """Bind governed inputs, criteria, catalogue and purpose to actual approval."""
     from .bounded import commitment
-    return commitment({
+    preimage = {
         "profile": profile.model_dump(mode="json"),
         "runtime_authority": context.get("runtime_authority"),
         "purpose_ref": (context.get("grant") or {}).get("purpose_ref"),
         "grant_expires_at": (context.get("grant") or {}).get("expires_at"),
-    })
+    }
+    binding = profile.policy_binding
+    if binding is None:
+        return commitment(preimage)  # legacy: byte-identical to before, no tag
+    # approval-commitment/0.2: tagged; the effective policy identity and the authenticated generation are SEPARATE preimage members.
+    return commitment({"commitment_version": _pb.APPROVAL_COMMITMENT_V2, **preimage,
+                       "policy_identity": _pb.identity_members(binding),
+                       "policy_generation": getattr(binding, "policy_generation", None)})
 
 
 def validate_evidence(status, criterion: EvidenceCriterion, profile: RuntimeAuthorityProfile,
@@ -263,6 +319,9 @@ def validate_extensions(profile: RuntimeAuthorityProfile, proposal, context: dic
                "expected_effective_grant_digest", "effective_grant_derivation_version"}
     if profile.operation_identity is not None:
         allowed.add("operation_id")
+    binding = profile.policy_binding
+    if binding is not None:  # ``activation_sequence`` is RESERVED: it is not here, so it is refused as an unsupported field
+        allowed |= {"approval_commitment_version", "policy_generation", "policy_activation_ref"}
     if set(spec) - allowed:
         reasons.append("runtime_authority_field_unsupported")
     expected_approval = approval_commitment(profile, context)
@@ -368,6 +427,31 @@ def validate_extensions(profile: RuntimeAuthorityProfile, proposal, context: dic
             reasons.append("operation_id_invalid")
         else:
             operation_fields = {"operation_id": operation_id, "operation_issuer": grant.get("issuer")}
+    generation_fields = {}
+    if binding is not None:
+        # Re-run at EVERY evaluation: ``model_copy`` and ``snapshot`` skip validators. The trusted values come from the profile, never from the approval.
+        defects = _pb.policy_binding_defects(profile)
+        if "invalid" in defects:
+            reasons.append("policy_binding_invalid")
+        if "unanchored" in defects:
+            reasons.append("freshness_ceiling_unanchored")
+        if "exceeded" in defects:
+            reasons.append("freshness_ceiling_exceeded")
+        version, generation, activation = (spec.get("approval_commitment_version"), spec.get("policy_generation"),
+                                           spec.get("policy_activation_ref"))
+        if version is None or generation is None or activation is None:
+            reasons.append("approval_policy_generation_missing")
+        if version is not None and (type(version) is not str or version not in _pb.SUPPORTED_APPROVAL_COMMITMENT_VERSIONS):
+            reasons.append("approval_commitment_version_unsupported")
+        if (generation is not None and not _pb.valid_int(generation)) or (activation is not None and not _pb.valid_digest(activation)):
+            reasons.append("approval_policy_generation_invalid")
+        if "invalid" not in defects:
+            if _pb.valid_int(generation) and generation != binding.policy_generation:
+                reasons.append("approval_policy_generation_mismatch")
+            if _pb.valid_digest(activation) and activation != binding.activation_ref:
+                reasons.append("approval_policy_activation_mismatch")
+            generation_fields = {"approval_commitment_version": _pb.APPROVAL_COMMITMENT_V2,
+                                 "policy_generation": binding.policy_generation, "policy_activation_ref": binding.activation_ref}
     extension = {
         "profile": PROFILE_VERSION, "approval_commitment": expected_approval,
         "required_inputs_digest": spec.get("required_inputs_digest"),
@@ -375,6 +459,7 @@ def validate_extensions(profile: RuntimeAuthorityProfile, proposal, context: dic
         "expected_effective_grant_digest": spec.get("expected_effective_grant_digest"),
         "effective_grant_derivation_version": spec.get("effective_grant_derivation_version"),
         **operation_fields,
+        **generation_fields,
     }
     return reasons, extension
 
