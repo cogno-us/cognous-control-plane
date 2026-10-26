@@ -6,7 +6,7 @@ One record shape, `RuleRevision`, modelled on `VocabularyChange`, covers four ru
 `runtime-authority-reasons/0.1` is the original 121 codes (120 `typed_only`, 1 `recomputable`) in `schemas/runtime_authority_reasons_0_1.json`,
 byte-identical to its pinned form; `runtime-authority-reasons/0.2` is the full set (164 codes: 163 `typed_only`, 1 `recomputable`) in
 `schemas/runtime_authority_reasons_0_2.json`, the 0.1 entries unchanged plus the codes the opt-in profiles emit. A row carries 0.1 unless one
-of its reasons is a 0.2 code, so default-path rows are unchanged.
+of its reasons is a 0.2 code, so default-path rows are unchanged. `runtime-authority-reasons/0.3` (172 codes) is a later immutable successor of 0.2 for the opt-in `policy-binding/0.1` profile; 0.2 is not edited.
 
 ## Row
 `rule_ref`, `from_digest` (None on an adoption row), `to_digest`, `reviser`, `signer`, `authority_ref`, `reason`, `supersedes`,

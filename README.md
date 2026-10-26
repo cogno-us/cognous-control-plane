@@ -129,7 +129,7 @@ The default path is the bounded authorization workflow described in [docs/bounde
 | Operation identity, freshness, witness digest, holder inventory, merge record, reversibility, dedupe-ttl, terminal revocation | `RuntimeAuthorityProfile` fields (witness: host call) | [opt-in-profiles.md](docs/opt-in-profiles.md) (one row each) |
 | Microsoft Agent Governance Toolkit pre-tool-call compatibility | optional extra, not in the lock | [microsoft-agt-compatibility.md](docs/microsoft-agt-compatibility.md) |
 
-The reason registry has two labels: `runtime-authority-reasons/0.1` (the original 121 codes) and `/0.2` (the full 164). Operator-supplied and stored JSON is read strictly.
+The reason registry has three labels: `runtime-authority-reasons/0.1` (the original 121 codes), `/0.2` (the frozen 164) and `/0.3` (172: the 164 plus eight policy-binding codes, proposed and not ratified). Operator-supplied and stored JSON is read strictly.
 
 ### Schemas, modules, examples and tools
 
