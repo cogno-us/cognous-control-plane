@@ -131,7 +131,8 @@ def policy_binding_defects(profile) -> list[str]:
         if action is None:
             continue
         base = action.max_status_age_seconds
-        if type(base) is not int or type(extension) is not int or base + extension > ceiling:
+        # a negative (bypassed) extension can never lower a bound, so it is counted as 0; a negative base is malformed
+        if type(base) is not int or type(extension) is not int or base < 0 or base + max(extension, 0) > ceiling:
             out.append("exceeded")
             break
     return out

@@ -87,20 +87,23 @@ def test_every_code_resolves_under_the_label_it_gets_and_no_old_code_moves():
 def test_an_unsupported_label_fails_closed_with_no_fallback(label):
     with pytest.raises(ValueError):
         registry_identity(label)
-    assert registry_admits(label, []) is False
+    assert registry_admits(label, [], R03["codes"]) is False
 
 
-def test_registry_admits_refuses_a_code_the_label_does_not_register():
-    assert registry_admits(VOCABULARY_VERSION_0_3, ["policy_binding_invalid", "grant_revoked", "check_overdue"]) is True
-    assert registry_admits(VOCABULARY_VERSION_0_2, ["policy_binding_invalid"]) is False
-    assert registry_admits(VOCABULARY_VERSION, ["policy_binding_invalid"]) is False
-    assert registry_admits(VOCABULARY_VERSION, ["check_overdue"]) is False
-    assert registry_admits(VOCABULARY_VERSION_0_2, ["check_overdue"]) is True
-    assert registry_admits(VOCABULARY_VERSION_0_3, ["not_a_registered_code"], registry_codes=R03["codes"]) is False
-    assert registry_admits(VOCABULARY_VERSION_0_3, ["policy_binding_invalid"], registry_codes=R03["codes"]) is True
-    assert registry_admits(VOCABULARY_VERSION_0_3, ["policy_binding_invalid"], registry_codes=R02["codes"]) is False
+def test_registry_admits_refuses_a_code_the_label_does_not_register_and_an_unlisted_code():
+    both = {**R03["codes"]}
+    assert registry_admits(VOCABULARY_VERSION_0_3, ["policy_binding_invalid", "grant_revoked", "check_overdue"], both) is True
+    assert registry_admits(VOCABULARY_VERSION_0_2, ["policy_binding_invalid"], both) is False
+    assert registry_admits(VOCABULARY_VERSION, ["policy_binding_invalid"], both) is False
+    assert registry_admits(VOCABULARY_VERSION, ["check_overdue"], both) is False
+    assert registry_admits(VOCABULARY_VERSION_0_2, ["check_overdue"], R02["codes"]) is True
+    assert registry_admits(VOCABULARY_VERSION_0_3, ["not_a_registered_code"], R03["codes"]) is False   # existence needs the loaded registry
+    assert registry_admits(VOCABULARY_VERSION_0_3, ["policy_binding_invalid"], R03["codes"]) is True
+    assert registry_admits(VOCABULARY_VERSION_0_3, ["policy_binding_invalid"], R02["codes"]) is False
     for bad in ("policy_binding_invalid", None, [None], [b"x"], 5):
-        assert registry_admits(VOCABULARY_VERSION_0_3, bad) is False
+        assert registry_admits(VOCABULARY_VERSION_0_3, bad, R03["codes"]) is False
+    with pytest.raises(TypeError):
+        registry_admits(VOCABULARY_VERSION_0_3, ["policy_binding_invalid"])   # the loaded registry is required, never defaulted
 
 
 def test_the_rows_of_a_policy_binding_hold_carry_0_3_and_default_rows_keep_0_1(tmp_path):
@@ -111,6 +114,6 @@ def test_the_rows_of_a_policy_binding_hold_carry_0_3_and_default_rows_keep_0_1(t
     d1 = decide(f, p)
     assert d1.result == "hold" and "approval_policy_generation_missing" in d1.reasons
     assert d1.reason_vocabulary_version == VOCABULARY_VERSION_0_3
-    assert registry_admits(d1.reason_vocabulary_version, d1.reasons, registry_codes=R03["codes"])
+    assert registry_admits(d1.reason_vocabulary_version, d1.reasons, R03["codes"])
     completed = [e for e in f.records.load().check_events if e.phase == "completed"]
     assert completed[0].reason_vocabulary_version == VOCABULARY_VERSION and completed[-1].reason_vocabulary_version == VOCABULARY_VERSION_0_3

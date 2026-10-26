@@ -516,3 +516,16 @@ def test_a_binding_naming_an_undeclared_ceiling_action_is_reported_alone_even_wi
     d = decide(f, p)
     assert "policy_binding_invalid" in d.reasons
     assert "approval_policy_generation_mismatch" not in d.reasons
+
+
+def test_a_negative_bypassed_extension_limit_cannot_hide_a_ceiling_violation(tmp_path, clock):
+    p, r, f, c = setup_flow(tmp_path)
+    adopt(r, f, c, binding(age_ceilings={p.action_id: 120}), freshness=FreshnessProfile(max_age_extension_seconds=60, anchor_deadline_to_inputs=True))
+    # class base 60 and ceiling 30 would be refused; a negative limit must not cancel the base (a negative limit lowers no bound)
+    below = f.runtime_authority_profile.policy_binding.model_copy(update={"age_ceilings": {p.action_id: 30}})
+    fresh = f.runtime_authority_profile.freshness.model_copy(update={"max_age_extension_seconds": -30})
+    bypassed = f.runtime_authority_profile.model_copy(update={"policy_binding": below, "freshness": fresh})
+    bind_approval(r, bypassed)
+    f.runtime_authority_profile = bypassed
+    d = decide(f, p)
+    assert d.result == "hold" and "freshness_ceiling_exceeded" in d.reasons

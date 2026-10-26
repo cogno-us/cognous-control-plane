@@ -33,7 +33,7 @@ authenticated activation. The durable ratchet is a consumer / EXT-S4 obligation.
 
 ## Registry identity
 `registry_identity(label)` returns this build's pinned sha256 of the file a label names and fails closed on any unsupported label;
-`registry_admits(label, reasons[, registry_codes])` refuses a 0.3 code under 0.1 or 0.2, an unsupported label and any unlisted code. This is an
+`registry_admits(label, reasons, registry_codes)` (the consumer's loaded registry is required, never defaulted) refuses a 0.3 code under 0.1 or 0.2, an unsupported label and any code the loaded registry does not list. This is an
 integrity check against the build's own pin. It is NOT an authenticated production evidence chain: no signed mapping or trust-root contract
 exists in the Control Plane and none was invented. The mapping must be retained with the evidence package and its trust must come from an
 authenticated publication or custody mechanism (Architect ruling); that mechanism is CONTRACT-BLOCKED.

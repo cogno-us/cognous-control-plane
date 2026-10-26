@@ -105,9 +105,10 @@ def registry_identity(label) -> str:
     return REGISTRY_SHA256[label]
 
 
-def registry_admits(label, reasons, registry_codes=None) -> bool:
-    """True only when ``label`` is supported and resolves every reason. A 0.3 code under 0.1 or 0.2 is refused, so is an unsupported
-    label, and (when the consumer's loaded registry ``registry_codes`` is given) any code it does not list."""
+def registry_admits(label, reasons, registry_codes) -> bool:
+    """True only when ``label`` is supported, every reason is listed in ``registry_codes`` (the consumer's loaded registry for that label:
+    existence is established only against it, never by this function alone) and no code is under a label that predates it. A 0.3 code
+    under 0.1 or 0.2, a 0.2 code under 0.1, an unsupported label and any unlisted code are refused."""
     if type(label) is not str or label not in REGISTRY_SHA256:
         return False
     if type(reasons) not in (list, tuple) or any(type(code) is not str for code in reasons):
@@ -117,7 +118,7 @@ def registry_admits(label, reasons, registry_codes=None) -> bool:
             return False
         if code in CODES_ADDED_IN_0_2 and label == VOCABULARY_VERSION:
             return False
-        if registry_codes is not None and code not in registry_codes:
+        if code not in registry_codes:
             return False
     return True
 
