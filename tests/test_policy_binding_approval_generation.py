@@ -484,3 +484,35 @@ def test_control_binding_dropped_revives_legacy_approval(tmp_path, clock):
 
 def test_the_eight_codes_are_the_policy_binding_vocabulary():
     assert len(NEW_CODES) == len(set(NEW_CODES)) == 8
+
+
+@pytest.mark.parametrize("update", [
+    {"policy_generation": object()}, {"selection_epoch": float("nan")}, {"binding_digest": {"x"}}, {"activation_ref": b"bytes"},
+    {"age_ceilings": {"x": float("inf")}},
+])
+def test_a_non_serializable_bypassed_binding_is_a_typed_refusal_not_an_exception(tmp_path, update):
+    p, r, f, c = setup_flow(tmp_path)
+    adopt(r, f, c, binding())
+    bad = f.runtime_authority_profile.policy_binding.model_copy(update=update)
+    f.runtime_authority_profile = f.runtime_authority_profile.model_copy(update={"policy_binding": bad})
+    d = decide(f, p)
+    assert d.result == "hold" and "policy_binding_invalid" in d.reasons
+
+
+def test_a_withdrawn_binding_still_authorizes_a_matching_approval_locally(tmp_path, clock):
+    """Pinned, not endorsed: the Control Plane does not stop authority on withdrawal; that is a consumer decision (EXT-S4-0/EXT-S4-2)."""
+    p, r, f, c = setup_flow(tmp_path)
+    adopt(r, f, c, withdrawn())
+    assert decide(f, p).result == "authorized"
+
+
+def test_a_binding_naming_an_undeclared_ceiling_action_is_reported_alone_even_with_a_wrong_generation(tmp_path):
+    p, r, f, c = setup_flow(tmp_path)
+    adopt(r, f, c, binding())
+    r.contexts[PROFILE]["runtime_authority"]["policy_generation"] = 9          # does not equal the trusted generation
+    bind_approval(r, f.runtime_authority_profile)
+    bad = f.runtime_authority_profile.policy_binding.model_copy(update={"age_ceilings": {"undeclared-action": 120}})
+    f.runtime_authority_profile = f.runtime_authority_profile.model_copy(update={"policy_binding": bad})
+    d = decide(f, p)
+    assert "policy_binding_invalid" in d.reasons
+    assert "approval_policy_generation_mismatch" not in d.reasons

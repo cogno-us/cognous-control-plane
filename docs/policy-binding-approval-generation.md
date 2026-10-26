@@ -29,7 +29,9 @@ commitment and every row is byte-identical to before (golden literals in `tests/
   must exist, and `class base + max_age_extension_seconds` may not exceed any ceiling. This is checked at construction AND at every
   evaluation, because `model_copy` and `snapshot` skip validators. `bounded.py`, `freshness.py` and `local_authority_effect.py` are not
   changed: with the invariant, an extension can never push an effective bound above a ceiling, and the anchored deadline
-  (`min(opened + bound, observed_at + bound)`) closes the 2x window for ceilinged actions. No maximum age is adopted (the Architect has
+  (`min(opened + bound, observed_at + bound)`) closes the 2x window for the status inputs judged through the freshness check (`_fresh`:
+  grant status, identity, mandate, conflict, policy, approval). It does NOT cover the reversibility purpose-status age check, which
+  compares directly with the class base bound (never extended, but not anchored), nor evidence obligations or destination observation. No maximum age is adopted (the Architect has
   not adopted one); the pre-existing `OverflowError` at about 2.5e11 seconds is not addressed here.
 
 ## What it cannot do (negative controls, pinned by tests)
@@ -51,6 +53,10 @@ Approval authenticity remains the existing unsigned trust model.
 ## Contract-blocked and provisional
 
 * `activation_sequence`: RESERVED (EXT-S4-0).
+* **A withdrawn binding still authorizes locally.** The Control Plane does not treat `withdrawn` as a refusal: an approval minted under a
+  withdrawn binding (its own `activation_ref` and generation) is authorized, and the earlier approvals are refused only because their
+  generation and activation no longer match. Whether a withdrawn scope may authorize at all is a consumer decision (EXT-S4-0/EXT-S4-2); nothing
+  here stops authority on withdrawal.
 * `disposition = "withdrawn"`: PROVISIONAL representation (consumer-supplied `activation_ref` and `policy_generation`, no digest, no
   ceilings). Zero, empty, null and copied digests are refused, also when validators are bypassed. EXT-S4-0 must define the canonical
   withdrawal binding; if it references a withdraw entry differently this shape must be replaced.

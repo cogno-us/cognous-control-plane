@@ -99,7 +99,7 @@ def member_defects(binding) -> bool:
 
 
 def identity_members(binding) -> dict:
-    """The effective policy identity as separate preimage members. Never raises on a malformed binding (the defect is reported elsewhere)."""
+    """The effective policy identity as separate preimage members (attribute reads only). ``validate_extensions`` refuses a malformed binding before this is hashed."""
     out = {"activation_ref": getattr(binding, "activation_ref", None), "selection_epoch": getattr(binding, "selection_epoch", None),
            "disposition": getattr(binding, "disposition", None)}
     digest = getattr(binding, "binding_digest", None)

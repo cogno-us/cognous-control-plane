@@ -324,6 +324,10 @@ def validate_extensions(profile: RuntimeAuthorityProfile, proposal, context: dic
         allowed |= {"approval_commitment_version", "policy_generation", "policy_activation_ref"}
     if set(spec) - allowed:
         reasons.append("runtime_authority_field_unsupported")
+    if binding is not None and _pb.member_defects(binding):
+        # Trusted configuration that is malformed (for example a ``model_copy``-bypassed binding) is refused with a typed code BEFORE anything
+        # is serialized or hashed: a non-JSON member must not surface as an untyped exception.
+        return ["policy_binding_invalid"], {}
     expected_approval = approval_commitment(profile, context)
     approvals = [x for x in inputs if x.input_type == "approval" and not x.missing]
     if not approvals or any(x.observed.get("runtime_authority_commitment") != expected_approval for x in approvals):
