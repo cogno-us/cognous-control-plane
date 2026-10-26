@@ -30,8 +30,12 @@ commitment and every row is byte-identical to before (golden literals in `tests/
   evaluation, because `model_copy` and `snapshot` skip validators. `bounded.py`, `freshness.py` and `local_authority_effect.py` are not
   changed: with the invariant, an extension can never push an effective bound above a ceiling, and the anchored deadline
   (`min(opened + bound, observed_at + bound)`) closes the 2x window for the status inputs judged through the freshness check (`_fresh`:
-  grant status, identity, mandate, conflict, policy, approval). It does NOT cover the reversibility purpose-status age check, which
-  compares directly with the class base bound (never extended, but not anchored), nor evidence obligations or destination observation. No maximum age is adopted (the Architect has
+  grant status, identity, mandate, conflict, policy, approval) AND, under a binding, for the purpose-status observation: `validate_extensions`
+  adds `observed_at + bound` of the purpose observation to the same deadline collector (the class bound for a direct read, the recorded
+  bound of an accepted cached snapshot). A purpose status that met its bound at evaluation (for example 59 s of a 60 s ceiling) is
+  refused before dispatch once the deadline passes (`check_expired_before_dispatch`, no effect). Without a binding the purpose age is judged at
+  evaluation and is not anchored (unchanged legacy behaviour). The dispatch guarantee does NOT cover evidence obligations or destination
+  observation, which have their own age paths and are not ceilinged. No maximum age is adopted (the Architect has
   not adopted one); the pre-existing `OverflowError` at about 2.5e11 seconds is not addressed here.
 
 ## What it cannot do (negative controls, pinned by tests)

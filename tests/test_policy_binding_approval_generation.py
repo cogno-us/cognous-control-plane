@@ -529,3 +529,80 @@ def test_a_negative_bypassed_extension_limit_cannot_hide_a_ceiling_violation(tmp
     f.runtime_authority_profile = bypassed
     d = decide(f, p)
     assert d.result == "hold" and "freshness_ceiling_exceeded" in d.reasons
+
+
+# ------------------------------------------------------------------------------------------------ purpose-status dispatch anchoring (R6)
+def _stall_once(f, clock, seconds):
+    """Tick the controlled clock exactly once, inside the destination observation between the effect check and the dispatch gate."""
+    original, calls, pinned = f.destination.observe, [], clock.now
+
+    def stalled(effect_id):
+        calls.append(1)
+        if len(calls) == 1:
+            clock.tick(seconds)
+        return original(effect_id).model_copy(update={"observed_at": pinned.isoformat()})
+    f.destination.observe = stalled
+
+
+def _purpose_flow(tmp_path, *, bound_binding):
+    p, r, f, c = setup_flow(tmp_path, purpose=True)
+    r.purpose.observed_at = (NOW - timedelta(seconds=59)).isoformat()          # satisfies the 60 s bound at evaluation
+    fresh = FreshnessProfile(max_age_extension_seconds=0, anchor_deadline_to_inputs=True)
+    if bound_binding:
+        adopt(r, f, c, binding(age_ceilings={p.action_id: 60}), freshness=fresh)
+    else:                                                                       # legacy: same freshness profile, no policy binding
+        cfg2 = c.model_copy(update={"freshness": fresh})
+        bind_approval(r, cfg2)
+        f.runtime_authority_profile = cfg2.snapshot()
+    return p, r, f
+
+
+def test_purpose_status_that_met_the_ceiling_at_evaluation_is_refused_after_a_two_second_dispatch_delay(tmp_path, clock):
+    """Effective ceiling 60 s, purpose-status age 59 s at evaluation, 2 s delay before dispatch: the status would be 61 s old."""
+    p, r, f = _purpose_flow(tmp_path, bound_binding=True)
+    d = decide(f, p)
+    assert d.result == "authorized", d.reasons
+    _stall_once(f, clock, 2)
+    with pytest.raises(PermissionError, match="check_expired_before_dispatch"):
+        execute(f, p, d)
+    assert f.destination.snapshot()["effects"] == {}, "no effect may proceed"
+
+
+@pytest.mark.parametrize("delay,dispatches", [(0, True), (1, True), (2, False)])
+def test_purpose_status_deadline_is_exactly_observed_at_plus_the_bound(tmp_path, clock, delay, dispatches):
+    p, r, f = _purpose_flow(tmp_path, bound_binding=True)
+    d = decide(f, p)
+    assert d.result == "authorized", d.reasons
+    _stall_once(f, clock, delay)
+    if dispatches:
+        attempt, _ = execute(f, p, d)
+        assert attempt.status == "acknowledged"
+    else:
+        with pytest.raises(PermissionError, match="check_expired_before_dispatch"):
+            execute(f, p, d)
+        assert f.destination.snapshot()["effects"] == {}
+
+
+def test_legacy_profile_without_a_policy_binding_keeps_its_behaviour_for_the_purpose_status(tmp_path, clock):
+    """Pinned legacy behaviour (not a guarantee): without a binding the purpose age is judged at evaluation and is not anchored."""
+    p, r, f = _purpose_flow(tmp_path, bound_binding=False)
+    d = decide(f, p)
+    assert d.result == "authorized", d.reasons
+    _stall_once(f, clock, 2)
+    attempt, _ = execute(f, p, d)
+    assert attempt.status == "acknowledged"
+
+
+def test_an_accepted_cached_purpose_snapshot_joins_the_dispatch_deadline_with_its_recorded_bound(tmp_path, clock):
+    from tests.test_reversibility import cls, flow as rev_flow, outage
+    p, r, f, c = rev_flow(tmp_path, cls("reversible_until", max_status_age_seconds=60))
+    r.cached.observed_at = (NOW - timedelta(seconds=59)).isoformat()
+    outage(r)                                                                   # the purpose store is down: the cached snapshot stands in
+    adopt(r, f, c, binding(age_ceilings={p.action_id: 60}), freshness=FreshnessProfile(max_age_extension_seconds=0, anchor_deadline_to_inputs=True))
+    d = decide(f, p)
+    assert d.result == "authorized", d.reasons
+    assert any(x.input_type == "purpose" and x.read_state == "cached_positive" for x in d.resolution_inputs)
+    _stall_once(f, clock, 2)
+    with pytest.raises(PermissionError, match="check_expired_before_dispatch"):
+        execute(f, p, d)
+    assert f.destination.snapshot()["effects"] == {}
