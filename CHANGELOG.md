@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Added — EXT-S4-4 / V02: claim-carried canonical policy binding under a successor claim profile (BUILDER_TESTED; non-authorizing)
+- New `canonical_policy_binding.py` (strict `ocs-policy-binding/1` validator and `binding_digest`; implements the published profile, imports no Registry code). New successor profile `urn:cognous:profiles:local-authority-effect:0.2.0-proposed` (name proposed, not ratified) and a declared optional claim member `policy_binding`, omitted while absent. Issuance gains keyword-only `policy_binding`, `expected_consumer_id`, `expected_operation`; verification refuses undeclared members, a binding under the legacy profile and a missing or inconsistent binding under the successor profile.
+- Legacy claims (no binding) are byte-identical: frozen vectors generated on the unmodified base. `bounded.py`, `policy_binding.py`, `runtime_authority.py` are unchanged. No reason code is added; refusal evidence uses existing codes in the claim-stage check.
+- Tightening: a dictionary claim with an undeclared member now fails `verify_local_execution_claim` (previously such a key rode along when its commitment was recomputed). Well-formed claims are unaffected.
+- NOT implemented: Runtime activation, rollback protection, ratchet handling, the atomic effect guard (V04/V05). A claim-carried binding authorizes nothing.
+
 ### Added — opt-in policy-binding/0.1: approval generation, approval-commitment/0.2 and registry freshness ceilings; reasons 0.3 (R6 reconstruction)
 - New opt-in `RuntimeAuthorityProfile.policy_binding` (`policy_binding.py`): effective policy identity (`binding_digest`, `selection_epoch`, `activation_ref`, `disposition`), an opaque consumer-supplied `policy_generation` (never derived from the epoch) and `age_ceilings`. With a binding the approval commitment is `approval-commitment/0.2` (tagged preimage); the approved spec must carry the version, generation and activation reference, compared by equality with the TRUSTED profile. Without a binding every dump and commitment is byte-identical (golden literals).
 - Freshness ceilings are enforced from source at construction and at every evaluation: a ceilinged profile needs a freshness/0.1 profile with `anchor_deadline_to_inputs`, and class base plus extension limit may not exceed a ceiling. Under a binding the purpose-status observation joins the dispatch deadline (class bound, or the recorded bound of an accepted cached snapshot). `bounded.py`, `freshness.py`, `local_authority_effect.py` are unchanged.
