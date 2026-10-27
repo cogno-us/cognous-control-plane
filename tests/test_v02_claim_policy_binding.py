@@ -604,12 +604,14 @@ def test_d03_a_binding_cannot_substitute_for_a_missing_grant_or_approval(tmp_pat
     (dict(binding_digest=sha("2")), "policy_binding_invalid"),
 ])
 def test_d04_inconsistent_approval_and_binding_identities_are_refused(tmp_path, uuids, profile_over, code):
+    """The reason code is asserted on the claim-stage resolution check (existing codes only)."""
     b = canonical_binding()
     pb = PolicyBinding(binding_digest=reference_binding_digest(b), selection_epoch=b["selection_epoch"], activation_ref=b["activation_ref"],
                        policy_generation=1, disposition="selected").model_copy(update=profile_over)
     p, r, f, d, cfg = tenant_flow(tmp_path, b, profile_binding=pb)
-    with pytest.raises(PermissionError):
+    with pytest.raises(PermissionError, match="policy binding refused"):
         materialize_local_execution_claim(f, p, d, now=TENANT_NOW, policy_binding=b, expected_consumer_id=CONSUMER, expected_operation=OPERATION)
+    assert code in last_claim_reasons(f)
 
 
 def test_d04b_identity_mismatch_is_recorded_with_existing_reason_codes(tmp_path, uuids):
@@ -672,3 +674,85 @@ def test_d10_policy_generation_and_selection_epoch_are_not_conflated(tmp_path, u
     claim, _ = issue(tmp_path, b, generation=7)
     assert "policy_generation" not in claim.policy_binding and claim.policy_binding["selection_epoch"] == 3
     assert verify_local_execution_claim(claim) is True
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# E. review follow-ups (fresh-context review of 7118d9f)
+# ---------------------------------------------------------------------------------------------------------------------------------
+def test_e01_binding_is_copied_before_any_host_code_runs(tmp_path, uuids):
+    """A snapshot reader (host code) that mutates the caller's dict mid-issuance must not change what the claim carries."""
+    b = canonical_binding()
+    p, r, f, d, cfg = tenant_flow(tmp_path, b)
+    original = r.authority_effect_snapshot
+
+    def mutating(ref):
+        b["activation_ref"], b["selection_epoch"] = sha("9"), 99
+        return original(ref)
+    r.authority_effect_snapshot = mutating
+    claim = materialize_local_execution_claim(f, p, d, now=TENANT_NOW, policy_binding=b, expected_consumer_id=CONSUMER, expected_operation=OPERATION)
+    assert claim.policy_binding["activation_ref"] == sha("c") and claim.policy_binding["selection_epoch"] == 3
+    assert verify_local_execution_claim(claim) is True
+
+
+def test_e02_subclass_instances_cannot_smuggle_undeclared_members(tmp_path, uuids):
+    claim, _ = issue(tmp_path)
+
+    class Sub(TenantLocalExecutionClaim):
+        smuggled: str = "x"
+    sub = Sub.model_validate(claim.model_dump(mode="json", exclude_none=False))
+    assert verify_local_execution_claim(sub) is False
+
+
+def test_e03_str_and_int_subclass_members_on_bypassed_instances_are_refused(tmp_path, uuids):
+    claim, _ = issue(tmp_path)
+
+    class S(str):
+        pass
+
+    class I(int):
+        pass
+    for path, bad in (("record_id", S("rec-example-f1ab")), ("record_version", I(2))):
+        forged = claim.model_copy(update={"policy_binding": put(claim.policy_binding, path, bad)})
+        assert verify_local_execution_claim(forged) is False, path
+
+
+def test_e04_host_expected_values_must_be_exact_strings(tmp_path, uuids):
+    class Steer(str):
+        def __ne__(self, other):
+            return False
+
+        def __eq__(self, other):
+            return True
+        __hash__ = str.__hash__
+    b = canonical_binding()
+    p, r, f, d, cfg = tenant_flow(tmp_path, b)
+    for kw in (dict(expected_consumer_id=Steer("anything"), expected_operation=OPERATION), dict(expected_consumer_id=CONSUMER, expected_operation=Steer("anything"))):
+        with pytest.raises(PermissionError):
+            materialize_local_execution_claim(f, p, d, now=TENANT_NOW, policy_binding=b, **kw)
+
+
+def test_e05_decision_activation_must_agree_with_the_binding(tmp_path, uuids):
+    """The decision-bound extension's policy_activation_ref (not only the live profile) must equal the binding's activation_ref."""
+    b = canonical_binding()
+    p, r, f, d, cfg = tenant_flow(tmp_path, b)
+    swapped = cfg.policy_binding.model_copy(update={"activation_ref": sha("1")})
+    f.runtime_authority_profile = cfg.model_copy(update={"policy_binding": swapped}).snapshot()
+    with pytest.raises(PermissionError):
+        materialize_local_execution_claim(f, p, d, now=TENANT_NOW, policy_binding=b, expected_consumer_id=CONSUMER, expected_operation=OPERATION)
+
+
+def test_e06_withdrawn_disposition_is_refused_with_the_existing_code(tmp_path, uuids):
+    b = canonical_binding()
+    withdrawn = PolicyBinding(selection_epoch=b["selection_epoch"], activation_ref=b["activation_ref"], policy_generation=1, disposition="withdrawn")
+    p, r, f, d, cfg = tenant_flow(tmp_path, b, profile_binding=withdrawn)
+    with pytest.raises(PermissionError):
+        materialize_local_execution_claim(f, p, d, now=TENANT_NOW, policy_binding=b, expected_consumer_id=CONSUMER, expected_operation=OPERATION)
+    assert "policy_binding_invalid" in last_claim_reasons(f)
+
+
+def test_e07_known_limit_a_claim_may_still_be_issued_without_a_binding(tmp_path, uuids):
+    """Pinned limit: omitting the binding yields a legacy claim even under a selected approval-side binding. Whether a no-binding claim may
+    execute is decided by the destination guard (contract 7.4 line 8), which is V04/V05 and not implemented here."""
+    p, r, f, d, cfg = tenant_flow(tmp_path, canonical_binding())
+    legacy = materialize_local_execution_claim(f, p, d, now=TENANT_NOW, claim_id="c")
+    assert legacy.profile == LOCAL_AUTHORITY_EFFECT_PROFILE and legacy.policy_binding is None

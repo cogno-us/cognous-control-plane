@@ -191,7 +191,8 @@ def _binding_issuance_reasons(workflow, current, binding, expected_consumer_id, 
     defect = _cpb.binding_defect(binding)
     if defect is not None:
         return [invalid], f"canonical policy binding member invalid: {defect}"
-    if binding["consumer_id"] != expected_consumer_id or binding["operation"] != expected_operation:
+    if (type(expected_consumer_id) is not str or type(expected_operation) is not str
+            or binding["consumer_id"] != expected_consumer_id or binding["operation"] != expected_operation):
         return [invalid], "policy binding consumer or operation does not match the host-expected values"
     if not isinstance(current, TenantAuthorizationBinding) or current.tenant_id != binding["scope"]["tenant"]:
         return [invalid], "policy binding requires a tenant claim whose tenant equals the binding scope tenant"
@@ -418,6 +419,8 @@ def _materialize_under_handoff(
 ) -> LocalExecutionClaim:
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("claim issuance time must be timezone-aware")
+    # One private copy, taken before any host code runs: every check below and the claim itself use this copy, never the caller's object.
+    policy_binding = copy.deepcopy(policy_binding)
     now = workflow._evaluation_time(now)
 
     persisted = workflow.records.decision(decision.decision_id)
@@ -446,10 +449,11 @@ def _materialize_under_handoff(
         binding_note = ""
         if policy_binding is not None or expected_consumer_id is not None or expected_operation is not None:
             binding_reasons, binding_note = _binding_issuance_reasons(workflow, current, policy_binding, expected_consumer_id, expected_operation)
+            resolver_reasons = set(reasons)
             reasons = list(reasons) + binding_reasons
         reasons = workflow._record_check(inputs, now, reasons, "claim", check_id=check_ref[0] if check_ref else None)
         if reasons or current is None or current != decision.binding:
-            if binding_reasons and not (set(reasons) - set(binding_reasons)) and current is not None and current == decision.binding:
+            if binding_reasons and not resolver_reasons and not (set(reasons) - set(binding_reasons)) and current is not None and current == decision.binding:
                 raise PermissionError(f"policy binding refused at claim issuance: {binding_note}")
             raise PermissionError("authorization-critical inputs changed before claim issuance")
 
@@ -550,7 +554,7 @@ def _materialize_under_handoff(
             claim_type = TenantLocalExecutionClaim
         if policy_binding is not None:
             raw["profile"] = LOCAL_AUTHORITY_EFFECT_PROFILE_V2
-            raw["policy_binding"] = copy.deepcopy(policy_binding)
+            raw["policy_binding"] = copy.deepcopy(policy_binding)  # the private copy; the claim never aliases it
         raw["claim_commitment"] = commitment(raw)
         claim = claim_type.model_validate(raw)
 
@@ -635,7 +639,9 @@ def verify_local_execution_claim(
 ) -> bool:
     if isinstance(claim, LocalExecutionClaim):
         value = claim.model_dump(mode="json", exclude_none=False)
-        declared = type(claim).model_fields
+        declared = (TenantLocalExecutionClaim if isinstance(claim, TenantLocalExecutionClaim) else LocalExecutionClaim).model_fields
+        if claim.policy_binding is not None and _cpb.binding_defect(claim.policy_binding) is not None:
+            return False  # judged on the instance's own member: a JSON dump would turn int/str subclasses into plain values
     else:
         value = copy.deepcopy(claim)
         try:

@@ -30,7 +30,7 @@ MEMBERS = (
 SCOPE_MEMBERS = ("tenant", "institution", "authority_domain")
 IDENTIFIERS = ("record_id", "selection_id", "family", "consumer_id", "operation")
 DIGESTS = ("record_digest", "selection_digest", "effective_policy_digest", "activation_ref", "trust_snapshot_fingerprint")
-#: Per-field integer domains (contract 4.1 / EXT-S1-5 spec): independent entries, deliberately not derived from one constant.
+#: Per-field integer domains. Contract 4.1 fixes the minimum (1); the upper bounds are those of the EXT-S1-5 spec / Registry vectors. Independent entries, not derived from one constant.
 INTEGER_RANGES = {
     "record_version": (1, 2147483647),
     "selection_epoch": (1, 2147483647),
