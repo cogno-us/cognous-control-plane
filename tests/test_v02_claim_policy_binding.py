@@ -49,6 +49,7 @@ TOP = ["binding_profile", "record_id", "record_version", "record_digest", "selec
        "consumer_id", "scope", "operation", "effective_policy_digest", "activation_ref", "trust_snapshot_version", "trust_snapshot_fingerprint"]
 SCOPE = ["tenant", "institution", "authority_domain"]
 PATHS = [m for m in TOP] + [f"scope.{s}" for s in SCOPE]
+LEAF_PATHS = [p for p in PATHS if p != "scope"]  # the container itself is exercised by the structural tests
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -292,7 +293,7 @@ def test_b01_successor_claim_carries_the_binding_under_the_existing_commitment(t
     assert "policy_binding_digest" not in raw and "binding_digest" not in raw  # no sibling digest field
 
 
-@pytest.mark.parametrize("path", PATHS)
+@pytest.mark.parametrize("path", LEAF_PATHS)
 def test_b02_any_altered_binding_member_invalidates_the_commitment(tmp_path, uuids, path):
     claim, _ = issue(tmp_path)
     raw = claim.model_dump(mode="json", exclude_none=False)
@@ -427,6 +428,30 @@ def test_b12_unknown_fields_are_refused_on_legacy_and_successor_dictionary_claim
     raw = claim.model_dump(mode="json", exclude_none=False)
     assert verify_local_execution_claim(resign(raw, unknown=1)) is False
     assert verify_local_execution_claim(resign(raw, policy_binding_digest=binding_digest(raw["policy_binding"]))) is False
+
+
+def test_b12b_explicit_null_binding_member_on_a_legacy_dictionary_claim_is_refused(tmp_path, uuids):
+    legacy = json.loads(legacy_claim_text(tmp_path))
+    assert verify_local_execution_claim(resign(legacy, policy_binding=None)) is False  # undeclared for the legacy profile, even when null
+
+
+def test_b12c_validator_bypassed_instances_are_judged_by_verify_itself(tmp_path, uuids):
+    """model_copy / model_construct skip validators, so verification must not rely on construction-time checks."""
+    claim, _ = issue(tmp_path)
+    raw = claim.model_dump(mode="json", exclude_none=False)
+    other_tenant = put(raw["policy_binding"], "scope.tenant", "tenant-beta")
+    cases = {
+        "scope inconsistent": resign(raw, policy_binding=other_tenant),
+        "successor profile without binding": resign(raw, policy_binding=_DROP),
+        "legacy profile with binding": resign(raw, profile=LOCAL_AUTHORITY_EFFECT_PROFILE),
+        "malformed binding": resign(raw, policy_binding={**raw["policy_binding"], "extra": 1}),
+    }
+    base = TenantLocalExecutionClaim.model_validate(raw)
+    for name, forged in cases.items():
+        update = {"profile": forged["profile"], "claim_commitment": forged["claim_commitment"], "policy_binding": forged.get("policy_binding")}
+        instance = base.model_copy(update=update)  # skips every validator
+        assert verify_local_execution_claim(instance) is False, name
+    assert verify_local_execution_claim(base.model_copy()) is True  # the unmodified claim still verifies
 
 
 def test_b13_unrecognized_claim_profiles_are_refused(tmp_path, uuids):

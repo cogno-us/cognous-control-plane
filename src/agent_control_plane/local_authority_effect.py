@@ -13,8 +13,9 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
+from agent_control_plane import canonical_policy_binding as _cpb
 from agent_control_plane.bounded import (
     BoundedAuthorizationWorkflow,
     RuntimeDecision,
@@ -25,8 +26,12 @@ from agent_control_plane.bounded import (
     _parse,
     commitment,
 )
+from agent_control_plane.policy_binding import member_defects as _approval_binding_defects
 
 LOCAL_AUTHORITY_EFFECT_PROFILE = "urn:cognous:profiles:local-authority-effect:0.1.0-proposed"
+#: Additive successor claim profile (EXT-S4-4): a claim under it MUST carry a valid canonical policy binding; under the legacy profile it MUST NOT.
+#: The name is a builder proposal pending ratification by the Control Plane owner.
+LOCAL_AUTHORITY_EFFECT_PROFILE_V2 = "urn:cognous:profiles:local-authority-effect:0.2.0-proposed"
 
 
 class ApprovalProjection(BaseModel):
@@ -118,6 +123,29 @@ class LocalExecutionClaim(BaseModel):
     source: Literal["trusted_control_plane_workflow"] = "trusted_control_plane_workflow"
     authorizing_by_possession: bool = False
     claim_commitment: str
+    #: Declared optional member (omitted from every dump while None, so a claim without a binding keeps its exact legacy bytes). Present if and
+    #: only if ``profile`` is the successor profile; covered by ``claim_commitment`` like every other member. Not authority by itself.
+    policy_binding: dict[str, Any] | None = Field(default=None, exclude_if=lambda v: v is None)
+
+    @field_validator("policy_binding", mode="before")
+    @classmethod
+    def _binding_is_a_valid_canonical_object(cls, value):
+        if value is None:
+            return None
+        defect = _cpb.binding_defect(value)
+        if defect is not None:
+            raise ValueError(f"policy_binding is not a valid ocs-policy-binding/1 object ({defect})")
+        return copy.deepcopy(value)
+
+    @model_validator(mode="after")
+    def _binding_agrees_with_profile_and_scope(self):
+        value = {"profile": self.profile, "tenant_id": getattr(self, "tenant_id", None), "institution_id": self.institution_id,
+                 "authority_domain": self.authority_domain}
+        if self.policy_binding is not None:
+            value["policy_binding"] = self.policy_binding
+        if not _binding_profile_consistent(value):
+            raise ValueError("policy_binding is inconsistent with the claim profile or the claim scope")
+        return self
 
 
 class TenantLocalExecutionClaim(LocalExecutionClaim):
@@ -132,6 +160,52 @@ class TenantLocalExecutionClaim(LocalExecutionClaim):
 def _utc(value: str) -> datetime:
     parsed = _parse(value)
     return parsed.astimezone(timezone.utc)
+
+
+def _binding_profile_consistent(value: dict) -> bool:
+    """Pure claim-internal consistency of the binding with the claim profile and the claim's own scope (no authority is read or created).
+
+    * successor profile: a valid completed binding, on a tenant claim, whose ``scope`` equals the claim's tenant, institution and authority domain;
+    * any other profile (the legacy profile included): NO ``policy_binding`` member, not even a null one.
+    """
+    if value.get("profile") != LOCAL_AUTHORITY_EFFECT_PROFILE_V2:
+        return "policy_binding" not in value
+    binding = value.get("policy_binding")
+    if _cpb.binding_defect(binding) is not None:
+        return False
+    scope = binding["scope"]
+    tenant = value.get("tenant_id")
+    return (type(tenant) is str and scope["tenant"] == tenant and scope["institution"] == value.get("institution_id")
+            and scope["authority_domain"] == value.get("authority_domain"))
+
+
+def _binding_issuance_reasons(workflow, current, binding, expected_consumer_id, expected_operation) -> tuple[list[str], str]:
+    """Existing reason codes (``policy_binding_invalid``, ``approval_policy_activation_mismatch``) and a diagnostic note for a binding offered at
+    issuance. The canonical binding must be consistent with the approval-side ``policy-binding/0.1`` the approvals already commit to; it never
+    replaces the grant, the approvals or that object. ``current`` None means the ordinary refusal applies and nothing is added."""
+    if current is None:
+        return [], ""
+    invalid, mismatch = "policy_binding_invalid", "approval_policy_activation_mismatch"
+    if binding is None:
+        return [invalid], "expected consumer or operation supplied without a policy binding"
+    defect = _cpb.binding_defect(binding)
+    if defect is not None:
+        return [invalid], f"canonical policy binding member invalid: {defect}"
+    if binding["consumer_id"] != expected_consumer_id or binding["operation"] != expected_operation:
+        return [invalid], "policy binding consumer or operation does not match the host-expected values"
+    if not isinstance(current, TenantAuthorizationBinding) or current.tenant_id != binding["scope"]["tenant"]:
+        return [invalid], "policy binding requires a tenant claim whose tenant equals the binding scope tenant"
+    profile = workflow.runtime_authority_profile
+    approval_side = getattr(profile, "policy_binding", None)
+    if approval_side is None or _approval_binding_defects(approval_side) or approval_side.disposition != "selected":
+        return [invalid], "no selected approval-side policy-binding/0.1 is configured for this workflow"
+    reasons: list[str] = []
+    carried_activation = (current.runtime_authority or {}).get("policy_activation_ref")
+    if binding["activation_ref"] != approval_side.activation_ref or carried_activation != binding["activation_ref"]:
+        reasons.append(mismatch)
+    if binding["selection_epoch"] != approval_side.selection_epoch or approval_side.binding_digest != _cpb.binding_digest(binding):
+        reasons.append(invalid)
+    return reasons, "policy binding is inconsistent with the approval-side policy binding" if reasons else ""
 
 
 def _operation_payload(
@@ -338,6 +412,9 @@ def _materialize_under_handoff(
     decision_input_commitment: str | None,
     decision_input_profile_version: str | None,
     provision: Callable[[LocalExecutionClaim], None] | None,
+    policy_binding: dict | None = None,
+    expected_consumer_id: str | None = None,
+    expected_operation: str | None = None,
 ) -> LocalExecutionClaim:
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("claim issuance time must be timezone-aware")
@@ -365,8 +442,15 @@ def _materialize_under_handoff(
             **({"stage": "claim", "decision": decision} if journal else {}),
             **({"check_ref": check_ref} if (workflow._identity or workflow._freshness) else {}),
         )
+        binding_reasons: list[str] = []
+        binding_note = ""
+        if policy_binding is not None or expected_consumer_id is not None or expected_operation is not None:
+            binding_reasons, binding_note = _binding_issuance_reasons(workflow, current, policy_binding, expected_consumer_id, expected_operation)
+            reasons = list(reasons) + binding_reasons
         reasons = workflow._record_check(inputs, now, reasons, "claim", check_id=check_ref[0] if check_ref else None)
         if reasons or current is None or current != decision.binding:
+            if binding_reasons and not (set(reasons) - set(binding_reasons)) and current is not None and current == decision.binding:
+                raise PermissionError(f"policy binding refused at claim issuance: {binding_note}")
             raise PermissionError("authorization-critical inputs changed before claim issuance")
 
         snapshot = snapshot_reader(proposal.authority_context_ref or "")
@@ -376,6 +460,10 @@ def _materialize_under_handoff(
         context, institution, grant, approvals, policies, evidence = _validate_issuance_snapshot(
             workflow, proposal, decision, snapshot, now=now
         )
+        if policy_binding is not None:
+            scope = policy_binding["scope"]
+            if scope["institution"] != institution.get("institution_id") or scope["authority_domain"] != institution.get("authority_domain"):
+                raise PermissionError("policy binding refused at claim issuance: scope does not match the claim institution and authority domain")
         grant_status = snapshot["grant_status"]
         requirement = context.get("requirement") or {}
 
@@ -460,6 +548,9 @@ def _materialize_under_handoff(
             raw["authorization_generation"] = "bounded-authorization-effect/0.2"
             raw["tenant_id"] = current.tenant_id
             claim_type = TenantLocalExecutionClaim
+        if policy_binding is not None:
+            raw["profile"] = LOCAL_AUTHORITY_EFFECT_PROFILE_V2
+            raw["policy_binding"] = copy.deepcopy(policy_binding)
         raw["claim_commitment"] = commitment(raw)
         claim = claim_type.model_validate(raw)
 
@@ -483,6 +574,9 @@ def materialize_local_execution_claim(
     expires_at: str | None = None,
     decision_input_commitment: str | None = None,
     decision_input_profile_version: str | None = None,
+    policy_binding: dict | None = None,
+    expected_consumer_id: str | None = None,
+    expected_operation: str | None = None,
 ) -> LocalExecutionClaim:
     """Return a validated non-executable claim snapshot.
 
@@ -495,7 +589,8 @@ def materialize_local_execution_claim(
         budget_id=budget_id, expires_at=expires_at,
         decision_input_commitment=decision_input_commitment,
         decision_input_profile_version=decision_input_profile_version,
-        provision=None,
+        provision=None, policy_binding=policy_binding,
+        expected_consumer_id=expected_consumer_id, expected_operation=expected_operation,
     )
 
 
@@ -511,6 +606,9 @@ def provision_local_execution_claim(
     expires_at: str | None = None,
     decision_input_commitment: str | None = None,
     decision_input_profile_version: str | None = None,
+    policy_binding: dict | None = None,
+    expected_consumer_id: str | None = None,
+    expected_operation: str | None = None,
 ) -> LocalExecutionClaim:
     """Atomically hand current authority to a participating local claim store.
 
@@ -527,7 +625,8 @@ def provision_local_execution_claim(
         budget_id=budget_id, expires_at=expires_at,
         decision_input_commitment=decision_input_commitment,
         decision_input_profile_version=decision_input_profile_version,
-        provision=provision,
+        provision=provision, policy_binding=policy_binding,
+        expected_consumer_id=expected_consumer_id, expected_operation=expected_operation,
     )
 
 
@@ -536,17 +635,30 @@ def verify_local_execution_claim(
 ) -> bool:
     if isinstance(claim, LocalExecutionClaim):
         value = claim.model_dump(mode="json", exclude_none=False)
+        declared = type(claim).model_fields
     else:
         value = copy.deepcopy(claim)
         try:
             if "tenant_id" in value or "authorization_generation" in value:
+                declared = TenantLocalExecutionClaim.model_fields
                 TenantLocalExecutionClaim.model_validate(value)
             else:
+                declared = LocalExecutionClaim.model_fields
                 LocalExecutionClaim.model_validate(value)
         except Exception:
             return False
     supplied = value.pop("claim_commitment", None)
-    if value.get("profile") != LOCAL_AUTHORITY_EFFECT_PROFILE:
+    profile = value.get("profile")
+    if profile != LOCAL_AUTHORITY_EFFECT_PROFILE and profile != LOCAL_AUTHORITY_EFFECT_PROFILE_V2:
+        return False
+    # Undeclared members are refused (a bare extra key is dropped by the model path, so it must never ride along in a dictionary claim). The
+    # legacy profile declares no binding member at all; the successor profile requires a valid, scope-consistent one.
+    allowed = set(declared) - {"claim_commitment"}
+    if profile == LOCAL_AUTHORITY_EFFECT_PROFILE:
+        allowed.discard("policy_binding")
+    if set(value) - allowed:
+        return False
+    if not _binding_profile_consistent(value):
         return False
     if value.get("source") != "trusted_control_plane_workflow":
         return False

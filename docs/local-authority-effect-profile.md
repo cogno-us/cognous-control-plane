@@ -109,3 +109,19 @@ transaction as the protected effect.
 This profile does not establish production identity, source authenticity,
 distributed transactions, remote revocation, universal mediation, external
 destination atomicity, EBL-Core conformance, or production readiness.
+
+## Successor profile: claim-carried canonical policy binding (EXT-S4-4, V02)
+
+Status: **BUILDER_TESTED developer increment; non-authorizing; not independently qualified. Tier 1, independent Ed25519 review, release, publication and production remain on HOLD.**
+
+Successor profile: `urn:cognous:profiles:local-authority-effect:0.2.0-proposed` (the identifier is a builder proposal pending ratification by the Control Plane owner). The legacy profile above is unchanged.
+
+- A claim MAY carry the completed Registry `ocs-policy-binding/1` object (Registry `docs/r08-v2-contract.md` section 4) as the declared optional member `policy_binding`. The member is omitted from every dump while absent, so a claim without a binding keeps its exact legacy bytes, commitment, issuance and verification behavior (frozen byte vectors in `tests/fixtures/v02_legacy_claim_vectors.json`, generated on the unmodified base).
+- Under the successor profile the binding is REQUIRED and valid; under the legacy profile it is REFUSED (an undeclared member). Any other undeclared member of a dictionary claim is also refused, because a bare extra key is dropped by the model path.
+- The existing `claim_commitment` (`bounded.commitment`) covers the complete binding. There is no sibling digest field. `bounded.py` is unchanged.
+- Validation (`canonical_policy_binding.py`) implements the published profile with strict types and closed membership, no normalization and no coercion; it imports no Registry code. It is distinct from the approval-side `policy-binding/0.1` object, which is unchanged.
+- Issuance (`materialize_local_execution_claim` / `provision_local_execution_claim`) accepts keyword-only `policy_binding`, `expected_consumer_id` and `expected_operation`. The consumer and operation are host-expected inputs (the claim has no such members). The binding must be a tenant claim whose scope equals the claim's tenant, institution and authority domain, and must agree with the approval-side `policy-binding/0.1` the approvals already commit to (shared `binding_digest`, `selection_epoch`, `activation_ref`; `policy_generation` is never inferred from or compared with the epoch). Refusal is `PermissionError`; evidence is the existing claim-stage resolution check using the existing codes `policy_binding_invalid` and `approval_policy_activation_mismatch`. No reason code is added.
+- The binding is not part of `policy_state` or `authority_state`, and it is not a grant, an approval or an activation.
+
+Limits (unchanged by this increment): the claim commitment is self-consistency, not a signature; possession of a claim, with or without a binding, authorizes nothing. The Runtime must compare the claim-carried binding with durable active authority under the destination transaction lock, with rollback protection, the ratchet and the atomic effect guard. That work is V04/V05 and is not implemented here. `activation_ref` is filled by the enforcing gate and is not derived or invented by the Control Plane.
+
