@@ -33,6 +33,44 @@ jobs:
       - name: Run tests
         run: pytest
 
+      # F4 ages-only (M11 increment): the Registry-governed tests must EXECUTE here. They need a Registry checkout at the exact pin and PyNaCl from Registry's
+      # hash-locked requirements. OCS_REQUIRE_REGISTRY_PIN=1 turns a missing/wrong pin or missing PyNaCl into a FAILURE, and the junit check below fails the job
+      # if any test in the module was skipped or fewer than the expected number ran. The env var is scoped to this step only: other modules that read
+      # OCS_REGISTRY_PIN_DIR assert different Registry pins and are intentionally not run against this one.
+      - name: Check out the pinned Registry
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: cogno-us/cognous-ocs-registry
+          ref: 6f600ab1150f00ef3d96834159b1807e866a78b6
+          path: registry-pin
+
+      - name: Install the Registry Ed25519 dependency (hash-locked)
+        run: python -m pip install --require-hashes -r registry-pin/requirements-ed25519.lock.txt
+
+      - name: Run the Registry-governed F4 age tests (must not skip)
+        env:
+          OCS_REGISTRY_PIN_DIR: ${{ github.workspace }}/registry-pin
+          OCS_REQUIRE_REGISTRY_PIN: "1"
+        run: |
+          set -o pipefail
+          {
+            git -C registry-pin rev-parse HEAD
+            test "$(git -C registry-pin rev-parse HEAD)" = "6f600ab1150f00ef3d96834159b1807e866a78b6"
+            python -c "import nacl, sys; print('pynacl', nacl.__version__, sys.version.split()[0])"
+            pytest -q tests/test_f4_age_governance.py --junitxml=f4-age-junit.xml
+            python - <<'PY'
+          import xml.etree.ElementTree as ET
+          suite = ET.parse("f4-age-junit.xml").getroot()
+          suite = suite if suite.tag == "testsuite" else suite[0]
+          n, skipped, failed = int(suite.get("tests")), int(suite.get("skipped")), int(suite.get("failures")) + int(suite.get("errors"))
+          print(f"f4 age tests: {n} run, {skipped} skipped, {failed} failed")
+          assert skipped == 0 and failed == 0 and n >= 70, "Registry-governed tests were skipped or did not run"
+          PY
+          } 2>&1 | tee f4-age-out.txt || {
+            echo "::error title=F4 age tests failed::$(tail -n 40 f4-age-out.txt | sed ':a;N;$!ba;s/\n/%0A/g')"
+            exit 1
+          }
+
       - name: Authorization control removal probes
         run: python tools/adversarial_mutations.py
 
