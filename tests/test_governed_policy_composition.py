@@ -467,9 +467,11 @@ def test_i05_post_construction_edits_of_the_held_state_are_refused_at_every_boun
         flow.runtime_authority_profile = cfg
     else:
         flow.runtime_authority_profile = flow.runtime_authority_profile.model_copy(update={"catalogue_version": "x"})
+    calls = {k: x.calls for k, x in srcs.items()}
     with pytest.raises(RegistryGovernedPolicyRefused) as e:
         flow.decide(p, now=NOW)
     refused(e, "scalars_modified" if edit == "scalars" else "profile_modified", "decision")
+    assert {k: x.calls for k, x in srcs.items()} == calls  # the held state is judged FIRST: no selection source was even invoked
 
 
 def test_i06_the_held_state_is_checked_again_after_the_sources_ran(tmp_path):
