@@ -52,9 +52,13 @@ jobs:
           OCS_REGISTRY_PIN_DIR: ${{ github.workspace }}/registry-pin
           OCS_REQUIRE_REGISTRY_PIN: "1"
         run: |
-          test "$(git -C registry-pin rev-parse HEAD)" = "6f600ab1150f00ef3d96834159b1807e866a78b6"
-          pytest -q tests/test_f4_age_governance.py --junitxml=f4-age-junit.xml
-          python - <<'PY'
+          set -o pipefail
+          {
+            git -C registry-pin rev-parse HEAD
+            test "$(git -C registry-pin rev-parse HEAD)" = "6f600ab1150f00ef3d96834159b1807e866a78b6"
+            python -c "import nacl, sys; print('pynacl', nacl.__version__, sys.version.split()[0])"
+            pytest -q tests/test_f4_age_governance.py --junitxml=f4-age-junit.xml
+            python - <<'PY'
           import xml.etree.ElementTree as ET
           suite = ET.parse("f4-age-junit.xml").getroot()
           suite = suite if suite.tag == "testsuite" else suite[0]
@@ -62,6 +66,10 @@ jobs:
           print(f"f4 age tests: {n} run, {skipped} skipped, {failed} failed")
           assert skipped == 0 and failed == 0 and n >= 60, "Registry-governed tests were skipped or did not run"
           PY
+          } 2>&1 | tee f4-age-out.txt || {
+            echo "::error title=F4 age tests failed::$(tail -n 40 f4-age-out.txt | sed ':a;N;$!ba;s/\n/%0A/g')"
+            exit 1
+          }
 
       - name: Authorization control removal probes
         run: python tools/adversarial_mutations.py
