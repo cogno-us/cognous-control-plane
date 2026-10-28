@@ -14,27 +14,33 @@ Source-backed behaviour (Control Plane `bounded.py` at `d66ae07`):
     institution and authority domain are the host MANIFEST's declared authority context for that action, and the consumer id is host configuration.
     A workflow is bound to ONE (consumer, tenant, action) scope; any other proposal is refused before any Registry call.
 
-Lifecycle: the selection is verified (record, signature, scope, expiry, withdrawal, revocation and epoch, exactly as Registry decides) at construction AND
-at the start of every `decide` and `execute`, using fresh material from the host `selection_source`. Each verification must reproduce the effective values
-and the Registry effective-policy digest bound at construction; a withdrawn, revoked, expired, superseded, widened or otherwise changed selection raises
-`RegistrySelectionRefused` BEFORE the existing code runs, so no decision, refusal record, attempt or effect is written. The host must rebuild the workflow to
-adopt a different selection. Participation is always `required` (an optional overlay is refused, never skipped). The two scalars are also compared to the
-bound values at each boundary, so a later attribute edit cannot widen them.
+Lifecycle: the selection is verified (record, signature, scope, expiry, withdrawal, revocation and epoch, exactly as Registry decides) at construction,
+at the start of every `decide` and `execute`, AND once more at the effect-commitment boundary: the supplied destination is wrapped so that
+`destination.apply` (the single place `execute` commits an effect, called after authorization re-resolution, observation/reconciliation and the
+"attempted" record) first re-verifies the selection and refuses with the existing `DefinitiveDestinationRejection` (a trusted assertion that nothing was
+dispatched) if it is no longer valid. Each verification must reproduce the effective values and the Registry effective-policy digest bound at
+construction; a withdrawn, revoked, expired, superseded, widened or otherwise changed selection raises `RegistrySelectionRefused` BEFORE the existing
+code runs at the decision and effect-entry boundaries (nothing is written), and at the commit gate leaves the destination untouched and the attempt
+`failed` with error `registry_f4_selection_invalid` (the existing evidence for a definitive rejection; like any failed attempt it blocks an automatic retry
+of the same effect). The host must rebuild the workflow to adopt a different selection. Participation is always `required`. The two scalars are compared to
+the bound values at each boundary, so a later attribute edit cannot widen them.
 
-Residual limitations (not hidden): (1) freshness of `selection_source` output is the host's custody responsibility; the Control Plane has no durable
-ratchet, so a source that replays an older valid selection is detected only by Registry's own expiry/epoch/trust checks on the material it is given;
-(2) validation happens at the START of `decide`/`execute`, not under the destination transaction lock, so a revocation landing inside that call is seen at
-the next boundary; (3) the clock tolerance (RG-C-006), identity and mandate ages and the F5 class bound are NOT governed here.
+Residual limitations (not hidden): (1) the commit gate runs immediately before `destination.apply` is entered, but not inside the destination's own
+transaction; a revocation landing in that interval (the delegated call itself) is not seen, and the Control Plane has no hook inside a destination
+transaction; (2) freshness, revocation visibility, epoch floors and rollback protection of `selection_source` output are host custody duties
+(docs/registry-f4-selection-source-custody.md); the Control Plane has no durable ratchet; (3) the clock tolerance (RG-C-006), identity and mandate ages
+and the F5 class bound are NOT governed here.
 Registry is resolved lazily from the host environment (a pinned checkout, never vendored); if it is unavailable the result is a refusal.
 """
 from __future__ import annotations
 
+import contextvars
 import importlib
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Mapping, Optional
 
-from agent_control_plane.bounded import BoundedAuthorizationWorkflow, TenantRuntimeProposal, _now
+from agent_control_plane.bounded import BoundedAuthorizationWorkflow, DefinitiveDestinationRejection, TenantRuntimeProposal, _now
 
 CLASSIFICATION = "BUILDER_TESTED; not independently qualified; non-authorizing"
 AGES = ("status_max_age_seconds", "approval_max_age_seconds")
@@ -135,6 +141,32 @@ def verify_scope_selection(*, scope: GovernedScope, institution_id: str, authori
     return {k: eff[k] for k in AGES}, digest, None
 
 
+_EXEC_NOW: contextvars.ContextVar = contextvars.ContextVar("registry_f4_execute_now", default=None)
+REJECTION_CODE = "registry_f4_selection_invalid"
+
+
+class _GatedDestination:
+    """Transparent wrapper of the host destination. Every attribute and method is forwarded unchanged except `apply`, which first runs the commit gate.
+
+    The gate runs in the caller's thread immediately before the delegated `apply`; a refusal raises the existing `DefinitiveDestinationRejection`, which the
+    workflow already records as a definitively rejected attempt (the wrapped destination is not called, so no dispatch happened).
+    """
+
+    def __init__(self, inner: Any, gate: Callable[[], None]):
+        object.__setattr__(self, "_inner", inner)
+        object.__setattr__(self, "_gate", gate)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(object.__getattribute__(self, "_inner"), name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        setattr(object.__getattribute__(self, "_inner"), name, value)
+
+    def apply(self, *args: Any, **kwargs: Any) -> Any:
+        object.__getattribute__(self, "_gate")()
+        return object.__getattribute__(self, "_inner").apply(*args, **kwargs)
+
+
 class GovernedAgeWorkflow(BoundedAuthorizationWorkflow):
     """`BoundedAuthorizationWorkflow` whose two age scalars come from an authenticated Registry F4 selection, re-validated at every decision and effect."""
 
@@ -164,7 +196,12 @@ class GovernedAgeWorkflow(BoundedAuthorizationWorkflow):
                                                          material=material, verifier=verifier, now=now)
         if refusal is not None:
             raise RegistrySelectionRefused(refusal, "construction")
-        super().__init__(status_max_age_seconds=values[AGES[0]], approval_max_age_seconds=values[AGES[1]], **workflow_kwargs)
+        destination = workflow_kwargs.pop("destination", None)
+        if destination is None or isinstance(destination, _GatedDestination):
+            raise RegistrySelectionRefused(Refusal("destination_invalid"), "construction")
+        super().__init__(status_max_age_seconds=values[AGES[0]], approval_max_age_seconds=values[AGES[1]],
+                         destination=_GatedDestination(destination, self._f4_commit_gate), **workflow_kwargs)
+        self.f4_last_commit_refusal: Optional[Refusal] = None
         self._f4_scope, self._f4_source, self._f4_verifier = scope, selection_source, verifier
         self._f4_host, self._f4_authority = host, authority
         self._f4_bound = (dict(values), digest)
@@ -180,6 +217,10 @@ class GovernedAgeWorkflow(BoundedAuthorizationWorkflow):
         scope = self._f4_scope
         if not isinstance(proposal, TenantRuntimeProposal) or proposal.tenant_id != scope.tenant_id or proposal.action_id != scope.action_id:
             raise RegistrySelectionRefused(Refusal("proposal_out_of_scope"), boundary)
+        self._f4_reverify(boundary, now)
+
+    def _f4_reverify(self, boundary: str, now: datetime) -> None:
+        scope = self._f4_scope
         values, digest = self._f4_bound
         if (self.status_max_age_seconds, self.approval_max_age_seconds) != (values[AGES[0]], values[AGES[1]]):
             raise RegistrySelectionRefused(Refusal("scalars_modified"), boundary)
@@ -197,10 +238,23 @@ class GovernedAgeWorkflow(BoundedAuthorizationWorkflow):
         if new_values != values or new_digest != digest:
             raise RegistrySelectionRefused(Refusal("selection_changed"), boundary)
 
+    def _f4_commit_gate(self) -> None:
+        """Last Registry check before `destination.apply` (see module docstring). Clock: the execute-entry time under a test clock, else the real clock."""
+        try:
+            self._f4_reverify("effect_commit", self._evaluation_time(_EXEC_NOW.get()))
+        except RegistrySelectionRefused as exc:
+            self.f4_last_commit_refusal = exc.refusal
+            raise DefinitiveDestinationRejection(REJECTION_CODE) from None
+
     def decide(self, proposal, *, now=None):
         self._f4_revalidate(proposal, "decision", self._evaluation_time(now))
         return super().decide(proposal, now=now)
 
     def execute(self, proposal, decision, *, adapter_id, now=None, lose_ack=False, partial=False):
-        self._f4_revalidate(proposal, "effect", self._evaluation_time(now))
-        return super().execute(proposal, decision, adapter_id=adapter_id, now=now, lose_ack=lose_ack, partial=partial)
+        entry_time = self._evaluation_time(now)
+        self._f4_revalidate(proposal, "effect", entry_time)
+        token = _EXEC_NOW.set(now)
+        try:
+            return super().execute(proposal, decision, adapter_id=adapter_id, now=now, lose_ack=lose_ack, partial=partial)
+        finally:
+            _EXEC_NOW.reset(token)

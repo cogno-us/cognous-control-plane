@@ -64,7 +64,7 @@ jobs:
           suite = suite if suite.tag == "testsuite" else suite[0]
           n, skipped, failed = int(suite.get("tests")), int(suite.get("skipped")), int(suite.get("failures")) + int(suite.get("errors"))
           print(f"f4 age tests: {n} run, {skipped} skipped, {failed} failed")
-          assert skipped == 0 and failed == 0 and n >= 60, "Registry-governed tests were skipped or did not run"
+          assert skipped == 0 and failed == 0 and n >= 70, "Registry-governed tests were skipped or did not run"
           PY
           } 2>&1 | tee f4-age-out.txt || {
             echo "::error title=F4 age tests failed::$(tail -n 40 f4-age-out.txt | sed ':a;N;$!ba;s/\n/%0A/g')"

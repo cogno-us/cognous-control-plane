@@ -97,11 +97,14 @@ class Source:
     """A host selection source whose material can change between boundaries."""
     def __init__(self, mat):
         self.mat, self.calls, self.fail = mat, 0, False
+        self.after = None  # (call number, material): from that call on the source serves the other material
 
     def __call__(self):
         self.calls += 1
         if self.fail:
             raise RuntimeError("source down")
+        if self.after is not None and self.calls >= self.after[0]:
+            return self.after[1]
         return self.mat
 
 
@@ -367,7 +370,7 @@ def test_e07_full_flow_executes_when_selection_stays_valid(tmp_path):
     d = flow.decide(p, now=NOW)
     assert d.result == "authorized"
     attempt, observed = flow.execute(p, d, adapter_id=p.adapter_id, now=NOW)
-    assert attempt.status == "acknowledged" and observed.state == "applied" and src.calls == 3  # construction, decision, effect
+    assert attempt.status == "acknowledged" and observed.state == "applied" and src.calls == 4  # construction, decision, effect entry, effect commit gate
 
 
 # =============================================================================================================== lifecycle
@@ -499,6 +502,112 @@ def test_l10_cross_family_partial_selection_cannot_widen_or_split_identity(tmp_p
     with pytest.raises(RegistrySelectionRefused):
         flow.decide(p, now=NOW)
     assert flow.registry_f4_policy_identity == ident and flow.clock_tolerance_seconds == 5
+
+
+REVOKED = lambda *a, **k: mat(*a, trust=trust_for(revoked_selections=frozenset({("sel-test-1", 1)})), **k)  # noqa: E731
+
+
+def _authorized(tmp_path, src):
+    p = tenant_proposal()
+    flow = build(tmp_path, src)
+    d = flow.decide(p, now=NOW)
+    assert d.result == "authorized"
+    return p, flow, d
+
+
+def test_c01_revoked_after_execute_entry_verification_but_before_the_effect_boundary(tmp_path):
+    """Deterministic TOCTOU case: call 1 construction, 2 decision, 3 execute entry (still valid); call 4 is the commit gate and the source now serves a
+    revoked selection. The destination must not be touched, the attempt is a definitive rejection, and no effect exists."""
+    src = Source(mat(60, 60))
+    p, flow, d = _authorized(tmp_path, src)
+    src.after = (4, REVOKED(60, 60))
+    attempt, observed = flow.execute(p, d, adapter_id=p.adapter_id, now=NOW)
+    assert src.calls == 4  # the entry check passed (call 3) and the gate (call 4) is what refused
+    assert attempt.status == "failed" and attempt.error == gov.REJECTION_CODE
+    assert flow.destination.snapshot()["effects"] == {}
+    assert flow.f4_last_commit_refusal.registry_code == "selection_revoked" and flow.f4_last_commit_refusal.code == "registry_not_applied"
+    persisted = [a for a in flow.records.load().attempts if a.effect_id == d.effect_id]
+    assert [a.status for a in persisted][-1] == "failed" and persisted[-1].error == gov.REJECTION_CODE  # the existing evidence for a definitive rejection
+    assert not any(a.status == "acknowledged" for a in persisted)
+
+
+@pytest.mark.parametrize("late,code", [
+    (lambda: mat(60, 60, trust=trust_for(valid_until="2026-10-04T00:00:00Z")), "trust_snapshot_expired"),
+    (lambda: mat(30, 60, stmt_over={"selection_id": "sel-test-2", "epoch": 2}), None),                      # superseded with different values
+    (lambda: mat(60, 60, sk=OTHER_SK), "signature_invalid"),
+    (lambda: mat(60, 60, stmt_over={"scope": dict(STMT_SCOPE, tenant="tenant-other")}), None)])
+def test_c02_other_late_invalidations_are_refused_at_the_commit_gate(tmp_path, late, code):
+    src = Source(mat(60, 60))
+    p, flow, d = _authorized(tmp_path, src)
+    src.after = (4, late())
+    attempt, _ = flow.execute(p, d, adapter_id=p.adapter_id, now=NOW)
+    assert attempt.status == "failed" and attempt.error == gov.REJECTION_CODE and flow.destination.snapshot()["effects"] == {}
+    if code:
+        assert flow.f4_last_commit_refusal.registry_code == code
+    else:
+        assert flow.f4_last_commit_refusal is not None
+
+
+def test_c03_source_failure_at_the_commit_gate_blocks_the_effect(tmp_path):
+    src = Source(mat(60, 60))
+    p, flow, d = _authorized(tmp_path, src)
+
+    class Dies(Source):
+        def __call__(self):
+            self.calls += 1
+            if self.calls >= 4:
+                raise RuntimeError("down")
+            return self.mat
+    src2 = Dies(mat(60, 60))
+    p, flow, d = _authorized(tmp_path / "b", src2)
+    attempt, _ = flow.execute(p, d, adapter_id=p.adapter_id, now=NOW)
+    assert attempt.status == "failed" and flow.destination.snapshot()["effects"] == {} and flow.f4_last_commit_refusal.code == "selection_source_failed"
+
+
+def test_c04_the_gate_is_the_last_step_before_apply_and_the_destination_is_transparent(tmp_path):
+    order = []
+    p = tenant_proposal()
+    src = Source(mat(60, 60))
+    flow = build(tmp_path, src)
+    inner = flow.destination._inner
+    real_apply, real_gate = inner.apply, flow._f4_commit_gate
+    inner.apply = lambda **kw: (order.append("apply"), real_apply(**kw))[1]
+    object.__setattr__(flow.destination, "_gate", lambda: (order.append("gate"), real_gate())[1])
+    d = flow.decide(p, now=NOW)
+    flow.execute(p, d, adapter_id=p.adapter_id, now=NOW)
+    assert order == ["gate", "apply"]
+    assert flow.destination.snapshot()["effects"] and flow.destination.snapshot() == inner.snapshot()  # reads/attributes forwarded unchanged
+    assert getattr(flow.destination, "dedupe_capability", "absent") == getattr(inner, "dedupe_capability", "absent")
+
+
+def test_c05_destination_must_be_a_plain_host_destination(tmp_path):
+    p = tenant_proposal()
+    kw = dict(scope=SCOPE, selection_source=Source(mat()), verifier=ev.Ed25519Verifier(), allow_test_time=True, construction_time=REG_NOW, manifest=manifest(),
+              resolver=tenant_resolver_for(p), records=BoundedRecordStore(tmp_path / "r.json", "run-1"))
+    with pytest.raises(RegistrySelectionRefused) as e:
+        GovernedAgeWorkflow(**kw)
+    refused(e, "destination_invalid")
+    first = build(tmp_path / "a", Source(mat()))
+    with pytest.raises(RegistrySelectionRefused) as e:
+        GovernedAgeWorkflow(destination=first.destination, **kw)
+    refused(e, "destination_invalid")
+
+
+def test_c06_every_boundary_including_the_commit_gate_is_judged_at_the_execute_entry_time(tmp_path, monkeypatch):
+    seen = []
+    real = gov.verify_scope_selection
+
+    def spy(**kw):
+        seen.append(kw["now"])
+        return real(**kw)
+    monkeypatch.setattr(gov, "verify_scope_selection", spy)
+    p, flow, d = _authorized(tmp_path, Source(mat(60, 60)))
+    seen.clear()
+    import agent_control_plane.bounded as bounded_module
+    monkeypatch.setattr(bounded_module, "_now", lambda: NOW + timedelta(seconds=1))  # the wall clock differs from the supplied test time
+    attempt, observed = flow.execute(p, d, adapter_id=p.adapter_id, now=NOW)
+    assert attempt.status == "acknowledged" and observed.state == "applied"
+    assert seen == [NOW, NOW]  # execute entry and commit gate
 
 
 def test_s01_module_excludes_clock_tolerance_and_other_families():
