@@ -1012,7 +1012,7 @@ PROTECTED = {
     "freshness.py": "3f146ee11a3424d816c6f35ba07259833612a985901b4a96c0275395f05d51c0",
     "policy_binding.py": "defdfac5fd60cf5be707a76204a12513f2f289b0620ec56d063b56dac4081a35",
     "rule_revision.py": "a3833f49e96db52e0665b9816daee2654f74f7784faad5101252b4c8722415a5",
-    "registry_f4_age_governance.py": "50cccf5f082af2a57657e974b35a901336f9583fc57c7f82c341a95ff2ceb107",
+    "registry_f4_age_governance.py": "9d6d88213befe60023e6ac7f3528762be466f3c577ce172d56125c4cb30325b3",  # consolidation: re-based on registry_governed_lifecycle.py (was 50cccf5f)
 }
 
 

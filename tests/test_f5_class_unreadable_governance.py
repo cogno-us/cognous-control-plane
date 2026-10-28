@@ -717,7 +717,7 @@ def test_e08_the_parameter_governs_only_the_cached_grant_branch_and_a_source_cha
     assert 'action_class.irreversible and action_class.on_unreadable != "refuse"' in text and 'cl.on_unreadable == "bounded_tolerance" and cached' in text
     assert "on_unreadable" not in inspect.getsource(bounded.BoundedAuthorizationWorkflow._cached_purpose)
     assert "on_unreadable" not in inspect.getsource(rev.judge_cached_purpose) and "on_unreadable" not in inspect.getsource(rev.effective_reversibility)
-    other = {p.name for p in SRC.glob("*.py") if "on_unreadable" in p.read_text() and p.name not in ("bounded.py", "runtime_authority.py", Path(gov.__file__).name)}
+    other = {p.name for p in SRC.glob("*.py") if "on_unreadable" in p.read_text() and p.name not in ("bounded.py", "runtime_authority.py", Path(gov.__file__).name, "registry_governed_policy.py")}  # the composed workflow validates the final composition of this field
     assert other == set(), other
 
 
@@ -1427,6 +1427,8 @@ def test_n10_the_module_governs_one_field_only_and_excludes_every_other_paramete
 
 
 # protected files: the evaluators, the F4 consumer and the M12 class-age consumer are unmodified by this increment
+# Consolidation (shared governed lifecycle): the F4 and F5 class-age consumers are deliberately re-based on registry_governed_lifecycle.py; their pins are the consolidated hashes
+# (were 50cccf5f / 9f765492 at Control Plane 5f11e0f). The protected evaluators below are byte-identical to that baseline.
 PROTECTED = {
     "bounded.py": "c219f8825a8ddf9da1fe6771ae575af0a9069ac8a04eadd40f093a9adb13655b",
     "runtime_authority.py": "a4b4ac36cca6e75d8fc3408b8738163acfb609a7265633aec2f799700ff9ea66",
@@ -1434,8 +1436,8 @@ PROTECTED = {
     "policy_binding.py": "defdfac5fd60cf5be707a76204a12513f2f289b0620ec56d063b56dac4081a35",
     "rule_revision.py": "a3833f49e96db52e0665b9816daee2654f74f7784faad5101252b4c8722415a5",
     "reversibility.py": "5edbadebb3aa777fba7f652c10c8da3c5e9ee1766b71866ed55dc25b319477d1",
-    "registry_f4_age_governance.py": "50cccf5f082af2a57657e974b35a901336f9583fc57c7f82c341a95ff2ceb107",
-    "registry_f5_class_age_governance.py": "9f765492923ef1fcae9ae07b95903c41446afbf58eade3f2e0acd35bbecb1059",
+    "registry_f4_age_governance.py": "9d6d88213befe60023e6ac7f3528762be466f3c577ce172d56125c4cb30325b3",
+    "registry_f5_class_age_governance.py": "fd4fb025ecf37d6dd20031881a36b2eb953a726dc6ecf5137ee8c1567b486497",
 }
 
 

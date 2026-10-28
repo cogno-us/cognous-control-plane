@@ -31,74 +31,30 @@ transaction; (2) freshness, revocation visibility, epoch floors and rollback pro
 (docs/registry-f4-selection-source-custody.md); the Control Plane has no durable ratchet; (3) the clock tolerance (RG-C-006), identity and mandate ages
 and the F5 class bound are NOT governed here.
 Registry is resolved lazily from the host environment (a pinned checkout, never vendored); if it is unavailable the result is a refusal.
+
+Consolidation (shared lifecycle): the scope/material/refusal types, the gated destination and the decide/execute/commit-gate lifecycle now live in
+`registry_governed_lifecycle` (re-exported here, so every import path and observable behaviour is unchanged). The held-state check (here: the two scalars) is also made
+once more AFTER the selection source and Registry have run, immediately before the caller's next step.
 """
 from __future__ import annotations
 
-import contextvars
 import importlib
-from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Mapping, Optional
 
-from agent_control_plane.bounded import BoundedAuthorizationWorkflow, DefinitiveDestinationRejection, TenantRuntimeProposal, _now
+from agent_control_plane.bounded import BoundedAuthorizationWorkflow, _now
+from agent_control_plane.registry_governed_lifecycle import (  # noqa: F401  (re-exported: existing import paths are unchanged)
+    CLASSIFICATION, SCALAR_MAX, GovernedLifecycle, GovernedScope, Refusal, RegistrySelectionRefused, SelectionMaterial, _GatedDestination, _declared_authority,
+    _scalar, _text, check_scope, check_source, construction_now, read_source, require_authority, take_destination,
+)
 
-CLASSIFICATION = "BUILDER_TESTED; not independently qualified; non-authorizing"
 AGES = ("status_max_age_seconds", "approval_max_age_seconds")
-SCALAR_MAX = 2147483647
 CONTRACT = "r08-v2"
+REJECTION_CODE = "registry_f4_selection_invalid"
 
 
-@dataclass(frozen=True)
-class GovernedScope:
-    """Host-fixed scope of one governed workflow. Never taken from a proposal or a Registry record."""
-    consumer_id: str
-    tenant_id: str
-    action_id: str
-    operation_id: str  # the Registry `operation` identifier the host maps to `action_id` (an action URN is not a valid Registry identifier)
-
-
-@dataclass(frozen=True)
-class SelectionMaterial:
-    """Raw material a host source returns at each boundary. Nothing here is trusted until Registry verifies it."""
-    record_text: Any
-    selection_text: Any
-    trust: Any
-
-
-@dataclass(frozen=True)
-class Refusal:
-    code: str
-    registry_code: Optional[str] = None
-    registry_kind: Optional[str] = None
-    non_authorizing: bool = True
-    classification: str = CLASSIFICATION
-
-
-class RegistrySelectionRefused(PermissionError):
-    """Raised before any existing decision/effect code or state write. `.refusal` carries the closed adapter vocabulary and Registry's typed code."""
-
-    def __init__(self, refusal: Refusal, boundary: str):
-        super().__init__(f"registry_f4_selection_refused:{boundary}:{refusal.code}" + (f":{refusal.registry_code}" if refusal.registry_code else ""))
-        self.refusal, self.boundary = refusal, boundary
-
-
-def _scalar(v: Any) -> bool:
-    return type(v) is int and 0 <= v <= SCALAR_MAX
-
-
-def _text(v: Any) -> bool:
-    return type(v) is str and bool(v)
-
-
-def _declared_authority(manifest: Any, action_id: str):
-    """(institution_id, authority_domain) the host manifest declares for `action_id`, or None. Mirrors `_declared_action` (exactly one match)."""
-    actions = manifest.get("actions", []) if isinstance(manifest, Mapping) else []
-    found = [a for a in actions if isinstance(a, Mapping) and a.get("action_id") == action_id]
-    if len(found) != 1:
-        return None
-    auth = found[0].get("authority_context") or {}
-    inst, dom = auth.get("institution_id"), auth.get("authority_domain")
-    return (inst, dom) if _text(inst) and _text(dom) else None
+def _refuse(code: str, boundary: str) -> RegistrySelectionRefused:
+    return RegistrySelectionRefused(Refusal(code), boundary)
 
 
 def verify_scope_selection(*, scope: GovernedScope, institution_id: str, authority_domain: str, caller_ages: Mapping[str, int], material: Any, verifier: Any,
@@ -141,120 +97,66 @@ def verify_scope_selection(*, scope: GovernedScope, institution_id: str, authori
     return {k: eff[k] for k in AGES}, digest, None
 
 
-_EXEC_NOW: contextvars.ContextVar = contextvars.ContextVar("registry_f4_execute_now", default=None)
-REJECTION_CODE = "registry_f4_selection_invalid"
-
-
-class _GatedDestination:
-    """Transparent wrapper of the host destination. Every attribute and method is forwarded unchanged except `apply`, which first runs the commit gate.
-
-    The gate runs in the caller's thread immediately before the delegated `apply`; a refusal raises the existing `DefinitiveDestinationRejection`, which the
-    workflow already records as a definitively rejected attempt (the wrapped destination is not called, so no dispatch happened).
-    """
-
-    def __init__(self, inner: Any, gate: Callable[[], None]):
-        object.__setattr__(self, "_inner", inner)
-        object.__setattr__(self, "_gate", gate)
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(object.__getattribute__(self, "_inner"), name)
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        setattr(object.__getattribute__(self, "_inner"), name, value)
-
-    def apply(self, *args: Any, **kwargs: Any) -> Any:
-        object.__getattribute__(self, "_gate")()
-        return object.__getattribute__(self, "_inner").apply(*args, **kwargs)
-
-
-class GovernedAgeWorkflow(BoundedAuthorizationWorkflow):
+class GovernedAgeWorkflow(GovernedLifecycle):
     """`BoundedAuthorizationWorkflow` whose two age scalars come from an authenticated Registry F4 selection, re-validated at every decision and effect."""
+
+    _gl_rejection_code = REJECTION_CODE
 
     def __init__(self, *, scope: GovernedScope, selection_source: Callable[[], Any], verifier: Any, status_max_age_seconds: int = 60,
                  approval_max_age_seconds: int = 60, construction_time: Optional[datetime] = None, **workflow_kwargs: Any):
-        if type(scope) is not GovernedScope or not all(_text(getattr(scope, f)) for f in ("consumer_id", "tenant_id", "action_id", "operation_id")):
-            raise RegistrySelectionRefused(Refusal("scope_invalid"), "construction")
-        if not callable(selection_source):
-            raise RegistrySelectionRefused(Refusal("selection_source_invalid"), "construction")
+        check_scope(scope, _refuse)
+        check_source(selection_source, _refuse)
         if workflow_kwargs.get("runtime_authority_profile") is not None:
-            raise RegistrySelectionRefused(Refusal("runtime_authority_profile_unsupported"), "construction")
+            raise _refuse("runtime_authority_profile_unsupported", "construction")
         if not (_scalar(status_max_age_seconds) and _scalar(approval_max_age_seconds)):
-            raise RegistrySelectionRefused(Refusal("host_scalar_invalid"), "construction")
-        authority = _declared_authority(workflow_kwargs.get("manifest"), scope.action_id)
-        if authority is None:
-            raise RegistrySelectionRefused(Refusal("manifest_action_undeclared"), "construction")
-        allow_test_time = bool(workflow_kwargs.get("allow_test_time"))
-        now = construction_time if (allow_test_time and construction_time is not None) else _now()
-        if now.tzinfo is None or now.utcoffset() is None:
-            raise RegistrySelectionRefused(Refusal("time_invalid"), "construction")
+            raise _refuse("host_scalar_invalid", "construction")
+        authority = require_authority(workflow_kwargs, scope.action_id, _refuse)
+        now = construction_now(construction_time, workflow_kwargs, _now, _refuse)
         host = {AGES[0]: status_max_age_seconds, AGES[1]: approval_max_age_seconds}
-        try:
-            material = selection_source()
-        except Exception:
-            raise RegistrySelectionRefused(Refusal("selection_source_failed"), "construction") from None
+        material = read_source(selection_source, _refuse, "construction")
         values, digest, refusal = verify_scope_selection(scope=scope, institution_id=authority[0], authority_domain=authority[1], caller_ages=host,
                                                          material=material, verifier=verifier, now=now)
         if refusal is not None:
             raise RegistrySelectionRefused(refusal, "construction")
-        destination = workflow_kwargs.pop("destination", None)
-        if destination is None or isinstance(destination, _GatedDestination):
-            raise RegistrySelectionRefused(Refusal("destination_invalid"), "construction")
+        destination = take_destination(workflow_kwargs, _refuse)
         super().__init__(status_max_age_seconds=values[AGES[0]], approval_max_age_seconds=values[AGES[1]],
-                         destination=_GatedDestination(destination, self._f4_commit_gate), **workflow_kwargs)
-        self.f4_last_commit_refusal: Optional[Refusal] = None
+                         destination=_GatedDestination(destination, self._gl_commit_gate), **workflow_kwargs)
         self._f4_scope, self._f4_source, self._f4_verifier = scope, selection_source, verifier
         self._f4_host, self._f4_authority = host, authority
-        self._f4_bound = (dict(values), digest)
+        self._gl_attach(scope=scope, authority=authority, bound=(dict(values), digest))
+
+    _f4_commit_gate = GovernedLifecycle._gl_commit_gate
+
+    @property
+    def f4_last_commit_refusal(self) -> Optional[Refusal]:
+        return self._gl_last_commit_refusal
+
+    @f4_last_commit_refusal.setter
+    def f4_last_commit_refusal(self, value: Optional[Refusal]) -> None:
+        self._gl_last_commit_refusal = value
 
     @property
     def registry_f4_policy_identity(self) -> dict:
-        values, digest = self._f4_bound
+        values, digest = self._gl_bound
         return {"contract_version": CONTRACT, "family": "f4-control-plane-age-bounds", "effective_policy_digest": digest, "effective": dict(values),
                 "host": dict(self._f4_host), "scope": {"consumer_id": self._f4_scope.consumer_id, "tenant_id": self._f4_scope.tenant_id,
                                                          "action_id": self._f4_scope.action_id, "operation_id": self._f4_scope.operation_id}}
 
-    def _f4_revalidate(self, proposal: Any, boundary: str, now: datetime) -> None:
-        scope = self._f4_scope
-        if not isinstance(proposal, TenantRuntimeProposal) or proposal.tenant_id != scope.tenant_id or proposal.action_id != scope.action_id:
-            raise RegistrySelectionRefused(Refusal("proposal_out_of_scope"), boundary)
-        self._f4_reverify(boundary, now)
+    def _gl_error(self, refusal: Refusal, boundary: str) -> Exception:
+        return RegistrySelectionRefused(refusal, boundary)
 
-    def _f4_reverify(self, boundary: str, now: datetime) -> None:
-        scope = self._f4_scope
-        values, digest = self._f4_bound
+    def _gl_held_defect(self) -> Optional[str]:
+        values, _ = self._gl_bound
         if (self.status_max_age_seconds, self.approval_max_age_seconds) != (values[AGES[0]], values[AGES[1]]):
-            raise RegistrySelectionRefused(Refusal("scalars_modified"), boundary)
-        authority = _declared_authority(self.manifest, scope.action_id)
-        if authority != self._f4_authority:
-            raise RegistrySelectionRefused(Refusal("manifest_authority_changed"), boundary)
-        try:
-            material = self._f4_source()
-        except Exception:
-            raise RegistrySelectionRefused(Refusal("selection_source_failed"), boundary) from None
-        new_values, new_digest, refusal = verify_scope_selection(scope=scope, institution_id=authority[0], authority_domain=authority[1],
-                                                                 caller_ages=self._f4_host, material=material, verifier=self._f4_verifier, now=now)
+            return "scalars_modified"
+        return None
+
+    def _gl_read_sources(self, boundary: str) -> Any:
+        return read_source(self._f4_source, _refuse, boundary)
+
+    def _gl_derive(self, materials: Any, authority: Any, now: datetime, boundary: str) -> Any:
+        new_values, new_digest, refusal = verify_scope_selection(scope=self._f4_scope, institution_id=authority[0], authority_domain=authority[1],
+                                                                 caller_ages=self._f4_host, material=materials, verifier=self._f4_verifier, now=now)
         if refusal is not None:
             raise RegistrySelectionRefused(refusal, boundary)
-        if new_values != values or new_digest != digest:
-            raise RegistrySelectionRefused(Refusal("selection_changed"), boundary)
-
-    def _f4_commit_gate(self) -> None:
-        """Last Registry check before `destination.apply` (see module docstring). Clock: the execute-entry time under a test clock, else the real clock."""
-        try:
-            self._f4_reverify("effect_commit", self._evaluation_time(_EXEC_NOW.get()))
-        except RegistrySelectionRefused as exc:
-            self.f4_last_commit_refusal = exc.refusal
-            raise DefinitiveDestinationRejection(REJECTION_CODE) from None
-
-    def decide(self, proposal, *, now=None):
-        self._f4_revalidate(proposal, "decision", self._evaluation_time(now))
-        return super().decide(proposal, now=now)
-
-    def execute(self, proposal, decision, *, adapter_id, now=None, lose_ack=False, partial=False):
-        entry_time = self._evaluation_time(now)
-        self._f4_revalidate(proposal, "effect", entry_time)
-        token = _EXEC_NOW.set(now)
-        try:
-            return super().execute(proposal, decision, adapter_id=adapter_id, now=now, lose_ack=lose_ack, partial=partial)
-        finally:
-            _EXEC_NOW.reset(token)
+        return (dict(new_values), new_digest)

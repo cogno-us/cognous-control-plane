@@ -49,18 +49,21 @@ duties (docs/registry-f4-selection-source-custody.md applies unchanged); the Con
 (4) the F4 scalars, clock tolerance, identity and mandate ages, `requires_revocation_assurance`, reversibility, `anchor_deadline_to_inputs`, terminal revocation and observation
 policy are NOT governed here; (5) the value governs only the cached-grant branch (see above).
 Registry is resolved lazily from the host environment (a pinned checkout, never vendored); if it is unavailable the result is a refusal.
+
+Consolidation (shared lifecycle): the decide/execute/commit-gate lifecycle, scope check, source invocation and destination wrapping now live in
+`registry_governed_lifecycle`; this module keeps its derivation, composition and refusal vocabulary unchanged.
 """
 from __future__ import annotations
 
-import contextvars
 import importlib
 import json
 from datetime import datetime
 from typing import Any, Callable, Mapping, Optional
 
-from agent_control_plane.bounded import BoundedAuthorizationWorkflow, DefinitiveDestinationRejection, TenantRuntimeProposal, _now
-from agent_control_plane.registry_f4_age_governance import (
-    GovernedScope, Refusal, RegistrySelectionRefused, SelectionMaterial, _GatedDestination, _declared_authority, _text,
+from agent_control_plane.bounded import _now
+from agent_control_plane.registry_governed_lifecycle import (
+    GovernedLifecycle, GovernedScope, Refusal, RegistrySelectionRefused, SelectionMaterial, _GatedDestination, _declared_authority, _text,
+    check_scope, check_source, construction_now, read_source, require_authority, take_destination, valid_scope,
 )
 from agent_control_plane.registry_f5_class_age_governance import derive_effective as derive_class_age, host_class_ages, profile_digest
 from agent_control_plane.runtime_authority import RuntimeAuthorityProfile
@@ -71,7 +74,6 @@ FIELD = "class_on_unreadable"
 VALUES = ("refuse", "bounded_tolerance")  # ActionClass.on_unreadable, strictest first
 _RANK = {"refuse": 0, "bounded_tolerance": 1}
 REJECTION_CODE = "registry_f5_unreadable_selection_invalid"
-_EXEC_NOW: contextvars.ContextVar = contextvars.ContextVar("registry_f5_unreadable_execute_now", default=None)
 
 
 class RegistryClassUnreadableRefused(RegistrySelectionRefused):
@@ -230,25 +232,23 @@ def derive_governed(*, scope: GovernedScope, age_scope: Optional[GovernedScope],
     return (profile, effective, digest, age_part), None
 
 
-class GovernedClassUnreadableWorkflow(BoundedAuthorizationWorkflow):
+class GovernedClassUnreadableWorkflow(GovernedLifecycle):
     """`BoundedAuthorizationWorkflow` whose class `on_unreadable` values come from an authenticated Registry `r08-v5` selection (optionally together with the Registry class status
     age), re-validated at every decision and effect.
 
     `runtime_authority_profile` is the HOST profile (required). `self.runtime_authority_profile` is the EFFECTIVE profile: issue approvals against it."""
 
+    _gl_rejection_code = REJECTION_CODE
+
     def __init__(self, *, scope: GovernedScope, selection_source: Callable[[], Any], verifier: Any, runtime_authority_profile: Any,
                  class_age_scope: Optional[GovernedScope] = None, class_age_selection_source: Optional[Callable[[], Any]] = None,
                  construction_time: Optional[datetime] = None, **workflow_kwargs: Any):
-        def ok_scope(sc):
-            return type(sc) is GovernedScope and all(_text(getattr(sc, f)) for f in ("consumer_id", "tenant_id", "action_id", "operation_id"))
-        if not ok_scope(scope):
-            raise _refuse("scope_invalid", "construction")
-        if not callable(selection_source):
-            raise _refuse("selection_source_invalid", "construction")
+        check_scope(scope, _refuse)
+        check_source(selection_source, _refuse)
         if (class_age_scope is None) != (class_age_selection_source is None):
             raise _refuse("class_age_configuration_invalid", "construction")
         if class_age_scope is not None:
-            if not ok_scope(class_age_scope) or not callable(class_age_selection_source):
+            if not valid_scope(class_age_scope) or not callable(class_age_selection_source):
                 raise _refuse("class_age_configuration_invalid", "construction")
             if (class_age_scope.consumer_id, class_age_scope.tenant_id, class_age_scope.action_id) != (scope.consumer_id, scope.tenant_id, scope.action_id):
                 raise _refuse("class_age_scope_mismatch", "construction")
@@ -273,41 +273,37 @@ class GovernedClassUnreadableWorkflow(BoundedAuthorizationWorkflow):
                 raise _refuse(code, "construction")
         if scope.action_id not in host.actions:
             raise _refuse("action_class_unknown", "construction")
-        authority = _declared_authority(workflow_kwargs.get("manifest"), scope.action_id)
-        if authority is None:
-            raise _refuse("manifest_action_undeclared", "construction")
-        allow_test_time = bool(workflow_kwargs.get("allow_test_time"))
-        now = construction_time if (allow_test_time and construction_time is not None) else _now()
-        if now.tzinfo is None or now.utcoffset() is None:
-            raise _refuse("time_invalid", "construction")
-        try:
-            material = selection_source()
-        except Exception:
-            raise _refuse("selection_source_failed", "construction") from None
+        authority = require_authority(workflow_kwargs, scope.action_id, _refuse)
+        now = construction_now(construction_time, workflow_kwargs, _now, _refuse)
+        material = read_source(selection_source, _refuse, "construction")
         age_material = None
         if class_age_scope is not None:
-            try:
-                age_material = class_age_selection_source()
-            except Exception:
-                raise _refuse("selection_source_failed", "construction") from None
+            age_material = read_source(class_age_selection_source, _refuse, "construction")
         derived, refusal = derive_governed(scope=scope, age_scope=class_age_scope, institution_id=authority[0], authority_domain=authority[1], host=host, host_values=host_values,
                                            host_ages=host_ages, unreadable_material=material, age_material=age_material, verifier=verifier, now=now)
         if refusal is not None:
             raise RegistryClassUnreadableRefused(refusal, "construction")
-        destination = workflow_kwargs.pop("destination", None)
-        if destination is None or isinstance(destination, _GatedDestination):
-            raise _refuse("destination_invalid", "construction")
+        destination = take_destination(workflow_kwargs, _refuse)
         profile, effective, digest, age_part = derived
-        super().__init__(runtime_authority_profile=profile, destination=_GatedDestination(destination, self._fu_commit_gate), **workflow_kwargs)
-        self.fu_last_commit_refusal: Optional[Refusal] = None
+        super().__init__(runtime_authority_profile=profile, destination=_GatedDestination(destination, self._gl_commit_gate), **workflow_kwargs)
         self._fu_scope, self._fu_age_scope = scope, class_age_scope
         self._fu_source, self._fu_age_source, self._fu_verifier = selection_source, class_age_selection_source, verifier
         self._fu_host, self._fu_host_values, self._fu_host_ages, self._fu_authority = host, host_values, host_ages, authority
-        self._fu_bound = (dict(effective), digest, age_part, profile_digest(profile))
+        self._gl_attach(scope=scope, authority=authority, bound=(dict(effective), digest, age_part, profile_digest(profile)))
+
+    _fu_commit_gate = GovernedLifecycle._gl_commit_gate
+
+    @property
+    def fu_last_commit_refusal(self) -> Optional[Refusal]:
+        return self._gl_last_commit_refusal
+
+    @fu_last_commit_refusal.setter
+    def fu_last_commit_refusal(self, value: Optional[Refusal]) -> None:
+        self._gl_last_commit_refusal = value
 
     @property
     def registry_f5_unreadable_policy_identity(self) -> dict:
-        effective, digest, age_part, pdigest = self._fu_bound
+        effective, digest, age_part, pdigest = self._gl_bound
         scope = self._fu_scope
         identity = {"contract_version": CONTRACT_V5, "family": FAMILY, "effective_policy_digest": digest, "effective": dict(effective),
                     "effective_profile_digest": pdigest, "host": dict(self._fu_host_values),
@@ -319,60 +315,28 @@ class GovernedClassUnreadableWorkflow(BoundedAuthorizationWorkflow):
                                      "host": dict(self._fu_host_ages), "operation_id": self._fu_age_scope.operation_id}
         return identity
 
-    def _fu_revalidate(self, proposal: Any, boundary: str, now: datetime) -> None:
-        scope = self._fu_scope
-        if not isinstance(proposal, TenantRuntimeProposal) or proposal.tenant_id != scope.tenant_id or proposal.action_id != scope.action_id:
-            raise _refuse("proposal_out_of_scope", boundary)
-        self._fu_reverify(boundary, now)
+    def _gl_error(self, refusal: Refusal, boundary: str) -> Exception:
+        return RegistryClassUnreadableRefused(refusal, boundary)
 
-    def _fu_reverify(self, boundary: str, now: datetime) -> None:
-        scope = self._fu_scope
-        effective, digest, age_part, pdigest = self._fu_bound
+    def _gl_held_defect(self) -> Optional[str]:
         held = self.runtime_authority_profile
-        if type(held) is not RuntimeAuthorityProfile or profile_digest(held) != pdigest:
-            raise _refuse("profile_modified", boundary)
-        authority = _declared_authority(self.manifest, scope.action_id)
-        if authority != self._fu_authority:
-            raise _refuse("manifest_authority_changed", boundary)
-        try:
-            material = self._fu_source()
-        except Exception:
-            raise _refuse("selection_source_failed", boundary) from None
+        if type(held) is not RuntimeAuthorityProfile or profile_digest(held) != self._gl_bound[3]:
+            return "profile_modified"
+        return None
+
+    def _gl_read_sources(self, boundary: str) -> Any:
+        material = read_source(self._fu_source, _refuse, boundary)
         age_material = None
         if self._fu_age_scope is not None:
-            try:
-                age_material = self._fu_age_source()
-            except Exception:
-                raise _refuse("selection_source_failed", boundary) from None
-        derived, refusal = derive_governed(scope=scope, age_scope=self._fu_age_scope, institution_id=authority[0], authority_domain=authority[1], host=self._fu_host,
+            age_material = read_source(self._fu_age_source, _refuse, boundary)
+        return (material, age_material)
+
+    def _gl_derive(self, materials: Any, authority: Any, now: datetime, boundary: str) -> Any:
+        material, age_material = materials
+        derived, refusal = derive_governed(scope=self._fu_scope, age_scope=self._fu_age_scope, institution_id=authority[0], authority_domain=authority[1], host=self._fu_host,
                                            host_values=self._fu_host_values, host_ages=self._fu_host_ages, unreadable_material=material, age_material=age_material,
                                            verifier=self._fu_verifier, now=now)
         if refusal is not None:
             raise RegistryClassUnreadableRefused(refusal, boundary)
         new_profile, new_effective, new_digest, new_age = derived
-        if new_effective != effective or new_digest != digest or new_age != age_part or profile_digest(new_profile) != pdigest:
-            raise _refuse("selection_changed", boundary)
-        held = self.runtime_authority_profile  # the held profile is re-checked LAST: nothing between this check and the caller's next step can run Registry source code
-        if type(held) is not RuntimeAuthorityProfile or profile_digest(held) != pdigest:
-            raise _refuse("profile_modified", boundary)
-
-    def _fu_commit_gate(self) -> None:
-        """Last Registry check before `destination.apply` (see module docstring). Clock: the execute-entry time under a test clock, else the real clock."""
-        try:
-            self._fu_reverify("effect_commit", self._evaluation_time(_EXEC_NOW.get()))
-        except RegistryClassUnreadableRefused as exc:
-            self.fu_last_commit_refusal = exc.refusal
-            raise DefinitiveDestinationRejection(REJECTION_CODE) from None
-
-    def decide(self, proposal, *, now=None):
-        self._fu_revalidate(proposal, "decision", self._evaluation_time(now))
-        return super().decide(proposal, now=now)
-
-    def execute(self, proposal, decision, *, adapter_id, now=None, lose_ack=False, partial=False):
-        entry_time = self._evaluation_time(now)
-        self._fu_revalidate(proposal, "effect", entry_time)
-        token = _EXEC_NOW.set(now)
-        try:
-            return super().execute(proposal, decision, adapter_id=adapter_id, now=now, lose_ack=lose_ack, partial=partial)
-        finally:
-            _EXEC_NOW.reset(token)
+        return (dict(new_effective), new_digest, new_age, profile_digest(new_profile))
