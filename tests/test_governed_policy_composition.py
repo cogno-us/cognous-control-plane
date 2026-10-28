@@ -8,7 +8,9 @@ the module is reported NOT RUN.
 """
 from __future__ import annotations
 
+import copy
 import hashlib
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -24,6 +26,7 @@ from agent_control_plane.bounded import BoundedAuthorizationWorkflow, LocalRefun
 from agent_control_plane.registry_governed_policy import (  # noqa: E402
     GovernedActivationLedger, GovernedFamilies, GovernedFamily, GovernedPolicyWorkflow, RegistryGovernedPolicyRefused,
 )
+from agent_control_plane.freshness import FreshnessProfile  # noqa: E402
 from agent_control_plane.runtime_authority import approval_commitment  # noqa: E402
 
 R_, B_ = base.R_, base.B_
@@ -390,6 +393,21 @@ def test_r05b_the_source_dying_exactly_at_the_commit_gate_blocks_the_effect(tmp_
     assert flow.governed_last_commit_refusal.code == "selection_source_failed"
 
 
+def test_r07_every_boundary_including_the_commit_gate_is_judged_at_the_execute_entry_time(tmp_path, monkeypatch):
+    import agent_control_plane.bounded as bounded_module
+    p, res, cfg, srcs, flow, d = authorized(tmp_path)
+    seen = []
+    real = pol.derive_policy
+
+    def spy(**kw):
+        seen.append(kw["now"])
+        return real(**kw)
+    monkeypatch.setattr(pol, "derive_policy", spy)
+    monkeypatch.setattr(bounded_module, "_now", lambda: NOW + timedelta(seconds=1))  # the wall clock differs from the supplied test time
+    attempt, _ = flow.execute(p, d, adapter_id=p.adapter_id, now=NOW)
+    assert attempt.status == "acknowledged" and len(seen) == 2 and set(seen) == {NOW}  # effect entry and commit gate, both at the execute-entry time
+
+
 @pytest.mark.parametrize("k", ["f", "a", "u"])
 def test_r06_withdrawn_or_expired_trust_after_construction_blocks_each_family(tmp_path, k):
     p, res, cfg, srcs, flow = ready(tmp_path)
@@ -488,6 +506,80 @@ def test_i06_the_held_state_is_checked_again_after_the_sources_ran(tmp_path):
     with pytest.raises(RegistryGovernedPolicyRefused) as e:
         flow.decide(p, now=NOW)
     refused(e, "profile_modified", "decision")
+
+
+# =============================================================================================================== construction inputs, clock, manifest, destination, bound components
+def test_k01_the_construction_clock_is_the_real_clock_unless_the_host_allows_test_time(tmp_path):
+    p = base.tenant_proposal()
+    res = base.tenant_resolver_for(p)
+    future = NOW + timedelta(days=30)  # outside every trust validity window if it were honoured
+    flow = GovernedPolicyWorkflow(families=families(f=fsrc()), verifier=ev.Ed25519Verifier(), construction_time=future,
+                                  **{**kwargs(tmp_path, res), "allow_test_time": False})
+    assert (flow.status_max_age_seconds, flow.approval_max_age_seconds) == (30, 30)  # built at the (patched) real clock: the supplied time was ignored
+    with pytest.raises(RegistryGovernedPolicyRefused) as e:
+        GovernedPolicyWorkflow(families=families(f=fsrc()), verifier=ev.Ed25519Verifier(), construction_time=future, **kwargs(tmp_path / "t", res))  # honoured: expired then
+    assert e.value.boundary == "construction"
+
+
+def test_k02_a_naive_construction_time_is_refused(tmp_path):
+    p, res, cfg = prepared(tmp_path)
+    with pytest.raises(RegistryGovernedPolicyRefused) as e:
+        GovernedPolicyWorkflow(families=families(fsrc(), asrc(), usrc()), verifier=ev.Ed25519Verifier(), runtime_authority_profile=cfg,
+                               construction_time=datetime(2026, 10, 3, 12, 0, 0), **kwargs(tmp_path, res))
+    refused(e, "time_invalid", "construction")
+
+
+def test_k03_an_already_gated_destination_is_refused(tmp_path):
+    p, res, cfg, srcs, flow = ready(tmp_path)
+    with pytest.raises(RegistryGovernedPolicyRefused) as e:
+        build(tmp_path / "again", res, cfg, families(fsrc(), asrc(), usrc()), destination=flow.destination)
+    refused(e, "destination_invalid", "construction")
+
+
+def test_k04_a_changed_manifest_authority_after_construction_is_refused_at_every_boundary(tmp_path):
+    p, res, cfg, srcs, flow = ready(tmp_path)
+    m = copy.deepcopy(flow.manifest)
+    for a in m["actions"]:
+        a["authority_context"]["institution_id"] = "institution-other"
+    flow.manifest = m
+    with pytest.raises(RegistryGovernedPolicyRefused) as e:
+        flow.decide(p, now=NOW)
+    refused(e, "manifest_authority_changed", "decision")
+
+
+@pytest.mark.parametrize("bad", [-1, True, "60", 2147483648])
+def test_k05_host_scalars_must_be_exact_integers_when_f4_is_declared(tmp_path, bad):
+    p, res, cfg = prepared(tmp_path)
+    with pytest.raises(RegistryGovernedPolicyRefused) as e:
+        build(tmp_path, res, cfg, families(f=fsrc()), pol={"status_max_age_seconds": bad})
+    refused(e, "host_scalar_invalid", "construction")
+
+
+@pytest.mark.parametrize("part", ["f4_ages", "class_age", "class_unreadable", "effective_profile_digest"])
+def test_k06_each_component_of_the_bound_identity_is_compared_on_its_own(tmp_path, monkeypatch, part):
+    p, res, cfg, srcs, flow = ready(tmp_path)
+    real = pol.derive_policy
+
+    def tampered(**kw):
+        out, refusal = real(**kw)
+        profile, scalars, bound = out
+        bound = dict(bound)
+        v = bound[part]
+        bound[part] = "sha256:" + "0" * 64 if part == "effective_profile_digest" else (v[0], "sha256:" + "0" * 64, *v[2:])
+        return (profile, scalars, bound), refusal
+    monkeypatch.setattr(pol, "derive_policy", tampered)
+    with pytest.raises(RegistryGovernedPolicyRefused) as e:
+        flow.decide(p, now=NOW)
+    refused(e, "selection_changed", "decision")
+
+
+def test_k07_the_extension_limit_can_never_grow_in_the_final_composition(tmp_path):
+    p, res, cfg = prepared(tmp_path, freshness=FreshnessProfile(max_age_extension_seconds=300))
+    scal = {"status_max_age_seconds": 60, "approval_max_age_seconds": 60}
+    grown = cfg.model_copy(update={"freshness": cfg.freshness.model_copy(update={"max_age_extension_seconds": 301})})
+    assert pol.final_composition_defect(cfg, grown, scal, None) == "composed_widens_host"
+    same = cfg.model_copy(deep=True)
+    assert pol.final_composition_defect(cfg, same, scal, None) is None
 
 
 # =============================================================================================================== cached purpose exclusion, existing refusal semantics
