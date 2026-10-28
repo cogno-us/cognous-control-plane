@@ -507,12 +507,13 @@ def test_s01_module_excludes_clock_tolerance_and_other_families():
         assert banned not in text.replace('"""', ""), banned
 
 
+BOUNDED_SHA256_AT_D66AE07 = "c219f8825a8ddf9da1fe6771ae575af0a9069ac8a04eadd40f093a9adb13655b"  # sha256 of src/agent_control_plane/bounded.py at d66ae07fa240510efdcc11ed4b3e1189dcefc822 (no git history needed, so it runs in shallow CI)
+
+
 def test_s02_bounded_module_is_unmodified_by_this_increment():
-    base = subprocess.run(["git", "show", "d66ae07fa240510efdcc11ed4b3e1189dcefc822:src/agent_control_plane/bounded.py"], capture_output=True, text=True,
-                          cwd=Path(__file__).resolve().parent.parent)
-    if base.returncode != 0:
-        pytest.skip("NOT RUN: base revision d66ae07 not present in this checkout")
-    assert (Path(__file__).resolve().parent.parent / "src/agent_control_plane/bounded.py").read_text() == base.stdout
+    import hashlib
+    text = (Path(__file__).resolve().parent.parent / "src/agent_control_plane/bounded.py").read_bytes()
+    assert hashlib.sha256(text).hexdigest() == BOUNDED_SHA256_AT_D66AE07
 
 
 def test_d01_defence_in_depth_refuses_a_registry_result_wider_than_the_host(tmp_path, monkeypatch):
