@@ -96,6 +96,40 @@ jobs:
             exit 1
           }
 
+      # F5 per-class on_unreadable (this increment): needs the Registry r08-v5 contract, which is NOT in the 6f600ab checkout above. A SECOND checkout at the exact Registry
+      # implementation-PR head (cogno-us/cognous-ocs-registry#64) is used for this step only; the F4 and F5 class-age steps above keep their own pin unchanged. Same rules:
+      # missing/wrong pin or missing PyNaCl is a FAILURE (OCS_REQUIRE_REGISTRY_PIN=1) and the junit gate fails on any skip or fewer tests than expected.
+      - name: Check out the Registry at the r08-v5 pin
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: cogno-us/cognous-ocs-registry
+          ref: 6c3e5e4037d34bd2b31371461bfc872c762026b9
+          path: registry-pin-v5
+
+      - name: Run the Registry-governed F5 on_unreadable tests (must not skip)
+        env:
+          OCS_REGISTRY_PIN_DIR: ${{ github.workspace }}/registry-pin-v5
+          OCS_REQUIRE_REGISTRY_PIN: "1"
+        run: |
+          set -o pipefail
+          {
+            git -C registry-pin-v5 rev-parse HEAD
+            test "$(git -C registry-pin-v5 rev-parse HEAD)" = "6c3e5e4037d34bd2b31371461bfc872c762026b9"
+            python -c "import nacl, sys; print('pynacl', nacl.__version__, sys.version.split()[0])"
+            pytest -q tests/test_f5_class_unreadable_governance.py --junitxml=f5-unreadable-junit.xml
+            python - <<'PY'
+          import xml.etree.ElementTree as ET
+          suite = ET.parse("f5-unreadable-junit.xml").getroot()
+          suite = suite if suite.tag == "testsuite" else suite[0]
+          n, skipped, failed = int(suite.get("tests")), int(suite.get("skipped")), int(suite.get("failures")) + int(suite.get("errors"))
+          print(f"f5 on_unreadable tests: {n} run, {skipped} skipped, {failed} failed")
+          assert skipped == 0 and failed == 0 and n >= 148, "Registry-governed on_unreadable tests were skipped or did not run"
+          PY
+          } 2>&1 | tee f5-unreadable-out.txt || {
+            echo "::error title=F5 on_unreadable tests failed::$(tail -n 40 f5-unreadable-out.txt | sed ':a;N;$!ba;s/\n/%0A/g')"
+            exit 1
+          }
+
       - name: Authorization control removal probes
         run: python tools/adversarial_mutations.py
 
