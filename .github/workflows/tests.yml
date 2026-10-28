@@ -71,6 +71,31 @@ jobs:
             exit 1
           }
 
+      # F5 per-class status age (M12 increment): same rules as the F4 step above. The Registry pin is the same checkout (it already contains the r08-v2 F5 composer).
+      - name: Run the Registry-governed F5 class-age tests (must not skip)
+        env:
+          OCS_REGISTRY_PIN_DIR: ${{ github.workspace }}/registry-pin
+          OCS_REQUIRE_REGISTRY_PIN: "1"
+        run: |
+          set -o pipefail
+          {
+            git -C registry-pin rev-parse HEAD
+            test "$(git -C registry-pin rev-parse HEAD)" = "6f600ab1150f00ef3d96834159b1807e866a78b6"
+            python -c "import nacl, sys; print('pynacl', nacl.__version__, sys.version.split()[0])"
+            pytest -q tests/test_f5_class_age_governance.py --junitxml=f5-class-age-junit.xml
+            python - <<'PY'
+          import xml.etree.ElementTree as ET
+          suite = ET.parse("f5-class-age-junit.xml").getroot()
+          suite = suite if suite.tag == "testsuite" else suite[0]
+          n, skipped, failed = int(suite.get("tests")), int(suite.get("skipped")), int(suite.get("failures")) + int(suite.get("errors"))
+          print(f"f5 class-age tests: {n} run, {skipped} skipped, {failed} failed")
+          assert skipped == 0 and failed == 0 and n >= 105, "Registry-governed F5 tests were skipped or did not run"
+          PY
+          } 2>&1 | tee f5-class-age-out.txt || {
+            echo "::error title=F5 class-age tests failed::$(tail -n 40 f5-class-age-out.txt | sed ':a;N;$!ba;s/\n/%0A/g')"
+            exit 1
+          }
+
       - name: Authorization control removal probes
         run: python tools/adversarial_mutations.py
 
