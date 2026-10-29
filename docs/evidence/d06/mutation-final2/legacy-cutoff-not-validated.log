@@ -1,0 +1,24 @@
+# legacy-cutoff-not-validated: the shared cutoff check accepts any legacy_cutoff
+# file: src/agent_control_plane/registry_governed_lifecycle.py
+# verdict: KILLED (exit 1)
+
+........................................................................ [ 18%]
+.........................F
+=================================== FAILURES ===================================
+__________ test_d06_an_invalid_cutoff_refuses_the_construction[True] ___________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1520/test_d06_an_invalid_cutoff_ref0')
+cutoff = True
+
+    @pytest.mark.parametrize("cutoff", [True, False, -1, 1.0, "1", None, 2 ** 31, 10 ** 30, [1]])
+    def test_d06_an_invalid_cutoff_refuses_the_construction(tmp_path, cutoff):
+        p, res, cfg, srcs, flow = S.ready(tmp_path)
+>       with pytest.raises(RegistryGovernedPolicyRefused) as e:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE RegistryGovernedPolicyRefused
+
+tests/test_effective_configuration_binding.py:360: Failed
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding.py::test_d06_an_invalid_cutoff_refuses_the_construction[True]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 97 passed in 36.58s

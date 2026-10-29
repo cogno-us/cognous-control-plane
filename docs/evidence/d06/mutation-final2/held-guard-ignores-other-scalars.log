@@ -1,0 +1,32 @@
+# held-guard-ignores-other-scalars: the held-state guard covers only the F4 scalars
+# file: src/agent_control_plane/registry_governed_lifecycle.py
+# verdict: KILLED (exit 1)
+
+........................................................................ [ 18%]
+...................................................................F
+=================================== FAILURES ===================================
+_ test_e03_a_post_construction_edit_of_a_scalar_or_the_observation_policy_is_refused_at_every_boundary[bool_in_place] _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1517/test_e03_a_post_construction_e1')
+edit = 'bool_in_place'
+
+    @pytest.mark.parametrize("edit", sorted(EDITS))
+    def test_e03_a_post_construction_edit_of_a_scalar_or_the_observation_policy_is_refused_at_every_boundary(tmp_path, edit):
+        """New held-state coverage: before D-06 only the F4 scalars (when declared) and the profile were guarded."""
+        p, res, cfg, srcs, flow, d = S.authorized(tmp_path)
+        EDITS[edit](flow)
+        calls = {k: x.calls for k, x in srcs.items() if x is not None}
+        for boundary, call in (("decision", lambda: flow.decide(p, now=NOW)), ("effect", lambda: flow.execute(p, d, adapter_id=p.adapter_id, now=NOW))):
+            with pytest.raises(RegistryGovernedPolicyRefused) as e:
+                call()
+>           assert e.value.refusal.code == "scalars_modified" and e.value.boundary == boundary
+E           AssertionError: assert ('configuratio...nding_invalid' == 'scalars_modified'
+E             
+E             - scalars_modified
+E             + configuration_binding_invalid)
+
+tests/test_effective_configuration_binding.py:411: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding.py::test_e03_a_post_construction_edit_of_a_scalar_or_the_observation_policy_is_refused_at_every_boundary[bool_in_place]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 139 passed in 42.72s

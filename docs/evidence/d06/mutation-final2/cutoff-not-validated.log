@@ -1,0 +1,24 @@
+# cutoff-not-validated: the cutoff type/range check is dropped (a bool True is read as 1)
+# file: src/agent_control_plane/effective_configuration_binding.py
+# verdict: KILLED (exit 1)
+
+................................F
+=================================== FAILURES ===================================
+___________ test_an_invalid_cutoff_never_makes_anything_legacy[True] ___________
+
+cutoff = True
+
+    @pytest.mark.parametrize("cutoff", [True, False, -1, 1.0, "1", None, MAXV + 1, 10 ** 30, float("inf"), [1], 1.5])
+    def test_an_invalid_cutoff_never_makes_anything_legacy(cutoff):
+        assert ecb.legacy_cutoff_defect(cutoff) is not None
+>       assert ecb.classify(persisted(None), LIVE, index=0, cutoff=cutoff, decision_count=10 ** 9) == ecb.UNBOUND_AFTER_CUTOFF
+E       AssertionError: assert 'legacy' == 'unbound-after-cutoff'
+E         
+E         - unbound-after-cutoff
+E         + legacy
+
+tests/test_effective_configuration_binding_unit.py:228: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding_unit.py::test_an_invalid_cutoff_never_makes_anything_legacy[True]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 32 passed in 1.94s

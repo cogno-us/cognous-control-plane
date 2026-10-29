@@ -1,0 +1,25 @@
+# hold-becomes-authorization: the binding layer returns no reasons for a hold (a hold would be authorized)
+# file: src/agent_control_plane/registry_governed_lifecycle.py
+# verdict: KILLED (exit 1)
+
+.............................................................F
+=================================== FAILURES ===================================
+_ test_a06_a_hold_persists_no_binding_and_the_binding_cannot_turn_a_hold_into_an_authorization _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1510/test_a06_a_hold_persists_no_bi0')
+
+    def test_a06_a_hold_persists_no_binding_and_the_binding_cannot_turn_a_hold_into_an_authorization(tmp_path):
+        p, res, cfg, srcs, flow = S.ready(tmp_path)
+        T.bind_approval(res, cfg)  # approvals over the HOST profile, not the narrowed one: the base result is a hold
+        d = flow.decide(p, now=NOW)
+>       assert d.result == "hold" and "runtime_authority_approval_mismatch" in d.reasons and d.binding is None
+E       AssertionError: assert ('authorized' == 'hold'
+E         
+E         - hold
+E         + authorized)
+
+tests/test_effective_configuration_binding.py:150: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding.py::test_a06_a_hold_persists_no_binding_and_the_binding_cannot_turn_a_hold_into_an_authorization
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 61 passed in 3.77s

@@ -1,0 +1,26 @@
+# skip-check-on-claim-path: the pin-export / claim path is not checked
+# file: src/agent_control_plane/registry_governed_lifecycle.py
+# verdict: KILLED (exit 1)
+
+........................................................................ [ 18%]
+........................................................................ [ 37%]
+........F
+=================================== FAILURES ===================================
+_ test_g01_the_pin_export_claim_path_accepts_the_same_configuration_after_restart _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1505/test_g01_the_pin_export_claim_0')
+
+    def test_g01_the_pin_export_claim_path_accepts_the_same_configuration_after_restart(tmp_path):
+        p, res, profile, binding, store, flow, d = pin_decision(tmp_path)
+        assert d.binding.runtime_authority[ecb.KEY]["version"] == ecb.VERSION and d.binding.runtime_authority["policy_generation"] == 1
+>       assert active(flow, p, d, binding)["state"] == "active"
+E       AssertionError: assert 'unknown' == 'active'
+E         
+E         - active
+E         + unknown
+
+tests/test_effective_configuration_binding.py:489: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding.py::test_g01_the_pin_export_claim_path_accepts_the_same_configuration_after_restart
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 152 passed in 45.62s

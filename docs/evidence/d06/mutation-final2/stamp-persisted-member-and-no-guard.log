@@ -1,0 +1,42 @@
+# stamp-persisted-member-and-no-guard: the persisted member is stamped AND the defensive guard is removed (a mismatch would be accepted)
+# file: src/agent_control_plane/registry_governed_lifecycle.py
+# verdict: KILLED (exit 1)
+
+...........................................................F
+=================================== FAILURES ===================================
+_ test_a05b_a_workflow_without_a_profile_refuses_a_changed_configuration_on_execute _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1515/test_a05b_a_workflow_without_a0')
+
+    def test_a05b_a_workflow_without_a_profile_refuses_a_changed_configuration_on_execute(tmp_path):
+        """No `decision=` is passed to `_resolve` on this path (no profile): the execute entry carries the decision, and a drift still refuses durably."""
+        p = T.base.tenant_proposal()
+        res = T.base.tenant_resolver_for(p)
+        flow = S.mk(tmp_path, res, None, T.families(f=T.fsrc()))
+        d = flow.decide(p, now=NOW)
+        for drift in (dict(identity_max_age_seconds=59), dict(clock_tolerance_seconds=6), dict(obs=None), dict(status_max_age_seconds=25), dict(obs=ObservationPolicy(max_age_seconds=299))):
+            other = S.mk(tmp_path, res, None, T.families(f=T.fsrc()), **drift)
+>           assert_binding_refusal(other, p, d)
+
+tests/test_effective_configuration_binding.py:129: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+wf = <agent_control_plane.registry_governed_policy.GovernedPolicyWorkflow object at 0x7ff593fbd1d0>
+p = TenantRuntimeProposal(manifest_id='refund-integration-pilot-v1', manifest_version='1.1', manifest_digest='sha256:4d1ad...'run-1', expected_side_effects=[], evidence_refs=['urn:cognous:evidence:refund-entitlement'], tenant_id='tenant-alpha')
+d = RuntimeDecision(reason_vocabulary_version=None, rule_identity=None, reopen_conditions=[], decision_id='32b615f6-e49c-4...c0b107f215773957e569ee85e5ca1abb94c267cd', missing=False, previous_observed_at=None, read_state=None, age_basis=None)])
+status = 'mismatch'
+
+    def assert_binding_refusal(wf, p, d, status=ecb.MISMATCH):
+        """execute refuses with the REGISTERED reason, a durable EffectTimeRefusal is written, nothing reached the destination and no attempt exists."""
+        n_ref = len(wf.records.load().refusals)
+        before = wf.destination.snapshot()
+        assert wf.configuration_binding_status(wf.records.decision(d.decision_id)) == status
+>       with pytest.raises(PermissionError, match="authorization-critical inputs changed before effect"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE PermissionError
+
+tests/test_effective_configuration_binding.py:49: Failed
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding.py::test_a05b_a_workflow_without_a_profile_refuses_a_changed_configuration_on_execute
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 59 passed in 3.12s

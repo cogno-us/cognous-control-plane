@@ -45,10 +45,23 @@ The constructor `clock_tolerance_seconds` is bound only so that drift refuses. T
 
 ## 3. Where it is minted and checked
 
-* Module: `src/agent_control_plane/effective_configuration_binding.py` (pure; imports only `commitment`). Lifecycle: `GovernedLifecycle._resolve` (non-protected `registry_governed_lifecycle.py`). Live members: `GovernedPolicyWorkflow._gl_configuration_members` (`registry_governed_policy.py`).
-* **Mint** on every AUTHORIZED decision of the composed governed workflow. Always on: there is no constructor switch, no default-off mode. A hold persists no binding (as before); a hold stays a hold.
+* Module: `src/agent_control_plane/effective_configuration_binding.py` (pure; imports only `commitment`). Lifecycle: `GovernedLifecycle._resolve` (non-protected `registry_governed_lifecycle.py`). The ONE implementation of the live members, the held-state guard for the scalars and the ObservationPolicy, the `legacy_cutoff` check and the construction-time bind step is in `GovernedLifecycle` (`_gl_build_members`, `_gl_config_defect`, `check_cutoff`, `_gl_bind_configuration`); each governed workflow supplies only a small hook `_gl_configuration_members` that names its host/effective profile digests and its bound family slots (section 3a).
+* **Mint** on every AUTHORIZED decision of every governed workflow (the composed `GovernedPolicyWorkflow` and the three dedicated single-family workflows, section 3a). Always on: there is no constructor switch, no default-off mode. A hold persists no binding (as before); a hold stays a hold.
 * **Check** on `execute` and on the pin-export / claim path. Both re-resolve through `workflow._resolve`, so the one override covers both; a test pins each. The base class's existing equality `current != persisted.binding` then does the refusing: the live member is placed in the rebuilt binding (or, for a legacy decision, deliberately left out), so a mismatch yields the registered reason `authorization_binding_changed` as a durable `EffectTimeRefusal`, and `execute` raises the existing `PermissionError("authorization-critical inputs changed before effect")`. The destination is not touched and no attempt is created.
-* Not covered, by scope: the plain `BoundedAuthorizationWorkflow` mints nothing (it has no governed configuration to bind), and the three dedicated single-family workflows (`registry_f4_age_governance`, `registry_f5_class_age_governance`, `registry_f5_class_unreadable_governance`) keep no configuration hook because their modules were outside the authorized file set. They mint no member and their records are byte-identical to before (`test_h05`). Governing them needs a one-hook addition in each module and is reported as a follow-up.
+* Not covered, by scope: the plain `BoundedAuthorizationWorkflow` mints nothing (it has no governed configuration to bind). It is not a governed workflow.
+
+## 3a. The dedicated single-family workflows (follow-up that closes "no unbound configuration in newly governed decisions")
+
+`GovernedAgeWorkflow` (F4, no profile), `GovernedClassAgeWorkflow` and `GovernedClassUnreadableWorkflow` (alone, or joined with class age) now mint and check the same binding. Each module adds exactly: a `legacy_cutoff=0` keyword validated by the shared `check_cutoff`; one call to the shared `_gl_bind_configuration` as the last construction step; `_gl_config_defect()` at the end of its `_gl_held_defect`; and one `_gl_configuration_members` hook that calls the shared builder. There is no second implementation, no new reason code, the same `legacy_cutoff` semantics (default 0, exact int 0..2147483647, `legacy_cutoff_invalid`) and the same refusal path (`authorization_binding_changed`). The composed workflow was moved onto the same shared code, so the four workflows differ only in their hook:
+
+| workflow | `host_profile_digest` | `effective_profile_digest` | family slots bound |
+|---|---|---|---|
+| F4 (`GovernedAgeWorkflow`) | null | null | `f4_ages` |
+| class age | host profile | held (derived) profile | `class_age` |
+| class unreadable alone | host profile | held (derived) profile | `class_unreadable` |
+| class unreadable + class age (joint) | host profile | held (derived) profile | `class_age`, `class_unreadable` |
+
+The F4 record has `runtime_authority == {"effective_configuration": {...}}` (it carried `None` before). The revocation and irreversibility modules (`registry_revocation_governance.py`, `registry_irreversibility_governance.py`) do not construct decision-minting workflows (they are family evaluators consumed by the composed workflow), so they needed and received no change. A dedicated and a composed decision are different records (different `scope`/`families`/profile digests), so a decision minted by one is refused by the other, by design. Row order is `FAMILY_TABLE` order in the dedicated workflows and `FAMILY_NAMES` order in the composed one; the two agree on every slot a dedicated workflow can bind (`test_d18`).
 
 ## 4. Reader rules and the read-only classifier
 
@@ -69,7 +82,7 @@ Every non-accepted status refuses with `authorization_binding_changed`. There is
 
 ## 5. `legacy_cutoff` and migration
 
-`GovernedPolicyWorkflow(..., legacy_cutoff=0)`. The cutoff is the number of rows in the append-only `decisions` list at activation, supplied by the host as an explicit finite integer. A decision without the member and with index below the cutoff executes under the previous semantics and is reported `legacy`. Rules:
+`GovernedPolicyWorkflow(..., legacy_cutoff=0)` and, identically, `GovernedAgeWorkflow`, `GovernedClassAgeWorkflow`, `GovernedClassUnreadableWorkflow` (`legacy_cutoff=0`; frozen fixtures from the unchanged b7eb11a code for each: `tests/fixtures/d06_legacy_store_dedicated_*.json`). The cutoff is the number of rows in the append-only `decisions` list at activation, supplied by the host as an explicit finite integer. A decision without the member and with index below the cutoff executes under the previous semantics and is reported `legacy`. Rules:
 
 * Default 0: no legacy decision is accepted. There is no wildcard value.
 * A cutoff that is not an exact `int` (bool, float, str, None), is negative, or exceeds 2147483647 is refused at construction (`legacy_cutoff_invalid`).
@@ -114,6 +127,20 @@ Pre-write adapter refusals (the existing closed adapter vocabulary of the govern
 * All five scalars and the ObservationPolicy values must be exact ints in 0..2147483647 at construction, even when the F4 family is not declared. A host that supplied a float or a larger value now gets `host_scalar_invalid`. (The pre-existing extreme-tolerance `OverflowError` defect of the protected `bounded.py` is unrelated and untouched.)
 * `tests/test_governed_policy_composition.py::test_i04...` characterized the gap that this closes. It is kept verbatim as a strict `xfail` with a comment citing the authorization; its documented successor is `tests/test_effective_configuration_binding.py::test_c03_the_documented_i04_scenario_now_refuses`. Its original passing result is in `docs/evidence/d06/baseline-b7eb11a-v7pin.log`.
 
+### 9a. Behaviour tightening for governed workflows: scalar and ObservationPolicy validation (before / after)
+
+Applies to the composed workflow (since the first D-06 change) AND, with the follow-up, to the three dedicated workflows. The five scalars are `status_max_age_seconds`, `approval_max_age_seconds`, `clock_tolerance_seconds`, `identity_max_age_seconds`, `mandate_max_age_seconds`; the ObservationPolicy values are `max_age_seconds` and `clock_tolerance_seconds`.
+
+| | before (b7eb11a) | after |
+|---|---|---|
+| The two F4 scalars, F4 declared / dedicated F4 | validated by the F4 module (unchanged) | validated by the F4 module (unchanged) and by the binding |
+| The two F4 scalars, F4 NOT declared (composed without F4; dedicated class age and class unreadable) | not validated by the governed layer; any value the base class accepted | must be exact ints 0..2147483647, else construction refuses `host_scalar_invalid` |
+| `clock_tolerance_seconds`, `identity_max_age_seconds`, `mandate_max_age_seconds` | not validated by the governed layer | must be exact ints 0..2147483647, else `host_scalar_invalid` |
+| ObservationPolicy `max_age_seconds` / `clock_tolerance_seconds` | not validated by the governed layer | exact ints 0..2147483647, else `host_scalar_invalid` (an absent ObservationPolicy stays allowed and is bound as an explicit null) |
+| Post-construction edit of any of these | only the two F4 scalars (when F4 declared) were guarded | any edit, including a type change such as `True` for `1` or an in-place edit of the ObservationPolicy object, is refused as `scalars_modified` before any selection source runs and again at the commit gate |
+
+Inputs that therefore now FAIL construction in every governed workflow, whether or not F4 is declared: a `bool` (`True`), a `float` (`60.0`, `1.5`), a `str` (`"60"`), `None`, a negative int, and an int above 2147483647, for any of the five scalars and the two ObservationPolicy values. Hosts that passed such values to a governed workflow must correct them; the plain `BoundedAuthorizationWorkflow` is unchanged. The pre-existing extreme-tolerance `OverflowError` defect of the protected `bounded.py` is unrelated and untouched. Tests: composed `test_e01`/`e02`/`e03`, dedicated `test_d09`/`d10`/`d12`.
+
 ## 10. Honest limits (do not state otherwise)
 
 * The record store is unsigned local JSON (existing tests rewrite persisted digests in place). The binding guards configuration DRIFT, restart and rebuild mix-ups, partial upgrades and buggy writers. It does NOT defend against a party who can rewrite the store: such a party can forge a whole decision, a member, or the data the cutoff is judged against.
@@ -121,9 +148,9 @@ Pre-write adapter refusals (the existing closed adapter vocabulary of the govern
 * The `legacy_cutoff` is host configuration with no durable provenance. A host that sets it too high (bounded only by the decision count) or an editor of the store defeats the check. Below the cutoff a stripped member is indistinguishable from a legacy record (`test_d04`).
 * Mixed fleets: a legacy writer can still append records without the member; new readers refuse them past the cutoff, legacy readers accept them.
 * The binding checks the executing workflow's HOST-supplied values. Registry freshness, revocation visibility and epoch floors remain host custody duties. Workers given different `observation_policy` or scalar values refuse each other's decisions (correct, but operationally visible).
-* Scope: only the composed `GovernedPolicyWorkflow` binds (see section 3).
+* Scope: the four governed workflows bind (section 3a); the plain `BoundedAuthorizationWorkflow` does not (it is not governed). A decision minted by one governed workflow is refused by another (different scope/profile/family members).
 * A legacy decision below the cutoff keeps the previous gap: its F4 scalars and ObservationPolicy are still unbound.
 
 ## 11. Evidence
 
-Tests: `tests/test_effective_configuration_binding_unit.py` (pure), `tests/test_effective_configuration_binding.py` (real workflow), `tests/test_effective_configuration_binding_legacy.py` (frozen fixtures, legacy reader, separate process; helpers `tests/d06_support.py`, `tests/d06_worker.py`). Frozen legacy fixtures: `tests/fixtures/d06_legacy_store_*.json`, generated by the UNCHANGED prior code (b7eb11aaeed9c766ecaae7d22955093f7f7cd1aa) before any source change. Raw baseline and final outputs, the protected-evaluator hashes, the mutation harness and its logs, and the draft CI Scope Declaration: `docs/evidence/d06/`. These are developer evidence, not independent qualification.
+Tests: `tests/test_effective_configuration_binding_unit.py` (pure), `tests/test_effective_configuration_binding.py` (real workflow), `tests/test_effective_configuration_binding_legacy.py` (frozen fixtures, legacy reader, separate process; helpers `tests/d06_support.py`, `tests/d06_worker.py`), `tests/test_effective_configuration_binding_dedicated.py` (the three dedicated workflows: mint, same-config accept, changed scalar / ObservationPolicy / family value / host profile refuse, missing member refuse, legacy below the cutoff, held-state, construction refusals). `test_h05` (the dedicated F4 workflow does not bind) is superseded: kept verbatim as a strict `xfail` citing the follow-up authorization, successor `test_h05b`. Frozen legacy fixtures: `tests/fixtures/d06_legacy_store_*.json`, generated by the UNCHANGED prior code (b7eb11aaeed9c766ecaae7d22955093f7f7cd1aa) before any source change. Raw baseline and final outputs, the protected-evaluator hashes, the mutation harness and its logs, and the draft CI Scope Declaration: `docs/evidence/d06/`. These are developer evidence, not independent qualification.

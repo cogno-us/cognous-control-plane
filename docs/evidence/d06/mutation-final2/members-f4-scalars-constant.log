@@ -1,0 +1,28 @@
+# members-f4-scalars-constant: the F4 scalars are not read live (constant 0)
+# file: src/agent_control_plane/registry_governed_lifecycle.py
+# verdict: KILLED (exit 1)
+
+.......................................................F
+=================================== FAILURES ===================================
+_______________ test_a02_the_members_are_the_live_configuration ________________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1522/test_a02_the_members_are_the_l0')
+
+    def test_a02_the_members_are_the_live_configuration(tmp_path):
+        p, res, cfg, srcs, flow, d = S.authorized(tmp_path)
+        m = member_of(flow, d)["members"]
+        assert m["scope"] == {"consumer_id": "consumer-test", "tenant_id": T.TENANT.lower(), "action_id": T.ACTION_ID, "institution_id": T.base.INSTITUTION, "authority_domain": T.base.DOMAIN}
+>       assert m["f4_scalars"] == {"status_max_age_seconds": 60, "approval_max_age_seconds": 60}  # live host values even though the F4 family is NOT declared
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert {'status_max_...e_seconds': 0} == {'status_max_..._seconds': 60}
+E         
+E         Differing items:
+E         {'approval_max_age_seconds': 0} != {'approval_max_age_seconds': 60}
+E         {'status_max_age_seconds': 0} != {'status_max_age_seconds': 60}
+E         Use -v to get more diff
+
+tests/test_effective_configuration_binding.py:81: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding.py::test_a02_the_members_are_the_live_configuration
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 55 passed in 2.18s

@@ -1,0 +1,27 @@
+{
+ "total": 1,
+ "killed": 1,
+ "survived": [],
+ "invalid": [],
+ "control": "PASS",
+ "results": [
+  {
+   "id": "__control__",
+   "verdict": "PASS",
+   "exit": 0,
+   "first_failure": null,
+   "desc": "unmutated copy",
+   "file": "-",
+   "note": null
+  },
+  {
+   "id": "dedicated-age-host-digest-is-effective",
+   "verdict": "KILLED",
+   "exit": 1,
+   "first_failure": "FAILED tests/test_effective_configuration_binding_dedicated.py::test_d19_a_different_host_age_with_the_same_final_ages_refuses[dedicated_age]",
+   "desc": "the dedicated class-age host digest is replaced by the effective digest",
+   "file": "src/agent_control_plane/registry_f5_class_age_governance.py",
+   "note": null
+  }
+ ]
+}

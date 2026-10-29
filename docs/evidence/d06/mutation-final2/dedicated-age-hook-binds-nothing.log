@@ -1,0 +1,26 @@
+# dedicated-age-hook-binds-nothing: the dedicated class-age workflow mints/checks no binding
+# file: src/agent_control_plane/registry_f5_class_age_governance.py
+# verdict: KILLED (exit 1)
+
+........................................................................ [ 18%]
+........................................................................ [ 37%]
+....................x..............................F
+=================================== FAILURES ===================================
+_ test_d01_every_authorized_decision_of_a_dedicated_workflow_carries_the_member[dedicated_age] _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1530/test_d01_every_authorized_deci1')
+kind = 'dedicated_age'
+
+    @pytest.mark.parametrize("kind", KINDS)
+    def test_d01_every_authorized_decision_of_a_dedicated_workflow_carries_the_member(tmp_path, kind):
+        p, res, cfg, store, flow, d = authorized(kind, tmp_path)
+        ra = stored(flow, d).binding.runtime_authority
+>       member = ra[ecb.KEY]
+                 ^^^^^^^^^^^
+E       KeyError: 'effective_configuration'
+
+tests/test_effective_configuration_binding_dedicated.py:99: KeyError
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding_dedicated.py::test_d01_every_authorized_decision_of_a_dedicated_workflow_carries_the_member[dedicated_age]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 194 passed, 1 xfailed in 59.55s
