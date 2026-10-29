@@ -1,0 +1,21 @@
+# drop-effective_profile_digest-from-preimage: the digest is computed without the `effective_profile_digest` member
+# file: src/agent_control_plane/effective_configuration_binding.py
+# verdict: KILLED (exit 1)
+
+.F
+=================================== FAILURES ===================================
+_ test_digest_is_the_existing_canonical_commitment_over_domain_version_and_members _
+
+    def test_digest_is_the_existing_canonical_commitment_over_domain_version_and_members():
+        m = members()
+>       assert ecb.digest_of(ecb.VERSION, m) == independent_digest(m)
+E       AssertionError: assert 'sha256:fcb7f...8bc60823de450' == 'sha256:fb79b...6c2f920502697'
+E         
+E         - sha256:fb79b5ceb72bff37a3ee53800ff4c9acc96e930cbd67b0feab36c2f920502697
+E         + sha256:fcb7ff3940e80ae369670f9d4265b1bd170fc9c16467509994b8bc60823de450
+
+tests/test_effective_configuration_binding_unit.py:96: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding_unit.py::test_digest_is_the_existing_canonical_commitment_over_domain_version_and_members
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 1 passed in 1.91s

@@ -1,0 +1,8 @@
+# compare-only-digest: the live comparison uses the digest alone (members still validated against it)
+# file: src/agent_control_plane/effective_configuration_binding.py
+# verdict: SURVIVED (exit 0)
+
+........................................................................ [ 37%]
+........................................................................ [ 74%]
+.................................................                        [100%]
+193 passed in 81.95s (0:01:21)

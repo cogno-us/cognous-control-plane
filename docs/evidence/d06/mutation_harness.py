@@ -87,7 +87,7 @@ mut("binding-invalid-falls-back-to-unbound", "an unbindable live configuration s
 mut("execute-does-not-carry-the-decision", "the execute entry does not carry the decision (no-profile path treated as a fresh mint)", LIFE,
     "token, dtoken = _EXEC_NOW.set(now), _EXEC_DECISION.set(decision)", "token, dtoken = _EXEC_NOW.set(now), _EXEC_DECISION.set(None)")
 # --- added after the first run, to explain the `stamp-persisted-member` survivor (run separately into mutation-extra/) ----------------------------------------------------
-GUARD = "        if status not in ecb.ACCEPTED and stamped.runtime_authority == persisted_ra:  # unreachable by construction; fail closed if it ever happens\n            return sorted(set(reasons) | {BINDING_CHANGED}), stamped\n"
+GUARD = "        if status not in ecb.ACCEPTED and stamped.runtime_authority == persisted_ra:  # LOAD-BEARING: Python equality conflates 60.0 == 60 and True == 1, so a malformed member can compare EQUAL to the live one; the classification still refuses\n            return sorted(set(reasons) | {BINDING_CHANGED}), stamped\n"
 STAMP_OLD = "        stamped = self._gl_with_member(binding, live)\n        persisted_ra"
 STAMP_NEW = "        stamped = self._gl_with_member(binding, (getattr(getattr(target, 'binding', None), 'runtime_authority', None) or {}).get(ecb.KEY, live))\n        persisted_ra"
 mut("redundant-guard-removed", "the defensive 'stamped equals persisted although not accepted' guard is removed (alone)", LIFE, GUARD, "",
