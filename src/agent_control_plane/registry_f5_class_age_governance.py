@@ -39,25 +39,28 @@ for bounded engineering only; stronger production atomicity is unqualified); (2)
 decided; (4) the F4 scalars, clock tolerance, identity and mandate ages and every other class field are NOT governed here; this workflow does not compose with
 `GovernedAgeWorkflow`.
 Registry is resolved lazily from the host environment (a pinned checkout, never vendored); if it is unavailable the result is a refusal.
+Consolidation (shared lifecycle): the decide/execute/commit-gate lifecycle, scope check, source invocation and destination wrapping now live in
+`registry_governed_lifecycle`; this module keeps its derivation, composition and refusal vocabulary unchanged. The held profile is also checked once more AFTER the selection
+source and Registry have run.
 """
 from __future__ import annotations
 
-import contextvars
 import importlib
 import json
 from datetime import datetime
 from typing import Any, Callable, Mapping, Optional
 
-from agent_control_plane.bounded import BoundedAuthorizationWorkflow, DefinitiveDestinationRejection, TenantRuntimeProposal, _now, commitment
-from agent_control_plane.registry_f4_age_governance import (
-    CLASSIFICATION, CONTRACT, GovernedScope, Refusal, RegistrySelectionRefused, SelectionMaterial, SCALAR_MAX, _GatedDestination, _declared_authority, _scalar, _text,
+from agent_control_plane.bounded import _now, commitment
+from agent_control_plane.registry_f4_age_governance import CONTRACT
+from agent_control_plane.registry_governed_lifecycle import (
+    GovernedLifecycle, GovernedScope, Refusal, RegistrySelectionRefused, SelectionMaterial, SCALAR_MAX, _GatedDestination, _declared_authority, _scalar, _text,
+    check_scope, check_source, construction_now, read_source, require_authority, take_destination,
 )
 from agent_control_plane.runtime_authority import RuntimeAuthorityProfile
 
 FAMILY = "f5-action-class-age-bounds"
 FIELD = "class_status_max_age_seconds"
 REJECTION_CODE = "registry_f5_selection_invalid"
-_EXEC_NOW: contextvars.ContextVar = contextvars.ContextVar("registry_f5_execute_now", default=None)
 
 
 class RegistryClassAgeRefused(RegistrySelectionRefused):
@@ -180,17 +183,18 @@ def derive_effective(*, scope: GovernedScope, institution_id: str, authority_dom
         return None, Refusal("effective_policy_digest_unavailable", None, kind)
 
 
-class GovernedClassAgeWorkflow(BoundedAuthorizationWorkflow):
+
+class GovernedClassAgeWorkflow(GovernedLifecycle):
     """`BoundedAuthorizationWorkflow` whose class status-age bounds come from an authenticated Registry F5 selection, re-validated at every decision and effect.
 
     `runtime_authority_profile` is the HOST profile (required). `self.runtime_authority_profile` is the EFFECTIVE profile: issue approvals against it."""
 
+    _gl_rejection_code = REJECTION_CODE
+
     def __init__(self, *, scope: GovernedScope, selection_source: Callable[[], Any], verifier: Any, runtime_authority_profile: Any,
                  construction_time: Optional[datetime] = None, **workflow_kwargs: Any):
-        if type(scope) is not GovernedScope or not all(_text(getattr(scope, f)) for f in ("consumer_id", "tenant_id", "action_id", "operation_id")):
-            raise _refuse("scope_invalid", "construction")
-        if not callable(selection_source):
-            raise _refuse("selection_source_invalid", "construction")
+        check_scope(scope, _refuse)
+        check_source(selection_source, _refuse)
         if runtime_authority_profile is None:
             raise _refuse("runtime_authority_profile_required", "construction")
         try:
@@ -204,83 +208,54 @@ class GovernedClassAgeWorkflow(BoundedAuthorizationWorkflow):
             raise _refuse(code, "construction")
         if scope.action_id not in host.actions:
             raise _refuse("action_class_unknown", "construction")
-        authority = _declared_authority(workflow_kwargs.get("manifest"), scope.action_id)
-        if authority is None:
-            raise _refuse("manifest_action_undeclared", "construction")
-        allow_test_time = bool(workflow_kwargs.get("allow_test_time"))
-        now = construction_time if (allow_test_time and construction_time is not None) else _now()
-        if now.tzinfo is None or now.utcoffset() is None:
-            raise _refuse("time_invalid", "construction")
-        try:
-            material = selection_source()
-        except Exception:
-            raise _refuse("selection_source_failed", "construction") from None
+        authority = require_authority(workflow_kwargs, scope.action_id, _refuse)
+        now = construction_now(construction_time, workflow_kwargs, _now, _refuse)
+        material = read_source(selection_source, _refuse, "construction")
         derived, refusal = derive_effective(scope=scope, institution_id=authority[0], authority_domain=authority[1], host=host, host_ages=host_ages,
                                             material=material, verifier=verifier, now=now)
         if refusal is not None:
             raise RegistryClassAgeRefused(refusal, "construction")
-        destination = workflow_kwargs.pop("destination", None)
-        if destination is None or isinstance(destination, _GatedDestination):
-            raise _refuse("destination_invalid", "construction")
+        destination = take_destination(workflow_kwargs, _refuse)
         profile, effective, digest, pdigest = derived
-        super().__init__(runtime_authority_profile=profile, destination=_GatedDestination(destination, self._f5_commit_gate), **workflow_kwargs)
-        self.f5_last_commit_refusal: Optional[Refusal] = None
+        super().__init__(runtime_authority_profile=profile, destination=_GatedDestination(destination, self._gl_commit_gate), **workflow_kwargs)
         self._f5_scope, self._f5_source, self._f5_verifier = scope, selection_source, verifier
         self._f5_host, self._f5_host_ages, self._f5_authority = host, host_ages, authority
-        self._f5_bound = (dict(effective), digest, pdigest)
+        self._gl_attach(scope=scope, authority=authority, bound=(dict(effective), digest, pdigest))
+
+    _f5_commit_gate = GovernedLifecycle._gl_commit_gate
+
+    @property
+    def f5_last_commit_refusal(self) -> Optional[Refusal]:
+        return self._gl_last_commit_refusal
+
+    @f5_last_commit_refusal.setter
+    def f5_last_commit_refusal(self, value: Optional[Refusal]) -> None:
+        self._gl_last_commit_refusal = value
 
     @property
     def registry_f5_policy_identity(self) -> dict:
-        effective, digest, pdigest = self._f5_bound
+        effective, digest, pdigest = self._gl_bound
         return {"contract_version": CONTRACT, "family": FAMILY, "effective_policy_digest": digest, "effective": dict(effective),
                 "effective_profile_digest": pdigest, "host": dict(self._f5_host_ages),
                 "scope": {"consumer_id": self._f5_scope.consumer_id, "tenant_id": self._f5_scope.tenant_id, "action_id": self._f5_scope.action_id,
                           "operation_id": self._f5_scope.operation_id}}
 
-    def _f5_revalidate(self, proposal: Any, boundary: str, now: datetime) -> None:
-        scope = self._f5_scope
-        if not isinstance(proposal, TenantRuntimeProposal) or proposal.tenant_id != scope.tenant_id or proposal.action_id != scope.action_id:
-            raise _refuse("proposal_out_of_scope", boundary)
-        self._f5_reverify(boundary, now)
+    def _gl_error(self, refusal: Refusal, boundary: str) -> Exception:
+        return RegistryClassAgeRefused(refusal, boundary)
 
-    def _f5_reverify(self, boundary: str, now: datetime) -> None:
-        scope = self._f5_scope
-        effective, digest, pdigest = self._f5_bound
+    def _gl_held_defect(self) -> Optional[str]:
         held = self.runtime_authority_profile
-        if type(held) is not RuntimeAuthorityProfile or profile_digest(held) != pdigest:
-            raise _refuse("profile_modified", boundary)
-        authority = _declared_authority(self.manifest, scope.action_id)
-        if authority != self._f5_authority:
-            raise _refuse("manifest_authority_changed", boundary)
-        try:
-            material = self._f5_source()
-        except Exception:
-            raise _refuse("selection_source_failed", boundary) from None
-        derived, refusal = derive_effective(scope=scope, institution_id=authority[0], authority_domain=authority[1], host=self._f5_host,
-                                            host_ages=self._f5_host_ages, material=material, verifier=self._f5_verifier, now=now)
+        if type(held) is not RuntimeAuthorityProfile or profile_digest(held) != self._gl_bound[2]:
+            return "profile_modified"
+        return None
+
+    def _gl_read_sources(self, boundary: str) -> Any:
+        return read_source(self._f5_source, _refuse, boundary)
+
+    def _gl_derive(self, materials: Any, authority: Any, now: datetime, boundary: str) -> Any:
+        derived, refusal = derive_effective(scope=self._f5_scope, institution_id=authority[0], authority_domain=authority[1], host=self._f5_host,
+                                            host_ages=self._f5_host_ages, material=materials, verifier=self._f5_verifier, now=now)
         if refusal is not None:
             raise RegistryClassAgeRefused(refusal, boundary)
         _, new_effective, new_digest, new_pdigest = derived
-        if new_effective != effective or new_digest != digest or new_pdigest != pdigest:
-            raise _refuse("selection_changed", boundary)
-
-    def _f5_commit_gate(self) -> None:
-        """Last Registry check before `destination.apply` (see module docstring). Clock: the execute-entry time under a test clock, else the real clock."""
-        try:
-            self._f5_reverify("effect_commit", self._evaluation_time(_EXEC_NOW.get()))
-        except RegistryClassAgeRefused as exc:
-            self.f5_last_commit_refusal = exc.refusal
-            raise DefinitiveDestinationRejection(REJECTION_CODE) from None
-
-    def decide(self, proposal, *, now=None):
-        self._f5_revalidate(proposal, "decision", self._evaluation_time(now))
-        return super().decide(proposal, now=now)
-
-    def execute(self, proposal, decision, *, adapter_id, now=None, lose_ack=False, partial=False):
-        entry_time = self._evaluation_time(now)
-        self._f5_revalidate(proposal, "effect", entry_time)
-        token = _EXEC_NOW.set(now)
-        try:
-            return super().execute(proposal, decision, adapter_id=adapter_id, now=now, lose_ack=lose_ack, partial=partial)
-        finally:
-            _EXEC_NOW.reset(token)
+        return (dict(new_effective), new_digest, new_pdigest)

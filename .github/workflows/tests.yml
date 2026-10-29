@@ -130,6 +130,30 @@ jobs:
             exit 1
           }
 
+      # Composed governed policy workflow (F4 + F5 class age + F5 on_unreadable, shared lifecycle consolidation). Reuses the r08-v5 Registry checkout above (no new pin); same rules:
+      # missing/wrong pin or missing PyNaCl is a FAILURE and the junit gate fails on any skip or fewer tests than expected.
+      - name: Run the composed Registry-governed policy tests (must not skip)
+        env:
+          OCS_REGISTRY_PIN_DIR: ${{ github.workspace }}/registry-pin-v5
+          OCS_REQUIRE_REGISTRY_PIN: "1"
+        run: |
+          set -o pipefail
+          {
+            test "$(git -C registry-pin-v5 rev-parse HEAD)" = "6c3e5e4037d34bd2b31371461bfc872c762026b9"
+            pytest -q tests/test_governed_policy_composition.py --junitxml=governed-policy-junit.xml
+            python - <<'PY'
+          import xml.etree.ElementTree as ET
+          suite = ET.parse("governed-policy-junit.xml").getroot()
+          suite = suite if suite.tag == "testsuite" else suite[0]
+          n, skipped, failed = int(suite.get("tests")), int(suite.get("skipped")), int(suite.get("failures")) + int(suite.get("errors"))
+          print(f"governed policy tests: {n} run, {skipped} skipped, {failed} failed")
+          assert skipped == 0 and failed == 0 and n >= 99, "composed governed-policy tests were skipped or did not run"
+          PY
+          } 2>&1 | tee governed-policy-out.txt || {
+            echo "::error title=Composed governed policy tests failed::$(tail -n 40 governed-policy-out.txt | sed ':a;N;$!ba;s/\n/%0A/g')"
+            exit 1
+          }
+
       - name: Authorization control removal probes
         run: python tools/adversarial_mutations.py
 
