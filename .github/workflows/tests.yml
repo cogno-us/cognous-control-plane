@@ -195,7 +195,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           repository: cogno-us/cognous-ocs-registry
-          ref: 0000000000000000000000000000000000000000
+          ref: b73c59e6769acd5af7263397e81dfc6fa4561f38
           path: registry-pin-v7
 
       - name: Run the Registry-governed irreversibility tests (must not skip)
@@ -205,7 +205,7 @@ jobs:
         run: |
           set -o pipefail
           {
-            test "$(git -C registry-pin-v7 rev-parse HEAD)" = "0000000000000000000000000000000000000000"
+            test "$(git -C registry-pin-v7 rev-parse HEAD)" = "b73c59e6769acd5af7263397e81dfc6fa4561f38"
             python -c "import nacl, sys; print('pynacl', nacl.__version__, sys.version.split()[0])"
             pytest -q tests/test_irreversibility_governance.py tests/test_irreversibility_unit.py tests/test_revocation_families_governance.py tests/test_governed_policy_composition.py tests/test_f5_class_unreadable_governance.py --junitxml=irreversibility-junit.xml
             python - <<'PY'

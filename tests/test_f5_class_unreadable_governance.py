@@ -23,7 +23,7 @@ import pytest
 
 PIN = "6c3e5e4037d34bd2b31371461bfc872c762026b9"  # Registry commit that contains r08-v5 (the Registry implementation PR head); the r08-v2 F5 composer in it is byte-identical to 6f600ab
 PIN_V6 = "42a666328b974a7581013358bcf8bc7b9eac7761"  # Registry commit that contains r08-v6 (the Registry revocation-families head). It also contains r08-v1..r08-v5 byte-identical, so the same builders run against it.
-PIN_V7 = "0000000000000000000000000000000000000000"  # Registry commit that contains r08-v7 (the unified-engine head); PLACEHOLDER until the lead sets the final value. It contains r08-v1..r08-v6 byte-identical.
+PIN_V7 = "b73c59e6769acd5af7263397e81dfc6fa4561f38"  # Registry commit that contains r08-v7 (the unified-engine head); PLACEHOLDER until the lead sets the final value. It contains r08-v1..r08-v6 byte-identical.
 ACCEPTED_PINS = (PIN, PIN_V6, PIN_V7)
 _REQUIRED = os.environ.get("OCS_REQUIRE_REGISTRY_PIN") == "1"
 
