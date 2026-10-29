@@ -154,6 +154,39 @@ jobs:
             exit 1
           }
 
+      # Registry-governed requires_revocation_assurance and terminal-revocation enablement (Registry r08-v6). Needs the r08-v6 contract, which is in NEITHER earlier pin: a THIRD checkout at the
+      # exact Registry implementation-PR head is used for this step only (it contains r08-v1..r08-v5 byte-identical). Same rules: a missing/wrong pin or missing PyNaCl is a FAILURE
+      # (OCS_REQUIRE_REGISTRY_PIN=1) and the junit gate fails on any skip or fewer tests than expected.
+      - name: Check out the Registry at the r08-v6 pin
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: cogno-us/cognous-ocs-registry
+          ref: 42a666328b974a7581013358bcf8bc7b9eac7761
+          path: registry-pin-v6
+
+      - name: Run the Registry-governed revocation-families tests (must not skip)
+        env:
+          OCS_REGISTRY_PIN_DIR: ${{ github.workspace }}/registry-pin-v6
+          OCS_REQUIRE_REGISTRY_PIN: "1"
+        run: |
+          set -o pipefail
+          {
+            test "$(git -C registry-pin-v6 rev-parse HEAD)" = "42a666328b974a7581013358bcf8bc7b9eac7761"
+            python -c "import nacl, sys; print('pynacl', nacl.__version__, sys.version.split()[0])"
+            pytest -q tests/test_revocation_families_governance.py tests/test_governed_policy_composition.py tests/test_f5_class_unreadable_governance.py --junitxml=revocation-families-junit.xml
+            python - <<'PY'
+          import xml.etree.ElementTree as ET
+          suite = ET.parse("revocation-families-junit.xml").getroot()
+          suite = suite if suite.tag == "testsuite" else suite[0]
+          n, skipped, failed = int(suite.get("tests")), int(suite.get("skipped")), int(suite.get("failures")) + int(suite.get("errors"))
+          print(f"revocation families + composed + on_unreadable tests under the r08-v6 pin: {n} run, {skipped} skipped, {failed} failed")
+          assert skipped == 0 and failed == 0 and n >= 386, "Registry-governed revocation-families tests were skipped or did not run"
+          PY
+          } 2>&1 | tee revocation-families-out.txt || {
+            echo "::error title=Revocation families tests failed::$(tail -n 40 revocation-families-out.txt | sed ':a;N;$!ba;s/\n/%0A/g')"
+            exit 1
+          }
+
       - name: Authorization control removal probes
         run: python tools/adversarial_mutations.py
 
