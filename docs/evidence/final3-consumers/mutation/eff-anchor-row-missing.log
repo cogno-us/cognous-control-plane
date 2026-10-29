@@ -1,0 +1,47 @@
+F
+=================================== FAILURES ===================================
+____ test_a01_registry_anchor_sets_the_flag_false_to_true_and_nothing_else _____
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1733/test_a01_registry_anchor_sets_0')
+
+    def test_a01_registry_anchor_sets_the_flag_false_to_true_and_nothing_else(tmp_path):
+>       p, res, cfg, src, flow = ready(tmp_path)
+                                 ^^^^^^^^^^^^^^^
+
+tests/test_final3_anchor.py:50: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_final3_anchor.py:36: in ready
+    flow = build(tmp_path, res, cfg, fams(anc=src), **kw)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/final3_support.py:84: in build
+    return GovernedPolicyWorkflow(families=families, verifier=ev.Ed25519Verifier(), runtime_authority_profile=cfg, construction_time=REG_NOW, **k)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/agent_control_plane/registry_governed_policy.py:415: in __init__
+    self._gp_snapshot = build_snapshot(bound=bound, host_profile_digest=agemod.profile_digest(host) if host is not None else None,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+bound = {'f4_ages': None, 'class_age': None, 'class_unreadable': None, 'class_revocation_assurance': None, ...}
+host_profile_digest = 'sha256:02a242d9e22786f22c40b505aa294812350b97277a16c87c435697f242b38bcd'
+refs = {'anchor_deadline': ('sel-test-1', 1)}
+scope = GovernedScope(consumer_id='consumer-test', tenant_id='tenant-alpha', action_id='urn:cognous:action:refund-issue-routine-v1', operation_id='refund-issue-anchor')
+operation_ids = {'anchor_deadline': 'refund-issue-anchor'}
+evaluated_at = datetime.datetime(2026, 10, 5, 19, 0, tzinfo=datetime.timezone.utc)
+order = ('f4_ages', 'class_age', 'class_unreadable', 'class_revocation_assurance', 'class_irreversible', 'anchor_deadline', ...)
+
+    def build_snapshot(*, bound: Mapping[str, Any], host_profile_digest: Optional[str], refs: Mapping[str, Optional[tuple]], scope: Any, operation_ids: Mapping[str, str],
+                       evaluated_at: datetime, order: tuple) -> EffectivePolicySnapshot:
+        """The snapshot of one already derived `bound` identity. `order` is the deterministic composition order; `refs` maps a slot to `(selection_id, epoch)`."""
+        families = []
+        for slot in order:
+            part = bound.get(slot)
+            if part is None:
+                continue
+>           family_id, contract = FAMILY_TABLE[slot]
+                                  ^^^^^^^^^^^^^^^^^^
+E           KeyError: 'anchor_deadline'
+
+src/agent_control_plane/registry_effective_policy.py:116: KeyError
+=========================== short test summary info ============================
+FAILED tests/test_final3_anchor.py::test_a01_registry_anchor_sets_the_flag_false_to_true_and_nothing_else
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 1 deselected in 7.38s

@@ -1,0 +1,19 @@
+...........................................................F
+=================================== FAILURES ===================================
+____ test_a01_registry_stricter_than_host_narrows_each_field_independently _____
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1696/test_a01_registry_stricter_tha0')
+
+    def test_a01_registry_stricter_than_host_narrows_each_field_independently(tmp_path):
+        p, res, flow = flow_for(tmp_path, age=mat(AGE, 60), tol=mat(TOL, 2))
+>       assert (flow.observation_policy.max_age_seconds, flow.observation_policy.clock_tolerance_seconds) == (60, 2)
+E       assert (300, 5) == (60, 2)
+E         
+E         At index 0 diff: 300 != 60
+E         Use -v to get more diff
+
+tests/test_final3_observation.py:55: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_final3_observation.py::test_a01_registry_stricter_than_host_narrows_each_field_independently
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 59 passed, 1 deselected in 27.24s

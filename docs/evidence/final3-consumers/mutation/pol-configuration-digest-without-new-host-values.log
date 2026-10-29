@@ -1,0 +1,22 @@
+........................................................................ [ 28%]
+........................................................................ [ 57%]
+........................................................................ [ 85%]
+..................................F
+=================================== FAILURES ===================================
+_ test_g01_a_host_change_masked_by_the_registry_value_still_changes_the_activation_ledger_identity _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1726/test_g01_a_host_change_masked_0')
+
+    def test_g01_a_host_change_masked_by_the_registry_value_still_changes_the_activation_ledger_identity(tmp_path):
+        """The activation ledger identity covers the HOST observation values (unlike the persisted binding, which carries the effective ones): a differently configured second workflow
+        for the same scope is refused even when both enforce the same effective policy."""
+        a = stage(tmp_path / "a", BASE)[4]
+        b = stage(tmp_path / "b", dict(BASE, host=[299, 5]))[4]
+>       assert a.registry_governed_policy_identity["configuration_digest"] != b.registry_governed_policy_identity["configuration_digest"]
+E       AssertionError: assert 'sha256:3be1df7fb36aeae0ea929586ba0512a4c3b43366906be1ad7d8a6c078f04a8d3' != 'sha256:3be1df7fb36aeae0ea929586ba0512a4c3b43366906be1ad7d8a6c078f04a8d3'
+
+tests/test_final3_composed_binding.py:358: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_final3_composed_binding.py::test_g01_a_host_change_masked_by_the_registry_value_still_changes_the_activation_ledger_identity
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 250 passed, 1 deselected in 116.08s (0:01:56)

@@ -1,0 +1,46 @@
+........................................................................ [ 28%]
+...........................F
+=================================== FAILURES ===================================
+_ test_d03_an_invalid_original_host_policy_is_refused_before_any_source_read_and_never_repaired[f5-observation-max-age-policy-age-age_above_token_range] _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1682/test_d03_an_invalid_original_h0')
+name = 'age_above_token_range', fam = 'f5-observation-max-age-policy'
+slot = 'age'
+
+    @pytest.mark.parametrize("name", sorted(BAD_HOSTS))
+    @pytest.mark.parametrize("fam,slot", [(AGE, "age"), (TOL, "tol")])
+    def test_d03_an_invalid_original_host_policy_is_refused_before_any_source_read_and_never_repaired(tmp_path, name, fam, slot):
+        p, res, cfg = base.prepared(tmp_path, t1=R_)
+        src = Source(mat(fam, 1 if fam == AGE else 0))  # a Registry value that WOULD be a valid narrowing if the host were repaired
+        with pytest.raises(RegistryGovernedPolicyRefused) as e:
+            build(tmp_path, res, None, fams(**{slot: src}), obs=BAD_HOSTS[name])
+>       refused(e, "host_observation_policy_invalid", "construction")
+
+tests/test_final3_observation.py:239: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/final3_support.py:88: in refused
+    return comp.refused(exc, code, boundary, registry_code)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+exc = <ExceptionInfo RegistryGovernedPolicyRefused('registry_governed_policy_refused:construction:observation_max_age:host_observation_policy_invalid') tblen=3>
+code = 'host_observation_policy_invalid', boundary = 'construction'
+registry_code = None
+
+    def refused(exc, code=None, boundary=None, registry_code=None):
+        e = exc.value
+        assert isinstance(e, PermissionError) and isinstance(e, RegistryGovernedPolicyRefused) and e.refusal.non_authorizing is True
+        if code:
+>           assert e.refusal.code == code, e.refusal
+E           AssertionError: Refusal(code='observation_max_age:host_observation_policy_invalid', registry_code=None, registry_kind=None, non_authorizing=True, classification='BUILDER_TESTED; not independently qualified; non-authorizing')
+E           assert 'observation_...olicy_invalid' == 'host_observa...olicy_invalid'
+E             
+E             - host_observation_policy_invalid
+E             + observation_max_age:host_observation_policy_invalid
+E             ? ++++++++++++++++++++
+
+tests/test_governed_policy_composition.py:99: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_final3_observation.py::test_d03_an_invalid_original_host_policy_is_refused_before_any_source_read_and_never_repaired[f5-observation-max-age-policy-age-age_above_token_range]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 99 passed, 1 deselected in 65.60s (0:01:05)

@@ -1,0 +1,116 @@
+F
+=================================== FAILURES ===================================
+____ test_a01_registry_anchor_sets_the_flag_false_to_true_and_nothing_else _____
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1706/test_a01_registry_anchor_sets_0')
+
+    def test_a01_registry_anchor_sets_the_flag_false_to_true_and_nothing_else(tmp_path):
+>       p, res, cfg, src, flow = ready(tmp_path)
+                                 ^^^^^^^^^^^^^^^
+
+tests/test_final3_anchor.py:50: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_final3_anchor.py:36: in ready
+    flow = build(tmp_path, res, cfg, fams(anc=src), **kw)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/final3_support.py:84: in build
+    return GovernedPolicyWorkflow(families=families, verifier=ev.Ed25519Verifier(), runtime_authority_profile=cfg, construction_time=REG_NOW, **k)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <agent_control_plane.registry_governed_policy.GovernedPolicyWorkflow object at 0x7fa1b96e34d0>
+families = GovernedFamilies(f4_ages=None, class_age=None, class_unreadable=None, class_revocation_assurance=None, terminal_revoca...ss_unreadable_governance.Source object at 0x7fa1b96e30e0>), observation_max_age=None, observation_clock_tolerance=None)
+verifier = <registry_adapters.ed25519_verifier.Ed25519Verifier object at 0x7fa1b96e3230>
+runtime_authority_profile = RuntimeAuthorityProfile(version='runtime-authority/0.1', catalogue_version='synthetic-catalogue/1', actions={'urn:cogn...se), holder_inventory=None, merge=None, reversibility=None, dedupe=None, terminal_revocation=None, policy_binding=None)
+status_max_age_seconds = 60, approval_max_age_seconds = 60
+construction_time = datetime.datetime(2026, 10, 5, 19, 0, tzinfo=datetime.timezone.utc)
+activation_ledger = None, legacy_cutoff = 0
+workflow_kwargs = {'allow_test_time': True, 'manifest': {'manifest_version': '1.1', 'manifest_id': 'refund-integration-pilot-v1', 'agent... at 0x7fa1b96e2ba0>, 'destination': <agent_control_plane.bounded.LocalRefundDestination object at 0x7fa1b9533110>, ...}
+
+    def __init__(self, *, families: GovernedFamilies, verifier: Any, runtime_authority_profile: Any = None, status_max_age_seconds: int = 60, approval_max_age_seconds: int = 60,
+                 construction_time: Optional[datetime] = None, activation_ledger: Optional[GovernedActivationLedger] = None, legacy_cutoff: int = 0, **workflow_kwargs: Any):
+        check_cutoff(legacy_cutoff, _refuse)  # explicit finite int (exact int, not bool, 0..SCALAR_MAX); no wildcard, no default that accepts legacy decisions
+        if type(families) is not GovernedFamilies:
+            raise _refuse("families_invalid", "construction")
+        declared = _declared(families)
+        if not declared:
+            raise _refuse("no_family_declared", "construction")
+        for _, fam in declared:
+            if type(fam) is not GovernedFamily:
+                raise _refuse("families_invalid", "construction")
+            check_scope(fam.scope, _refuse)
+            check_source(fam.selection_source, _refuse)
+        first = declared[0][1].scope
+        if any((f.scope.consumer_id, f.scope.tenant_id, f.scope.action_id) != (first.consumer_id, first.tenant_id, first.action_id) for _, f in declared):
+            raise _refuse("family_scope_mismatch", "construction")
+        scope = first
+        profile_families = (families.class_age is not None or families.class_unreadable is not None or families.class_revocation_assurance is not None
+                            or families.terminal_revocation is not None or families.class_irreversible is not None or families.anchor_deadline is not None)
+        host = None
+        if profile_families and runtime_authority_profile is None:
+            raise _refuse("runtime_authority_profile_required", "construction")
+        if runtime_authority_profile is not None:
+            try:
+                host = RuntimeAuthorityProfile.model_validate(runtime_authority_profile).snapshot()
+            except Exception:
+                raise _refuse("host_profile_invalid", "construction") from None
+            if profile_families and host.policy_binding is not None:
+                raise _refuse("policy_binding_unsupported", "construction")
+        host_values = host_ages = None
+        if families.class_unreadable is not None:
+            host_values, code = unrmod.host_class_unreadable(host)
+            if host_values is None:
+                raise _refuse(code, "construction")
+            defect = unrmod.host_class_defect(host)  # ORIGINAL host validity FIRST: before any Registry call or source read
+            if defect is not None:
+                raise _refuse(defect, "construction")
+        if families.class_age is not None:
+            host_ages, code = agemod.host_class_ages(host)
+            if host_ages is None:
+                raise _refuse(code, "construction")
+        host_assurance = host_terminal = host_irreversible = None
+        if (families.class_revocation_assurance is not None or families.terminal_revocation is not None or families.class_irreversible is not None
+                or families.anchor_deadline is not None):
+            defect = unrmod.host_class_defect(host)  # ORIGINAL host validity FIRST (nothing composed here may repair it): before any Registry call or source read
+            if defect is not None:
+                raise _refuse(defect, "construction")
+        if families.class_revocation_assurance is not None:
+            host_assurance, code = revmod.host_class_assurance(host)
+            if host_assurance is None:
+                raise _refuse(code, "construction")
+        if families.class_irreversible is not None:  # ambiguity (two actions of one class with different flags) is a host defect: refused before any source read
+            host_irreversible, code = irmod.host_class_irreversible(host)
+            if host_irreversible is None:
+                raise _refuse(code, "construction")
+        if families.terminal_revocation is not None:
+            host_terminal = revmod.host_terminal_value(host)
+        host_anchor = host_observation = None
+        if families.anchor_deadline is not None:  # HOST preconditions the Registry does not enforce: the profile and its FreshnessProfile must already exist
+            host_anchor, code = f3mod.host_anchor_value(host)
+            if host_anchor is None:
+                raise _refuse(code, "construction")
+        if families.observation_max_age is not None or families.observation_clock_tolerance is not None:  # the ORIGINAL host policy first; never synthesized, never repaired
+            host_observation, code = f3mod.host_observation_values(workflow_kwargs.get("observation_policy"))
+            if host_observation is None:
+                raise _refuse(code, "construction")
+        if profile_families and scope.action_id not in host.actions:
+            raise _refuse("action_class_unknown", "construction")
+        if families.f4_ages is not None and not (_scalar(status_max_age_seconds) and _scalar(approval_max_age_seconds)):
+            raise _refuse("host_scalar_invalid", "construction")
+        authority = require_authority(workflow_kwargs, scope.action_id, _refuse)
+        now = construction_now(construction_time, workflow_kwargs, _now, _refuse)
+        host_scalars = {f4mod.AGES[0]: status_max_age_seconds, f4mod.AGES[1]: approval_max_age_seconds}
+        materials = {name: read_source(fam.selection_source, _refuse, "construction") for name, fam in declared}
+        derived, refusal = derive_policy(families=families, host=host, host_scalars=host_scalars, host_ages=host_ages, host_values=host_values, materials=materials,
+                                         verifier=verifier, institution_id=authority[0], authority_domain=authority[1], now=now, host_assurance=host_assurance,
+                                         host_terminal=host_terminal, host_irreversible=host_irreversible,
+                                         host_observation=host_observation)
+        if refusal is not None:
+>           raise RegistryGovernedPolicyRefused(refusal, "construction")
+E           agent_control_plane.registry_governed_policy.RegistryGovernedPolicyRefused: registry_governed_policy_refused:construction:anchor_deadline:registry_not_applied:selection_consumer_mismatch
+
+src/agent_control_plane/registry_governed_policy.py:385: RegistryGovernedPolicyRefused
+=========================== short test summary info ============================
+FAILED tests/test_final3_anchor.py::test_a01_registry_anchor_sets_the_flag_false_to_true_and_nothing_else
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 1 deselected in 7.06s

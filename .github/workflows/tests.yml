@@ -221,6 +221,40 @@ jobs:
             exit 1
           }
 
+      # FINAL3 consumers (anchor deadline, ObservationPolicy max age and clock tolerance; Registry r08-v8). Needs the r08-v8 contract, which is in NONE of the earlier pins: a FIFTH checkout at the
+      # exact head of Registry PR #77 (it contains r08-v1..r08-v7 byte-identical, so the earlier governed suites are re-run unchanged under it). The pin below is also PIN_V8 in
+      # tests/test_f5_class_unreadable_governance.py. Same rules: a missing/wrong pin or missing PyNaCl is a FAILURE (OCS_REQUIRE_REGISTRY_PIN=1) and the junit gate fails on any skip or
+      # fewer tests than expected. BUILDER_TESTED developer evidence; not independent qualification.
+      - name: Check out the Registry at the r08-v8 pin
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: cogno-us/cognous-ocs-registry
+          ref: a40fe755e2384a99c37016fa9ad59396f1835900
+          path: registry-pin-v8
+
+      - name: Run the Registry-governed FINAL3 consumer tests (must not skip)
+        env:
+          OCS_REGISTRY_PIN_DIR: ${{ github.workspace }}/registry-pin-v8
+          OCS_REQUIRE_REGISTRY_PIN: "1"
+        run: |
+          set -o pipefail
+          {
+            test "$(git -C registry-pin-v8 rev-parse HEAD)" = "a40fe755e2384a99c37016fa9ad59396f1835900"
+            python -c "import nacl, sys; print('pynacl', nacl.__version__, sys.version.split()[0])"
+            pytest -q tests/test_final3_anchor.py tests/test_final3_observation.py tests/test_final3_composed_binding.py tests/test_irreversibility_governance.py tests/test_irreversibility_unit.py tests/test_revocation_families_governance.py tests/test_governed_policy_composition.py tests/test_f5_class_unreadable_governance.py --junitxml=final3-junit.xml
+            python - <<'PY'
+          import xml.etree.ElementTree as ET
+          suite = ET.parse("final3-junit.xml").getroot()
+          suite = suite if suite.tag == "testsuite" else suite[0]
+          n, skipped, failed = int(suite.get("tests")), int(suite.get("skipped")), int(suite.get("failures")) + int(suite.get("errors"))
+          print(f"FINAL3 consumers + earlier governed suites under the r08-v8 pin: {n} run, {skipped} skipped, {failed} failed")
+          assert skipped == 0 and failed == 0 and n >= @@N@@, "Registry-governed FINAL3 tests were skipped or did not run"
+          PY
+          } 2>&1 | tee final3-out.txt || {
+            echo "::error title=FINAL3 consumer tests failed::$(tail -n 40 final3-out.txt | sed ':a;N;$!ba;s/\n/%0A/g')"
+            exit 1
+          }
+
       - name: Authorization control removal probes
         run: python tools/adversarial_mutations.py
 

@@ -1,0 +1,23 @@
+........................................................................ [ 28%]
+........................................................................ [ 57%]
+.......................................................F
+=================================== FAILURES ===================================
+_ test_g06_a_verifier_that_is_not_the_admitted_ed25519_verifier_wrong_material_types_and_an_unavailable_registry_are_refused _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1699/test_g06_a_verifier_that_is_no0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f094d4f1ef0>
+
+    def test_g06_a_verifier_that_is_not_the_admitted_ed25519_verifier_wrong_material_types_and_an_unavailable_registry_are_refused(tmp_path, monkeypatch):
+        kw = dict(family=AGE, scope=SCOPES[AGE], institution_id=base.INSTITUTION, authority_domain=base.DOMAIN, host_value=300, now=REG_NOW)
+        got, ref = f3.derive_observation(material=mat(AGE, 60), verifier=object(), **kw)
+>       assert got is None and ref.code == "verifier_not_admitted"
+E       AssertionError: assert (None is None and 'registry_not_applied' == 'verifier_not_admitted'
+E         
+E         - verifier_not_admitted
+E         + registry_not_applied)
+
+tests/test_final3_observation.py:477: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_final3_observation.py::test_g06_a_verifier_that_is_not_the_admitted_ed25519_verifier_wrong_material_types_and_an_unavailable_registry_are_refused
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 199 passed, 1 deselected in 46.34s

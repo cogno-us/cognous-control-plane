@@ -1,0 +1,20 @@
+....F
+=================================== FAILURES ===================================
+_ test_a03_the_effective_digest_is_the_registry_identity_of_the_effective_value_and_every_state_is_distinct _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1737/test_a03_the_effective_digest_0')
+
+    def test_a03_the_effective_digest_is_the_registry_identity_of_the_effective_value_and_every_state_is_distinct(tmp_path):
+        ds = {v: v8id.effective_policy_digest(ANC, {FIELDS[ANC]: v}, "r08-v8") for v in ("anchor", "no_change")}
+        assert ds["anchor"] != ds["no_change"] and v8id.registered_family_version(ANC, "r08-v8") == 1
+        from agent_control_plane import registry_effective_policy as eff
+>       assert eff.FAMILY_TABLE["anchor_deadline"] == (f3.FAMILY_ANCHOR, f3.CONTRACT_V8) and eff.SCHEMA_REVISIONS["anchor_deadline"] == 1
+E       AssertionError: assert (('f5-anchor-d...cy', 'r08-v8') == ('f5-anchor-d...cy', 'r08-v8')
+E         
+E         Use -v to get more diff and 2 == 1)
+
+tests/test_final3_anchor.py:75: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_final3_anchor.py::test_a03_the_effective_digest_is_the_registry_identity_of_the_effective_value_and_every_state_is_distinct
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 4 passed, 1 deselected in 5.57s

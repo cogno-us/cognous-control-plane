@@ -1,0 +1,68 @@
+........................................................................ [ 28%]
+........................................................................ [ 57%]
+........................................................................ [ 85%]
+...........................F
+=================================== FAILURES ===================================
+_ test_e04_the_nine_family_snapshot_is_deterministic_and_covers_the_new_families _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1740/test_e04_the_nine_family_snaps0')
+
+    def test_e04_the_nine_family_snapshot_is_deterministic_and_covers_the_new_families(tmp_path):
+        p, res, cfg, srcs, flow = nine(tmp_path)
+        snap = flow.effective_policy_snapshot
+        for slot, fam, val in (("anchor_deadline", ANC, (("anchor_deadline_to_inputs", "anchor"),)), ("observation_max_age", AGE, ((FIELDS[AGE], 60),)),
+                               ("observation_clock_tolerance", TOL, ((FIELDS[TOL], 2),))):
+            f = snap.family(slot)
+            assert (f.family_id, f.contract_version, f.family_schema_revision, f.effective) == (fam, "r08-v8", 1, val) and f.selection_id and f.selection_epoch is not None
+            assert f.effective_policy_digest == v8id.effective_policy_digest(fam, dict(val), "r08-v8")
+>       snap_dict = eff.resolve_effective_policy(families=flow._gp_families, host=flow._gp_host, host_scalars=flow._gp_host_scalars,
+                                                 materials={n: f.selection_source() for n, f in pol._declared(flow._gp_families)}, verifier=ev.Ed25519Verifier(),
+                                                 institution_id=base.INSTITUTION, authority_domain=base.DOMAIN, now=REG_NOW, host_ages=flow._gp_host_ages,
+                                                 host_values=flow._gp_host_values, host_assurance=flow._gp_host_assurance, host_irreversible=flow._gp_host_irreversible,
+                                                 host_terminal=flow._gp_host_terminal, host_observation=flow._gp_host_observation)
+
+tests/test_final3_composed_binding.py:295: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+families = GovernedFamilies(f4_ages=GovernedFamily(scope=GovernedScope(consumer_id='consumer-test', tenant_id='tenant-alpha', act...='refund-issue-obstol'), selection_source=<tests.test_f5_class_unreadable_governance.Source object at 0x7fa0f0a351d0>))
+host = RuntimeAuthorityProfile(version='runtime-authority/0.1', catalogue_version='synthetic-catalogue/1', actions={'urn:cogn...k', credential_ref=None)]), merge=None, reversibility=None, dedupe=None, terminal_revocation=None, policy_binding=None)
+host_scalars = {'status_max_age_seconds': 60, 'approval_max_age_seconds': 60}
+materials = {'f4_ages': SelectionMaterial(record_text='{"contract_version": "r08-v2", "evaluator": {"binding": "registered-code-re...tion='refund-issue-assurance'),)),), revoked_key_ids=frozenset(), revoked_selections=frozenset(), min_epochs=())), ...}
+verifier = <registry_adapters.ed25519_verifier.Ed25519Verifier object at 0x7fa0f1c78230>
+institution_id = 'urn:cognous:institution:synthetic-customer-service'
+authority_domain = 'customer-refunds'
+now = datetime.datetime(2026, 10, 5, 19, 0, tzinfo=datetime.timezone.utc)
+host_ages = {'synthetic-reversible': 60, 'synthetic-irreversible': 120}
+host_values = {'synthetic-reversible': 'refuse', 'synthetic-irreversible': 'refuse'}
+host_assurance = {'synthetic-reversible': 'not_required', 'synthetic-irreversible': 'not_required'}
+host_irreversible = {'synthetic-reversible': 'no_change', 'synthetic-irreversible': 'irreversible'}
+host_terminal = 'off'
+host_observation = {'max_age_seconds': 300, 'clock_tolerance_seconds': 5}
+
+    def resolve_effective_policy(*, families: Any, host: Any, host_scalars: Mapping[str, int], materials: Mapping[str, Any], verifier: Any, institution_id: str,
+                                 authority_domain: str, now: datetime, host_ages: Optional[Mapping[str, int]] = None, host_values: Optional[Mapping[str, str]] = None,
+                                 host_assurance: Optional[Mapping[str, str]] = None, host_irreversible: Optional[Mapping[str, str]] = None,
+                                 host_terminal: Optional[str] = None,
+                                 host_observation: Optional[Mapping[str, int]] = None) -> EffectivePolicySnapshot:
+        """Run the EXISTING `derive_policy` over every declared family and return the snapshot of the one effective policy, or raise `RegistryGovernedPolicyRefused` (boundary
+        `resolution`) with the same refusal `derive_policy` returned. Pure: builds no workflow, writes nothing and never returns a partial or weaker policy."""
+        from agent_control_plane import registry_governed_policy as pol  # late import: that module builds snapshots with this one
+        declared = pol._declared(families)
+        if not declared:
+            raise pol.RegistryGovernedPolicyRefused(Refusal("no_family_declared"), "resolution")
+        materials = {name: materials.get(name) for name, _ in declared}  # ONE read of each material: the verified object is the one named in the snapshot
+        if any(m is None for m in materials.values()):  # a declared family is mandatory: no fallback to a smaller set
+            raise pol.RegistryGovernedPolicyRefused(Refusal("selection_missing"), "resolution")
+        derived, refusal = pol.derive_policy(families=families, host=host, host_scalars=host_scalars, host_ages=host_ages, host_values=host_values, materials=materials,
+                                             verifier=verifier, institution_id=institution_id, authority_domain=authority_domain, now=now, host_assurance=host_assurance,
+                                             host_terminal=host_terminal, host_irreversible=host_irreversible,
+                                             )
+        if refusal is not None:
+>           raise pol.RegistryGovernedPolicyRefused(refusal, "resolution")
+E           agent_control_plane.registry_governed_policy.RegistryGovernedPolicyRefused: registry_governed_policy_refused:resolution:observation_max_age:host_observation_policy_missing
+
+src/agent_control_plane/registry_effective_policy.py:145: RegistryGovernedPolicyRefused
+=========================== short test summary info ============================
+FAILED tests/test_final3_composed_binding.py::test_e04_the_nine_family_snapshot_is_deterministic_and_covers_the_new_families
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 243 passed, 1 deselected in 87.00s (0:01:27)

@@ -1,0 +1,23 @@
+........................................................................ [ 28%]
+...............................................F
+=================================== FAILURES ===================================
+_________ test_d04_a_model_construct_policy_and_a_subclass_are_refused _________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1683/test_d04_a_model_construct_pol0')
+
+    def test_d04_a_model_construct_policy_and_a_subclass_are_refused(tmp_path):
+        p, res, cfg = base.prepared(tmp_path, t1=R_)
+        constructed = ObservationPolicy.model_construct(max_age_seconds=0, clock_tolerance_seconds=5)
+    
+        class Sub(ObservationPolicy):
+            pass
+        for bad in (constructed, Sub(max_age_seconds=300), {"max_age_seconds": 300, "clock_tolerance_seconds": 5}):
+>           with pytest.raises(RegistryGovernedPolicyRefused) as e:
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE RegistryGovernedPolicyRefused
+
+tests/test_final3_observation.py:250: Failed
+=========================== short test summary info ============================
+FAILED tests/test_final3_observation.py::test_d04_a_model_construct_policy_and_a_subclass_are_refused
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 119 passed, 1 deselected in 64.35s (0:01:04)

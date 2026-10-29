@@ -1,0 +1,25 @@
+..F
+=================================== FAILURES ===================================
+_ test_a02_a_no_op_leaves_the_profile_byte_identical_and_never_lowers_a_host_true[True-anchor] _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1710/test_a02_a_no_op_leaves_the_pr1')
+host_flag = True, value = 'anchor'
+
+    @pytest.mark.parametrize("host_flag,value", [(False, "no_change"), (True, "anchor"), (True, "no_change")])
+    def test_a02_a_no_op_leaves_the_profile_byte_identical_and_never_lowers_a_host_true(tmp_path, host_flag, value):
+        p, res, cfg, src, flow = ready(tmp_path, host_flag=host_flag, value=value)
+        assert flow.runtime_authority_profile.freshness.anchor_deadline_to_inputs is host_flag
+        assert dump(flow.runtime_authority_profile) == dump(cfg)
+        ident = flow.registry_governed_policy_identity
+        assert ident["anchor_deadline"]["effective"][FIELDS[ANC]] == ("anchor" if host_flag else "no_change")
+>       assert ident["host"]["anchor_deadline"] == ("anchor" if host_flag else "no_change")
+E       AssertionError: assert 'no_change' == 'anchor'
+E         
+E         - anchor
+E         + no_change
+
+tests/test_final3_anchor.py:68: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_final3_anchor.py::test_a02_a_no_op_leaves_the_profile_byte_identical_and_never_lowers_a_host_true[True-anchor]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 2 passed, 1 deselected in 10.05s

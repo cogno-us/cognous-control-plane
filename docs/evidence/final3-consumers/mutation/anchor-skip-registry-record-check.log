@@ -1,0 +1,12 @@
+........................................................................ [ 28%]
+........................................................................ [ 57%]
+........................................................................ [ 85%]
+....................................                                     [100%]
+=============================== warnings summary ===============================
+../claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/venv-g1-212/lib/python3.13/site-packages/_pytest/pathlib.py:95
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/venv-g1-212/lib/python3.13/site-packages/_pytest/pathlib.py:95: PytestWarning: (rm_rf) error removing /tmp/pytest-of-root/garbage-4746f45b-5565-42e2-b5f4-c32db6a6f879
+  <class 'OSError'>: [Errno 39] Directory not empty: '/tmp/pytest-of-root/garbage-4746f45b-5565-42e2-b5f4-c32db6a6f879'
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+252 passed, 1 deselected, 1 warning in 182.10s (0:03:02)

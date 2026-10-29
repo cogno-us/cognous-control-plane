@@ -1,0 +1,455 @@
+[
+ {
+  "id": "CONTROL",
+  "status": "PASS",
+  "tail": "252 passed, 1 deselected in 87.49s (0:01:27)"
+ },
+ {
+  "id": "anchor-missing-freshness-treated-as-no_change",
+  "status": "KILLED",
+  "desc": "a host without a FreshnessProfile is read as `no_change` instead of refused",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_anchor.py::test_b01_a_host_profile_without_a_freshness_profile_is_refused_before_any_source_read_and_none_is_invented"
+ },
+ {
+  "id": "anchor-invents-a-freshness-profile",
+  "status": "KILLED",
+  "desc": "compose_anchor creates a FreshnessProfile when the host has none (and the precondition is dropped)",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_anchor.py::test_b01_a_host_profile_without_a_freshness_profile_is_refused_before_any_source_read_and_none_is_invented"
+ },
+ {
+  "id": "anchor-compose-can-clear-the-flag",
+  "status": "KILLED",
+  "desc": "compose_anchor writes the effective value either way (True -> False possible)",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_anchor.py::test_b05_compose_anchor_never_invents_a_freshness_profile_and_only_ever_sets_true"
+ },
+ {
+  "id": "anchor-rank-inverted",
+  "status": "KILLED",
+  "desc": "no_change is treated as stricter than anchor",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_anchor.py::test_a01_registry_anchor_sets_the_flag_false_to_true_and_nothing_else"
+ },
+ {
+  "id": "anchor-skip-registry-record-check",
+  "status": "SURVIVED",
+  "desc": "the second strict parse of the Registry record is not compared",
+  "equivalent": null,
+  "by": "252 passed, 1 deselected, 1 warning in 182.10s (0:03:02)"
+ },
+ {
+  "id": "anchor-skip-widening-check",
+  "status": "SURVIVED",
+  "desc": "an effective value looser than the host is not refused in the derivation",
+  "equivalent": null,
+  "by": "252 passed, 1 deselected in 182.60s (0:03:02)"
+ },
+ {
+  "id": "anchor-caller-always-no_change",
+  "status": "KILLED",
+  "desc": "the caller handed to the Registry always says no_change",
+  "equivalent": "expected equivalent for host False; for host True the Registry composes anchor if EITHER side is anchor and the consumer's second strict parse recomputes stricter(host, record)",
+  "by": "FAILED tests/test_final3_anchor.py::test_a02_a_no_op_leaves_the_profile_byte_identical_and_never_lowers_a_host_true[True-no_change]"
+ },
+ {
+  "id": "obs-effective-uses-max",
+  "status": "KILLED",
+  "desc": "the consumer expects max(host, registry) instead of min",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_observation.py::test_a01_registry_stricter_than_host_narrows_each_field_independently"
+ },
+ {
+  "id": "obs-skip-min-check",
+  "status": "KILLED",
+  "desc": "the consumer does not re-derive min(host, registry)",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_observation.py::test_g03_the_derivation_re_checks_a_forged_registry_decision[effective4-effective_policy_invalid]"
+ },
+ {
+  "id": "obs-skip-widening-check",
+  "status": "KILLED",
+  "desc": "an effective value above the host is not refused in the derivation",
+  "equivalent": "partly redundant with the final composition check (observation_defect); a forged value above the host is still refused there (test_g02/g03 use the layers separately)",
+  "by": "FAILED tests/test_final3_observation.py::test_g03_the_derivation_re_checks_a_forged_registry_decision[effective0-effective_policy_widens_host]"
+ },
+ {
+  "id": "obs-synthesize-missing-policy",
+  "status": "KILLED",
+  "desc": "a missing host ObservationPolicy is replaced by a default instead of refused",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_observation.py::test_d01_a_declared_observation_family_with_no_host_policy_is_refused_at_construction_and_none_is_synthesized[f5-observation-max-age-policy-age]"
+ },
+ {
+  "id": "obs-skip-original-host-validation",
+  "status": "KILLED",
+  "desc": "the original host policy values are not range/type checked",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_observation.py::test_d03_an_invalid_original_host_policy_is_refused_before_any_source_read_and_never_repaired[f5-observation-max-age-policy-age-age_above_token_range]"
+ },
+ {
+  "id": "obs-host-policy-subclass-allowed",
+  "status": "KILLED",
+  "desc": "a subclass or non-ObservationPolicy host object is accepted",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_observation.py::test_d04_a_model_construct_policy_and_a_subclass_are_refused"
+ },
+ {
+  "id": "obs-token-range-off-by-one",
+  "status": "KILLED",
+  "desc": "the structural upper range excludes 2147483647",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_observation.py::test_a03_min_of_host_and_registry_for_max_age[2147483647-300-300]"
+ },
+ {
+  "id": "obs-tolerance-floor-one",
+  "status": "KILLED",
+  "desc": "tolerance 0 is not admitted",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_observation.py::test_a04_min_of_host_and_registry_for_the_observation_tolerance_zero_admitted[0-5-0]"
+ },
+ {
+  "id": "obs-age-floor-zero",
+  "status": "SURVIVED",
+  "desc": "max age 0 is admitted",
+  "equivalent": null,
+  "by": "252 passed, 1 deselected in 121.12s (0:02:01)"
+ },
+ {
+  "id": "obs-bool-allowed",
+  "status": "KILLED",
+  "desc": "a bool passes the exact-int rule",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_observation.py::test_d03_an_invalid_original_host_policy_is_refused_before_any_source_read_and_never_repaired[f5-observation-max-age-policy-age-bool_age]"
+ },
+ {
+  "id": "obs-defect-allows-equal-plus-one",
+  "status": "KILLED",
+  "desc": "the final check lets a value exceed the host by one",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_observation.py::test_g01_observation_defect_checks_the_final_values_against_the_original_host"
+ },
+ {
+  "id": "obs-defect-skips-undeclared-equality",
+  "status": "KILLED",
+  "desc": "an undeclared field may differ from the host",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_observation.py::test_g01_observation_defect_checks_the_final_values_against_the_original_host"
+ },
+ {
+  "id": "obs-defect-skips-range",
+  "status": "KILLED",
+  "desc": "the final check does not re-check exact ints / range",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_observation.py::test_g01_observation_defect_checks_the_final_values_against_the_original_host"
+ },
+ {
+  "id": "obs-effective-uses-host-for-declared",
+  "status": "KILLED",
+  "desc": "the effective policy keeps the host value of a declared field",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_observation.py::test_a01_registry_stricter_than_host_narrows_each_field_independently"
+ },
+ {
+  "id": "obs-table-swapped-members",
+  "status": "KILLED",
+  "desc": "max-age and tolerance members are swapped",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_anchor.py::test_f02_without_the_family_the_host_False_flag_dispatches_the_documented_residual"
+ },
+ {
+  "id": "obs-alias-to-constructor-tolerance",
+  "status": "KILLED",
+  "desc": "the tolerance member name is the held constructor name",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_observation.py::test_a01_registry_stricter_than_host_narrows_each_field_independently"
+ },
+ {
+  "id": "contract-version-v7",
+  "status": "KILLED",
+  "desc": "the consumer asks the Registry identity for r08-v7",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_anchor.py::test_a01_registry_anchor_sets_the_flag_false_to_true_and_nothing_else"
+ },
+ {
+  "id": "schema-revision-check-dropped",
+  "status": "SURVIVED",
+  "desc": "the family schema revision is not read from the Registry table",
+  "equivalent": "expected equivalent: the Registry digest preimage itself carries the revision; the local check is defence in depth",
+  "by": "252 passed, 1 deselected in 128.92s (0:02:08)"
+ },
+ {
+  "id": "verified-skips-verifier-admission",
+  "status": "KILLED",
+  "desc": "any verifier object is accepted",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_observation.py::test_g06_a_verifier_that_is_not_the_admitted_ed25519_verifier_wrong_material_types_and_an_unavailable_registry_are_refused"
+ },
+ {
+  "id": "verified-skips-deny-all-check",
+  "status": "KILLED",
+  "desc": "a deny_all decision is not refused",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_observation.py::test_g04_a_registry_decision_of_the_wrong_shape_is_refused[deny_all]"
+ },
+ {
+  "id": "verified-skips-operational-check",
+  "status": "SURVIVED",
+  "desc": "operationally_authorized is not checked",
+  "equivalent": null,
+  "by": "252 passed, 1 deselected in 131.50s (0:02:11)"
+ },
+ {
+  "id": "verified-wrong-consumer-in-context",
+  "status": "KILLED",
+  "desc": "the Registry context uses the tenant as consumer",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_anchor.py::test_a01_registry_anchor_sets_the_flag_false_to_true_and_nothing_else"
+ },
+ {
+  "id": "verified-participation-optional",
+  "status": "KILLED",
+  "desc": "participation `optional` instead of `required`",
+  "equivalent": "expected equivalent: every optional-participation refusal is `overlay_not_applied`, which this module refuses as `registry_not_applied`",
+  "by": "FAILED tests/test_final3_anchor.py::test_a01_registry_anchor_sets_the_flag_false_to_true_and_nothing_else"
+ },
+ {
+  "id": "pol-anchor-not-profile-bearing",
+  "status": "KILLED",
+  "desc": "anchor does not count as a profile-bearing family (profile may be absent)",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_anchor.py::test_b02_no_runtime_authority_profile_at_all_is_refused"
+ },
+ {
+  "id": "pol-policy-binding-lifted-for-anchor",
+  "status": "KILLED",
+  "desc": "the policy_binding refusal is lifted when the anchor family is declared",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_anchor.py::test_b03_policy_binding_is_still_refused_for_the_profile_bearing_family"
+ },
+ {
+  "id": "pol-anchor-precondition-dropped",
+  "status": "KILLED",
+  "desc": "the construction-time anchor host precondition is dropped",
+  "equivalent": "expected equivalent: derive_anchor re-checks the precondition (after the source read); the tests also pin 'no source read'",
+  "by": "FAILED tests/test_final3_anchor.py::test_a02_a_no_op_leaves_the_profile_byte_identical_and_never_lowers_a_host_true[True-anchor]"
+ },
+ {
+  "id": "pol-observation-precondition-dropped",
+  "status": "KILLED",
+  "desc": "the construction-time host observation precondition is dropped",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_observation.py::test_a02_host_stricter_than_registry_is_a_no_op_and_the_registry_never_widens"
+ },
+ {
+  "id": "pol-effective-policy-not-passed-to-bounded",
+  "status": "KILLED",
+  "desc": "the host ObservationPolicy (not the effective one) is given to the bounded workflow",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_observation.py::test_a01_registry_stricter_than_host_narrows_each_field_independently"
+ },
+ {
+  "id": "pol-ctor-tolerance-narrowed",
+  "status": "KILLED",
+  "desc": "the observation tolerance is also applied to the constructor clock_tolerance_seconds",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_observation.py::test_c01_the_constructor_clock_tolerance_is_untouched_by_the_observation_tolerance_family"
+ },
+ {
+  "id": "pol-obs-final-validation-skipped",
+  "status": "KILLED",
+  "desc": "the final observation validation is skipped",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_observation.py::test_g02_a_forged_registry_result_that_widens_or_is_not_the_min_is_refused"
+ },
+ {
+  "id": "pol-profile-final-validation-skipped",
+  "status": "KILLED",
+  "desc": "the final profile validation result is ignored",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_anchor.py::test_c04_a_forged_composer_that_lowers_or_changes_something_else_is_refused_at_construction"
+ },
+ {
+  "id": "pol-anchor-not-declared-in-final-validation",
+  "status": "KILLED",
+  "desc": "the anchor carve-out is not passed to the final composition check",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_anchor.py::test_a01_registry_anchor_sets_the_flag_false_to_true_and_nothing_else"
+ },
+ {
+  "id": "pol-anchor-carveout-always-on",
+  "status": "KILLED",
+  "desc": "the anchor flag may always differ (even when the family is not declared)",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_anchor.py::test_c01_final_composition_allows_only_the_flag_false_to_true_and_only_when_declared"
+ },
+ {
+  "id": "pol-anchor-widening-allowed",
+  "status": "KILLED",
+  "desc": "True -> False passes the final composition check",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_anchor.py::test_c01_final_composition_allows_only_the_flag_false_to_true_and_only_when_declared"
+ },
+ {
+  "id": "pol-freshness-missing-not-checked-in-final",
+  "status": "KILLED",
+  "desc": "the defence-in-depth host-freshness check in the final composition is dropped",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_anchor.py::test_c03_an_action_class_change_next_to_the_flag_is_refused"
+ },
+ {
+  "id": "pol-name-order-anchor-last",
+  "status": "KILLED",
+  "desc": "the three slots are ordered after terminal revocation",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_composed_binding.py::test_e01_all_nine_families_compose_authorize_and_execute_in_the_fixed_order"
+ },
+ {
+  "id": "pol-name-dropped-tolerance",
+  "status": "KILLED",
+  "desc": "the tolerance slot is missing from the family names (declared but never governed)",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_observation.py::test_a01_registry_stricter_than_host_narrows_each_field_independently"
+ },
+ {
+  "id": "pol-swapped-observation-families",
+  "status": "KILLED",
+  "desc": "max-age slot is verified as the tolerance family",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_anchor.py::test_f02_without_the_family_the_host_False_flag_dispatches_the_documented_residual"
+ },
+ {
+  "id": "pol-observation-host-value-swapped",
+  "status": "KILLED",
+  "desc": "the tolerance derivation is handed the host max age",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_observation.py::test_a02_host_stricter_than_registry_is_a_no_op_and_the_registry_never_widens"
+ },
+ {
+  "id": "pol-held-observation-check-dropped",
+  "status": "KILLED",
+  "desc": "the live ObservationPolicy is not compared with the bound effective one",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_observation.py::test_c03_editing_either_tolerance_after_construction_is_refused"
+ },
+ {
+  "id": "pol-held-config-check-dropped",
+  "status": "KILLED",
+  "desc": "the shared scalar guard is skipped for this workflow",
+  "equivalent": "partly redundant: the dedicated observation guard fires first for the observation values; the constructor tolerance edit (test_c03) is caught only by the shared guard",
+  "by": "FAILED tests/test_final3_observation.py::test_c03_editing_either_tolerance_after_construction_is_refused"
+ },
+ {
+  "id": "pol-configuration-digest-without-new-host-values",
+  "status": "KILLED",
+  "desc": "the activation-ledger configuration digest ignores the host anchor / observation values",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_composed_binding.py::test_g01_a_host_change_masked_by_the_registry_value_still_changes_the_activation_ledger_identity"
+ },
+ {
+  "id": "pol-configuration-digest-wrap-always",
+  "status": "KILLED",
+  "desc": "every configuration (even without the new families) gets the wrapped digest",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_composed_binding.py::test_f01_workflows_without_the_new_families_keep_their_pinned_configuration_digests"
+ },
+ {
+  "id": "pol-rederive-without-host-observation",
+  "status": "KILLED",
+  "desc": "boundary re-derivation forgets the host observation values",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_anchor.py::test_f02_without_the_family_the_host_False_flag_dispatches_the_documented_residual"
+ },
+ {
+  "id": "pol-bound-slot-not-recorded",
+  "status": "KILLED",
+  "desc": "the anchor part is not recorded in the bound identity",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_anchor.py::test_a01_registry_anchor_sets_the_flag_false_to_true_and_nothing_else"
+ },
+ {
+  "id": "pol-profile-digest-ignores-anchor",
+  "status": "KILLED",
+  "desc": "the effective-profile digest is not computed when only the anchor family is declared",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_anchor.py::test_a01_registry_anchor_sets_the_flag_false_to_true_and_nothing_else"
+ },
+ {
+  "id": "eff-anchor-row-missing",
+  "status": "KILLED",
+  "desc": "the anchor slot is missing from the family table (binding cannot represent it)",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_anchor.py::test_a01_registry_anchor_sets_the_flag_false_to_true_and_nothing_else"
+ },
+ {
+  "id": "eff-anchor-contract-v7",
+  "status": "KILLED",
+  "desc": "the anchor row names contract r08-v7",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_anchor.py::test_a03_the_effective_digest_is_the_registry_identity_of_the_effective_value_and_every_state_is_distinct"
+ },
+ {
+  "id": "eff-age-family-id-typo",
+  "status": "KILLED",
+  "desc": "the max-age row carries another family id",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_observation.py::test_a06_digests_are_the_registry_v8_identity_of_the_effective_value_with_family_schema_revision_1"
+ },
+ {
+  "id": "eff-tolerance-row-is-max-age",
+  "status": "KILLED",
+  "desc": "the tolerance row carries the max-age family id",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_observation.py::test_a06_digests_are_the_registry_v8_identity_of_the_effective_value_with_family_schema_revision_1"
+ },
+ {
+  "id": "eff-schema-revision-2",
+  "status": "KILLED",
+  "desc": "the anchor schema revision is 2",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_anchor.py::test_a03_the_effective_digest_is_the_registry_identity_of_the_effective_value_and_every_state_is_distinct"
+ },
+ {
+  "id": "eff-schema-revision-missing",
+  "status": "KILLED",
+  "desc": "no schema revision for the tolerance row",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_observation.py::test_a06_digests_are_the_registry_v8_identity_of_the_effective_value_with_family_schema_revision_1"
+ },
+ {
+  "id": "eff-snapshot-drops-anchor",
+  "status": "KILLED",
+  "desc": "the snapshot omits the anchor family",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_composed_binding.py::test_e01_all_nine_families_compose_authorize_and_execute_in_the_fixed_order"
+ },
+ {
+  "id": "eff-resolve-without-host-observation",
+  "status": "KILLED",
+  "desc": "the pure resolver forgets the host observation values",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_composed_binding.py::test_e04_the_nine_family_snapshot_is_deterministic_and_covers_the_new_families"
+ },
+ {
+  "id": "life-commit-gate-skips-reverify",
+  "status": "KILLED",
+  "desc": "the pre-apply commit gate does not re-verify",
+  "equivalent": null,
+  "by": "E             - failed"
+ },
+ {
+  "id": "life-execute-entry-skips-reverify",
+  "status": "KILLED",
+  "desc": "execute entry does not re-verify the selections",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_anchor.py::test_e01_a_bad_selection_is_refused_at_decision_execute_entry_and_the_pre_apply_gate[effect-revoked]"
+ },
+ {
+  "id": "life-decision-entry-skips-reverify",
+  "status": "KILLED",
+  "desc": "decision entry does not re-verify the selections",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_anchor.py::test_e01_a_bad_selection_is_refused_at_decision_execute_entry_and_the_pre_apply_gate[decision-revoked]"
+ }
+]

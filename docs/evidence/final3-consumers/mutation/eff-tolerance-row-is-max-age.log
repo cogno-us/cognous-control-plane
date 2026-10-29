@@ -1,0 +1,25 @@
+........................................................................ [ 28%]
+...F
+=================================== FAILURES ===================================
+_ test_a06_digests_are_the_registry_v8_identity_of_the_effective_value_with_family_schema_revision_1 _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1736/test_a06_digests_are_the_regis0')
+
+    def test_a06_digests_are_the_registry_v8_identity_of_the_effective_value_with_family_schema_revision_1(tmp_path):
+        flow = flow_for(tmp_path, age=mat(AGE, 60), tol=mat(TOL, 2))[2]
+        ident = flow.registry_governed_policy_identity
+        assert ident["observation_max_age"]["effective_policy_digest"] == v8id.effective_policy_digest(AGE, {FIELDS[AGE]: 60}, "r08-v8")
+        assert ident["observation_clock_tolerance"]["effective_policy_digest"] == v8id.effective_policy_digest(TOL, {FIELDS[TOL]: 2}, "r08-v8")
+        assert v8id.registered_family_version(AGE, "r08-v8") == v8id.registered_family_version(TOL, "r08-v8") == 1
+        for slot, fam in (("observation_max_age", AGE), ("observation_clock_tolerance", TOL)):
+>           assert eff.FAMILY_TABLE[slot] == (fam, "r08-v8") and eff.SCHEMA_REVISIONS[slot] == 1
+E           AssertionError: assert (('f5-observat...cy', 'r08-v8') == ('f5-observat...cy', 'r08-v8')
+E             
+E             At index 0 diff: 'f5-observation-max-age-policy' != 'f5-observation-clock-tolerance-policy'
+E             Use -v to get more diff)
+
+tests/test_final3_observation.py:95: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_final3_observation.py::test_a06_digests_are_the_registry_v8_identity_of_the_effective_value_with_family_schema_revision_1
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 75 passed, 1 deselected in 26.13s

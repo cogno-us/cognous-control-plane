@@ -367,3 +367,49 @@ def test_f04_with_the_family_the_window_is_the_anchored_remaining_window_age_20_
     # age 20 s, ceiling 30 s: remaining anchored window 10 s. A stall of 0 s is inside it; 29 s and beyond is not. (28 s is also beyond 10 s: only 0 dispatches.)
     out = _e2e(tmp_path, declared=True, host_flag=False, age=20, stall=stall)[0]
     assert out == ("dispatched" if stall == 0 else "refused")
+
+
+# ------------------------------------------------------------------------------------------------------------------------------ forged Registry decisions (the consumer re-checks the verdict)
+def _stub_decision(effective, **over):
+    import registry_successor.decision as rd
+    return rd.PolicyDecision(**dict(dict(kind="applied", effective=effective, deny_all=False, deny_all_fields=(), code=None, detail="", caller_unchanged=False,
+                                         operationally_authorized=False), **over))
+
+
+@pytest.mark.parametrize("host_flag,record_value,forged,code", [
+    (False, "no_change", "anchor", "effective_policy_invalid"),      # not the stricter of host and record (an unrequested strengthening is also refused)
+    (True, "anchor", "no_change", "effective_policy_widens_host"),   # lowers a host True
+    (True, "no_change", "no_change", "effective_policy_widens_host"),
+    (False, "anchor", "no_change", "effective_policy_invalid"),      # ignores the record
+    (False, "no_change", "bogus", "effective_policy_invalid"),
+    (False, "no_change", True, "effective_policy_invalid"),          # a JSON boolean is never a value of this family
+])
+def test_g01_the_derivation_re_checks_a_forged_registry_verdict(tmp_path, monkeypatch, host_flag, record_value, forged, code):
+    import registry_successor.v8_decision as v8d
+    p = base.tenant_proposal()
+    host = host_with_freshness(p, flag=host_flag)
+    stub = _stub_decision({FIELDS[ANC]: forged})
+    monkeypatch.setattr(v8d, "verify_and_decide_v8", lambda *a, **k: stub)
+    got, ref = f3.derive_anchor(scope=SCOPES[ANC], institution_id=base.INSTITUTION, authority_domain=base.DOMAIN, host=host, material=mat(ANC, record_value),
+                                verifier=ev.Ed25519Verifier(), now=REG_NOW)
+    assert got is None and ref.code == code
+
+
+@pytest.mark.parametrize("over,code", [(dict(operationally_authorized=True), "registry_decision_invalid"), (dict(deny_all=True), "registry_decision_invalid"),
+                                       (dict(kind="overlay_not_applied", code="selection_revoked"), "registry_not_applied")])
+def test_g02_a_registry_verdict_of_the_wrong_shape_is_refused(tmp_path, monkeypatch, over, code):
+    import registry_successor.v8_decision as v8d
+    p = base.tenant_proposal()
+    stub = _stub_decision({FIELDS[ANC]: "anchor"}, **over)
+    monkeypatch.setattr(v8d, "verify_and_decide_v8", lambda *a, **k: stub)
+    got, ref = f3.derive_anchor(scope=SCOPES[ANC], institution_id=base.INSTITUTION, authority_domain=base.DOMAIN, host=host_with_freshness(p), material=mat(ANC),
+                                verifier=ev.Ed25519Verifier(), now=REG_NOW)
+    assert got is None and ref.code == code
+
+
+def test_g03_a_family_schema_revision_other_than_1_from_the_registry_table_is_refused(tmp_path, monkeypatch):
+    monkeypatch.setattr(v8id, "registered_family_version", lambda family, contract: 2)
+    p = base.tenant_proposal()
+    got, ref = f3.derive_anchor(scope=SCOPES[ANC], institution_id=base.INSTITUTION, authority_domain=base.DOMAIN, host=host_with_freshness(p), material=mat(ANC),
+                                verifier=ev.Ed25519Verifier(), now=REG_NOW)
+    assert got is None and ref.code == "effective_policy_digest_unavailable"

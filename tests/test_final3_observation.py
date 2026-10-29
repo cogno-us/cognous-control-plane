@@ -494,3 +494,33 @@ def test_g07_a_registry_call_that_raises_is_a_refusal(tmp_path, monkeypatch):
     got, ref = f3.derive_observation(family=TOL, scope=SCOPES[TOL], institution_id=base.INSTITUTION, authority_domain=base.DOMAIN, host_value=5, material=mat(TOL, 1),
                                      verifier=ev.Ed25519Verifier(), now=REG_NOW)
     assert got is None and ref.code == "registry_call_failed"
+
+
+def test_g08_the_derivation_re_reads_the_record_value_and_its_floor(tmp_path, monkeypatch):
+    """A forged Registry verdict of 0 (max age) over a record that also says 0 is refused by the consumer's own floor (max age >= 1), whatever the verdict says."""
+    import registry_successor.v8_decision as v8d
+    stub = _decision_stub({FIELDS[AGE]: 0})
+    monkeypatch.setattr(v8d, "verify_and_decide_v8", lambda *a, **k: stub)
+    got, ref = f3.derive_observation(family=AGE, scope=SCOPES[AGE], institution_id=base.INSTITUTION, authority_domain=base.DOMAIN, host_value=300,
+                                     material=mat(AGE, record=t8.record({FIELDS[AGE]: 0}, family=AGE)), verifier=ev.Ed25519Verifier(), now=REG_NOW)
+    assert got is None and ref.code == "effective_policy_invalid"
+    stub = _decision_stub({FIELDS[TOL]: -1})
+    monkeypatch.setattr(v8d, "verify_and_decide_v8", lambda *a, **k: stub)
+    got, ref = f3.derive_observation(family=TOL, scope=SCOPES[TOL], institution_id=base.INSTITUTION, authority_domain=base.DOMAIN, host_value=5,
+                                     material=mat(TOL, record=t8.record({FIELDS[TOL]: -1}, family=TOL)), verifier=ev.Ed25519Verifier(), now=REG_NOW)
+    assert got is None and ref.code == "effective_policy_invalid"
+
+
+def test_g09_an_operationally_authorized_registry_verdict_and_a_non_1_schema_revision_are_refused(tmp_path, monkeypatch):
+    import registry_successor.v8_decision as v8d
+    kw = dict(family=AGE, scope=SCOPES[AGE], institution_id=base.INSTITUTION, authority_domain=base.DOMAIN, host_value=300, material=mat(AGE, 60), verifier=ev.Ed25519Verifier(),
+              now=REG_NOW)
+    stub = _decision_stub({FIELDS[AGE]: 60})
+    stub = stub.__class__(**dict(stub.__dict__, operationally_authorized=True))
+    monkeypatch.setattr(v8d, "verify_and_decide_v8", lambda *a, **k: stub)
+    got, ref = f3.derive_observation(**kw)
+    assert got is None and ref.code == "registry_decision_invalid"
+    monkeypatch.undo()
+    monkeypatch.setattr(v8id, "registered_family_version", lambda family, contract: 2)
+    got, ref = f3.derive_observation(**kw)
+    assert got is None and ref.code == "effective_policy_digest_unavailable"

@@ -1,0 +1,41 @@
+......F
+=================================== FAILURES ===================================
+_ test_b01_a_host_profile_without_a_freshness_profile_is_refused_before_any_source_read_and_none_is_invented _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1673/test_b01_a_host_profile_withou0')
+
+    def test_b01_a_host_profile_without_a_freshness_profile_is_refused_before_any_source_read_and_none_is_invented(tmp_path):
+        p, res, cfg = base.prepared(tmp_path, t1=R_)
+        assert cfg.freshness is None
+        src = Source(mat(ANC))
+        with pytest.raises(RegistryGovernedPolicyRefused) as e:
+            build(tmp_path, res, cfg, fams(anc=src))
+>       refused(e, "host_freshness_profile_missing", "construction")
+
+tests/test_final3_anchor.py:98: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/final3_support.py:88: in refused
+    return comp.refused(exc, code, boundary, registry_code)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+exc = <ExceptionInfo RegistryGovernedPolicyRefused('registry_governed_policy_refused:construction:effective_profile_invalid') tblen=3>
+code = 'host_freshness_profile_missing', boundary = 'construction'
+registry_code = None
+
+    def refused(exc, code=None, boundary=None, registry_code=None):
+        e = exc.value
+        assert isinstance(e, PermissionError) and isinstance(e, RegistryGovernedPolicyRefused) and e.refusal.non_authorizing is True
+        if code:
+>           assert e.refusal.code == code, e.refusal
+E           AssertionError: Refusal(code='effective_profile_invalid', registry_code=None, registry_kind=None, non_authorizing=True, classification='BUILDER_TESTED; not independently qualified; non-authorizing')
+E           assert 'effective_profile_invalid' == 'host_freshne...ofile_missing'
+E             
+E             - host_freshness_profile_missing
+E             + effective_profile_invalid
+
+tests/test_governed_policy_composition.py:99: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_final3_anchor.py::test_b01_a_host_profile_without_a_freshness_profile_is_refused_before_any_source_read_and_none_is_invented
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 6 passed, 1 deselected in 16.76s

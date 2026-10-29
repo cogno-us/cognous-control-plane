@@ -1,0 +1,25 @@
+........................................................................ [ 28%]
+........................................................................ [ 57%]
+........................................................................ [ 85%]
+....................F
+=================================== FAILURES ===================================
+_ test_e01_all_nine_families_compose_authorize_and_execute_in_the_fixed_order __
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1738/test_e01_all_nine_families_com0')
+
+    def test_e01_all_nine_families_compose_authorize_and_execute_in_the_fixed_order(tmp_path):
+        p, res, cfg, srcs, flow = nine(tmp_path)
+        d = flow.decide(p, now=NOW)
+        assert d.result == "authorized", d.reasons
+        rows = d.binding.runtime_authority[ecb.KEY]["members"]["families"]
+        assert [r["slot"] for r in rows] == ["f4_ages", "class_age", "class_unreadable", "class_revocation_assurance", "class_irreversible", "anchor_deadline",
+                                              "observation_max_age", "observation_clock_tolerance", "terminal_revocation"]
+>       assert [r["slot"] for r in rows] == list(pol.FAMILY_NAMES) and [flow.effective_policy_snapshot.families[i].slot for i in range(9)] == list(pol.FAMILY_NAMES)
+                                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       IndexError: tuple index out of range
+
+tests/test_final3_composed_binding.py:253: IndexError
+=========================== short test summary info ============================
+FAILED tests/test_final3_composed_binding.py::test_e01_all_nine_families_compose_authorize_and_execute_in_the_fixed_order
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 236 passed, 1 deselected in 86.62s (0:01:26)

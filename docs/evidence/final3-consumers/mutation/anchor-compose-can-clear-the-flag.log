@@ -1,0 +1,34 @@
+..........F
+=================================== FAILURES ===================================
+_ test_b05_compose_anchor_never_invents_a_freshness_profile_and_only_ever_sets_true _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1672/test_b05_compose_anchor_never_0')
+
+    def test_b05_compose_anchor_never_invents_a_freshness_profile_and_only_ever_sets_true(tmp_path):
+        p, res, cfg = base.prepared(tmp_path, t1=R_)
+        with pytest.raises(ValueError):
+            f3.compose_anchor(cfg, {FIELDS[ANC]: "anchor"})
+>       assert f3.compose_anchor(cfg, {FIELDS[ANC]: "no_change"}).model_dump() == cfg.model_dump()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_final3_anchor.py:130: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+base = RuntimeAuthorityProfile(version='runtime-authority/0.1', catalogue_version='synthetic-catalogue/1', actions={'urn:cogn...one, holder_inventory=None, merge=None, reversibility=None, dedupe=None, terminal_revocation=None, policy_binding=None)
+effective = {'anchor_deadline_to_inputs': 'no_change'}
+
+    def compose_anchor(base: RuntimeAuthorityProfile, effective: Mapping[str, str]) -> RuntimeAuthorityProfile:
+        """The profile with `FreshnessProfile.anchor_deadline_to_inputs` set True when `effective` is `anchor`. Pure; it only ever sets True (a host True is never cleared, whatever `effective`
+        says), it requires the `FreshnessProfile` to exist (never invents one) and nothing else in the profile changes."""
+        doc = base.model_dump(mode="json")
+        if True:
+            freshness = doc.get("freshness")
+            if freshness is None:
+>               raise ValueError(HOST_FRESHNESS_MISSING)
+E               ValueError: host_freshness_profile_missing
+
+src/agent_control_plane/registry_final3_governance.py:112: ValueError
+=========================== short test summary info ============================
+FAILED tests/test_final3_anchor.py::test_b05_compose_anchor_never_invents_a_freshness_profile_and_only_ever_sets_true
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 10 passed, 1 deselected in 15.64s

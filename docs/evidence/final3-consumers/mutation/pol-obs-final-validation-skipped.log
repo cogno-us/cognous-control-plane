@@ -1,0 +1,29 @@
+........................................................................ [ 28%]
+........................................................................ [ 57%]
+..........................................F
+=================================== FAILURES ===================================
+__ test_g02_a_forged_registry_result_that_widens_or_is_not_the_min_is_refused __
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1714/test_g02_a_forged_registry_res0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fa90c1460b0>
+
+    def test_g02_a_forged_registry_result_that_widens_or_is_not_the_min_is_refused(tmp_path, monkeypatch):
+        p, res, cfg = base.prepared(tmp_path, t1=R_)
+        real = f3.derive_observation
+    
+        def forged(value):
+            def f(**kw):
+                got, ref = real(**kw)
+                return (({FIELDS[AGE]: value}, got[1]), None) if got else (got, ref)
+            return f
+        for value in (301, MAXV):  # the derivation is replaced wholesale: only the FINAL composition check stands between a forged value above the host and the workflow
+            monkeypatch.setattr(f3, "derive_observation", forged(value))
+>           with pytest.raises(RegistryGovernedPolicyRefused) as e:
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE RegistryGovernedPolicyRefused
+
+tests/test_final3_observation.py:428: Failed
+=========================== short test summary info ============================
+FAILED tests/test_final3_observation.py::test_g02_a_forged_registry_result_that_widens_or_is_not_the_min_is_refused
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 186 passed, 1 deselected in 71.14s (0:01:11)

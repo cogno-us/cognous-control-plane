@@ -1,0 +1,46 @@
+........................................................................ [ 28%]
+......................F
+=================================== FAILURES ===================================
+_______ test_c03_editing_either_tolerance_after_construction_is_refused ________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1724/test_c03_editing_either_tolera0')
+
+    def test_c03_editing_either_tolerance_after_construction_is_refused(tmp_path):
+        p, res, flow = flow_for(tmp_path, tol=mat(TOL, 2))
+        flow.clock_tolerance_seconds = 1  # the constructor tolerance
+        with pytest.raises(RegistryGovernedPolicyRefused) as e:
+            flow.decide(p, now=NOW)
+        refused(e, "scalars_modified", "decision")
+        p, res, flow = flow_for(tmp_path / "o", tol=mat(TOL, 2))
+        flow.observation_policy.clock_tolerance_seconds = 5  # the host value put back over the narrowed one
+        with pytest.raises(RegistryGovernedPolicyRefused) as e:
+            flow.decide(p, now=NOW)
+>       refused(e, "observation_policy_modified", "decision")
+
+tests/test_final3_observation.py:181: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/final3_support.py:88: in refused
+    return comp.refused(exc, code, boundary, registry_code)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+exc = <ExceptionInfo RegistryGovernedPolicyRefused('registry_governed_policy_refused:decision:scalars_modified') tblen=4>
+code = 'observation_policy_modified', boundary = 'decision'
+registry_code = None
+
+    def refused(exc, code=None, boundary=None, registry_code=None):
+        e = exc.value
+        assert isinstance(e, PermissionError) and isinstance(e, RegistryGovernedPolicyRefused) and e.refusal.non_authorizing is True
+        if code:
+>           assert e.refusal.code == code, e.refusal
+E           AssertionError: Refusal(code='scalars_modified', registry_code=None, registry_kind=None, non_authorizing=True, classification='BUILDER_TESTED; not independently qualified; non-authorizing')
+E           assert 'scalars_modified' == 'observation_policy_modified'
+E             
+E             - observation_policy_modified
+E             + scalars_modified
+
+tests/test_governed_policy_composition.py:99: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_final3_observation.py::test_c03_editing_either_tolerance_after_construction_is_refused
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 94 passed, 1 deselected in 48.89s
