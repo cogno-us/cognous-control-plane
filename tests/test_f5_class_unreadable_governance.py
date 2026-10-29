@@ -23,7 +23,8 @@ import pytest
 
 PIN = "6c3e5e4037d34bd2b31371461bfc872c762026b9"  # Registry commit that contains r08-v5 (the Registry implementation PR head); the r08-v2 F5 composer in it is byte-identical to 6f600ab
 PIN_V6 = "42a666328b974a7581013358bcf8bc7b9eac7761"  # Registry commit that contains r08-v6 (the Registry revocation-families head). It also contains r08-v1..r08-v5 byte-identical, so the same builders run against it.
-ACCEPTED_PINS = (PIN, PIN_V6)
+PIN_V7 = "0000000000000000000000000000000000000000"  # Registry commit that contains r08-v7 (the unified-engine head); PLACEHOLDER until the lead sets the final value. It contains r08-v1..r08-v6 byte-identical.
+ACCEPTED_PINS = (PIN, PIN_V6, PIN_V7)
 _REQUIRED = os.environ.get("OCS_REQUIRE_REGISTRY_PIN") == "1"
 
 
@@ -39,7 +40,7 @@ if not PIN_DIR or not (Path(PIN_DIR) / "registry_successor").is_dir():
 PIN_DIR = str(Path(PIN_DIR).resolve())
 _head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=PIN_DIR, capture_output=True, text=True).stdout.strip()
 if _head not in ACCEPTED_PINS:
-    _unavailable(f"Registry checkout is {_head!r}, expected the r08-v5 pin {PIN} or the r08-v6 pin {PIN_V6}")
+    _unavailable(f"Registry checkout is {_head!r}, expected the r08-v5 pin {PIN}, the r08-v6 pin {PIN_V6} or the r08-v7 pin {PIN_V7}")
 sys.path.insert(0, PIN_DIR)
 sys.path.insert(0, str(Path(PIN_DIR) / "tests"))
 try:
@@ -719,7 +720,7 @@ def test_e08_the_parameter_governs_only_the_cached_grant_branch_and_a_source_cha
     assert 'action_class.irreversible and action_class.on_unreadable != "refuse"' in text and 'cl.on_unreadable == "bounded_tolerance" and cached' in text
     assert "on_unreadable" not in inspect.getsource(bounded.BoundedAuthorizationWorkflow._cached_purpose)
     assert "on_unreadable" not in inspect.getsource(rev.judge_cached_purpose) and "on_unreadable" not in inspect.getsource(rev.effective_reversibility)
-    other = {p.name for p in SRC.glob("*.py") if "on_unreadable" in p.read_text() and p.name not in ("bounded.py", "runtime_authority.py", Path(gov.__file__).name, "registry_governed_policy.py")}  # the composed workflow validates the final composition of this field
+    other = {p.name for p in SRC.glob("*.py") if "on_unreadable" in p.read_text() and p.name not in ("bounded.py", "runtime_authority.py", Path(gov.__file__).name, "registry_governed_policy.py", "registry_irreversibility_governance.py")}  # the composed workflow validates the final composition of this field
     assert other == set(), other
 
 

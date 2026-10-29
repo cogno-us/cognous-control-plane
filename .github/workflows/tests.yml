@@ -187,6 +187,40 @@ jobs:
             exit 1
           }
 
+      # Registry-governed ActionClass.irreversible (Registry r08-v7, unified engine) and the immutable effective-policy snapshot. Needs the r08-v7 contract, which is in NONE of the earlier pins: a
+      # FOURTH checkout at the exact Registry r08-v7 head is used for this step only (it contains r08-v1..r08-v6 byte-identical, so the r08-v6 suites also run against it). THE PIN BELOW IS A
+      # PLACEHOLDER (40 zeros) UNTIL THE LEAD SETS THE FINAL REGISTRY COMMIT (also PIN_V7 in tests/test_f5_class_unreadable_governance.py); with the placeholder this step fails closed. Same rules:
+      # a missing/wrong pin or missing PyNaCl is a FAILURE (OCS_REQUIRE_REGISTRY_PIN=1) and the junit gate fails on any skip or fewer tests than expected.
+      - name: Check out the Registry at the r08-v7 pin
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: cogno-us/cognous-ocs-registry
+          ref: 0000000000000000000000000000000000000000
+          path: registry-pin-v7
+
+      - name: Run the Registry-governed irreversibility tests (must not skip)
+        env:
+          OCS_REGISTRY_PIN_DIR: ${{ github.workspace }}/registry-pin-v7
+          OCS_REQUIRE_REGISTRY_PIN: "1"
+        run: |
+          set -o pipefail
+          {
+            test "$(git -C registry-pin-v7 rev-parse HEAD)" = "0000000000000000000000000000000000000000"
+            python -c "import nacl, sys; print('pynacl', nacl.__version__, sys.version.split()[0])"
+            pytest -q tests/test_irreversibility_governance.py tests/test_irreversibility_unit.py tests/test_revocation_families_governance.py tests/test_governed_policy_composition.py tests/test_f5_class_unreadable_governance.py --junitxml=irreversibility-junit.xml
+            python - <<'PY'
+          import xml.etree.ElementTree as ET
+          suite = ET.parse("irreversibility-junit.xml").getroot()
+          suite = suite if suite.tag == "testsuite" else suite[0]
+          n, skipped, failed = int(suite.get("tests")), int(suite.get("skipped")), int(suite.get("failures")) + int(suite.get("errors"))
+          print(f"irreversibility + unit + revocation families + composed + on_unreadable tests under the r08-v7 pin: {n} run, {skipped} skipped, {failed} failed")
+          assert skipped == 0 and failed == 0 and n >= 574, "Registry-governed irreversibility tests were skipped or did not run"
+          PY
+          } 2>&1 | tee irreversibility-out.txt || {
+            echo "::error title=Irreversibility tests failed::$(tail -n 40 irreversibility-out.txt | sed ':a;N;$!ba;s/\n/%0A/g')"
+            exit 1
+          }
+
       - name: Authorization control removal probes
         run: python tools/adversarial_mutations.py
 
