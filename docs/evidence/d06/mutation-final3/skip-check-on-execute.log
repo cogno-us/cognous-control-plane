@@ -1,0 +1,95 @@
+# skip-check-on-execute: execute is not checked (member only minted)
+# file: src/agent_control_plane/registry_governed_lifecycle.py
+# verdict: KILLED (exit 1)
+
+........................................................F
+=================================== FAILURES ===================================
+_ test_a05_a_workflow_without_a_profile_still_binds_via_a_one_member_extension _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1590/test_a05_a_workflow_without_a_0')
+
+    def test_a05_a_workflow_without_a_profile_still_binds_via_a_one_member_extension(tmp_path):
+        """F4 only, no RuntimeAuthorityProfile: the persisted `runtime_authority` was null; it becomes `{effective_configuration: ...}` and nothing else."""
+        p = T.base.tenant_proposal()
+        res = T.base.tenant_resolver_for(p)
+        flow = S.mk(tmp_path, res, None, T.families(f=T.fsrc()))
+        d = flow.decide(p, now=NOW)
+        assert d.result == "authorized" and set(d.binding.runtime_authority) == {ecb.KEY}
+        assert member_of(flow, d)["members"]["effective_profile_digest"] is None and member_of(flow, d)["members"]["host_profile_digest"] is None
+        restarted = S.mk(tmp_path, res, None, T.families(f=T.fsrc()))
+>       assert_executes(restarted, p, d)
+
+tests/test_effective_configuration_binding.py:118: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_effective_configuration_binding.py:61: in assert_executes
+    attempt, observed = wf.execute(p, wf.records.decision(d.decision_id), adapter_id=p.adapter_id, now=NOW)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/agent_control_plane/registry_governed_lifecycle.py:336: in execute
+    return super().execute(proposal, decision, adapter_id=adapter_id, now=now, lose_ack=lose_ack, partial=partial)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <agent_control_plane.registry_governed_policy.GovernedPolicyWorkflow object at 0x7f00532c9090>
+proposal = TenantRuntimeProposal(manifest_id='refund-integration-pilot-v1', manifest_version='1.1', manifest_digest='sha256:4d1ad...'run-1', expected_side_effects=[], evidence_refs=['urn:cognous:evidence:refund-entitlement'], tenant_id='tenant-alpha')
+decision = RuntimeDecision(reason_vocabulary_version=None, rule_identity=None, reopen_conditions=[], decision_id='87c900cc-2b7c-4...c0b107f215773957e569ee85e5ca1abb94c267cd', missing=False, previous_observed_at=None, read_state=None, age_basis=None)])
+adapter_id = 'urn:cognous:adapter:synthetic-refund-v1'
+now = datetime.datetime(2026, 10, 5, 19, 0, tzinfo=datetime.timezone.utc)
+lose_ack = False, partial = False
+
+    def execute(
+        self,
+        proposal: RuntimeProposal,
+        decision: RuntimeDecision,
+        *,
+        adapter_id: str,
+        now: datetime | None = None,
+        lose_ack: bool = False,
+        partial: bool = False,
+    ) -> tuple[EffectAttempt, EffectObservation | None]:
+        self._require_reaper_alive()
+        now = self._evaluation_time(now)
+        persisted = self.records.decision(decision.decision_id)
+        if persisted is None or persisted != decision:
+            raise PermissionError("decision is not the immutable persisted decision")
+        if persisted.result != "authorized" or persisted.binding is None:
+            raise PermissionError("decision is not authorized")
+        if persisted.effect_id != self._effect_id(persisted.binding):
+            raise PermissionError("decision effect identity is invalid")
+    
+        frozen = proposal.model_copy(deep=True)
+        inputs: list[ResolutionInput] = []
+        check_ref: list[str] = []
+        reasons, current = self._resolve(frozen, now, inputs=inputs, **({"stage":"effect", "decision":persisted} if self.runtime_authority_profile else {}),
+                                         **({"check_ref": check_ref} if (self._identity or self._freshness) else {}))
+        if self._identity and current is not None and not reasons:
+            self._operation_gate(current, reasons)
+        reasons = self._record_check(inputs, now, reasons, "effect", check_id=check_ref[0] if check_ref else None)
+        if reasons or current is None or current != persisted.binding:
+            refusal_reasons = sorted(set(reasons))
+            if not refusal_reasons and current != persisted.binding:
+                refusal_reasons = ["authorization_binding_changed"]
+            self.records.append_refusal(EffectTimeRefusal(
+                **({"check_id": check_ref[0]} if check_ref else {}),
+                refusal_id=str(uuid.uuid4()),
+                decision_id=persisted.decision_id,
+                effect_id=persisted.effect_id,
+                recorded_at=self._write_time(now),
+                **self._eval_stamp(now),
+                time_source=self.time_source,
+                original_operation_horizon=persisted.operation_horizon,
+                operation_horizon=self._horizon(frozen),
+                reason_vocabulary_version=(vocabulary_for(refusal_reasons) if self.runtime_authority_profile else None),
+                rule_identity=self._rule_identity(inputs),
+                reopen_conditions=(reopen_conditions(refusal_reasons, inputs) if self.runtime_authority_profile else []),
+                reasons=refusal_reasons,
+                changed_inputs=self._effect_time_changed_inputs(inputs, persisted.binding),
+                resolution_inputs=inputs,
+            ))
+>           raise PermissionError("authorization-critical inputs changed before effect")
+E           PermissionError: authorization-critical inputs changed before effect
+
+src/agent_control_plane/bounded.py:1711: PermissionError
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding.py::test_a05_a_workflow_without_a_profile_still_binds_via_a_one_member_extension
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 58 passed in 3.85s

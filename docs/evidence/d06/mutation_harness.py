@@ -120,6 +120,13 @@ mut("members-families-skip-schema-revisions", "the family schema revisions are n
 mut("members-observation-policy-null", "the ObservationPolicy is not bound (explicit null)", LIFE,
     'observation_policy=None if obs is None else {"max_age_seconds": obs.max_age_seconds, "clock_tolerance_seconds": obs.clock_tolerance_seconds})',
     "observation_policy=None)")
+# --- review follow-up: oversize cutoff refused at construction; the base hook has no 'do not bind' answer --------------------------------------------------------------------
+mut("cutoff-above-count-accepted", "a legacy_cutoff above the decisions in the store is accepted at construction", LIFE, "            if legacy_cutoff > count:", "            if False:")
+mut("cutoff-count-load-failure-ignored", "an unreadable store while counting decisions lets the cutoff through", LIFE,
+    '            except Exception:\n                raise refuse("legacy_cutoff_invalid", "construction") from None\n            if legacy_cutoff > count:',
+    '            except Exception:\n                count = legacy_cutoff\n            if legacy_cutoff > count:')
+mut("base-hook-does-not-bind", "the base hook answers 'bind nothing' again (a forgetful subclass would mint and check nothing)", LIFE,
+    '        raise ecb.BindingInvalid("hook_not_implemented")', "        return None")
 # --- the dedicated single-family hooks (follow-up) ---------------------------------------------------------------------------------------------------------------------------
 F4M, AGEM, UNRM = ("src/agent_control_plane/registry_f4_age_governance.py", "src/agent_control_plane/registry_f5_class_age_governance.py",
                    "src/agent_control_plane/registry_f5_class_unreadable_governance.py")

@@ -1,0 +1,10 @@
+GATE f4: 73 run, 0 skipped, 0 failed (minimum 70) -> PASS
+GATE f5-class-age: 111 run, 0 skipped, 0 failed (minimum 105) -> PASS
+GATE f5-unreadable: 148 run, 0 skipped, 0 failed (minimum 148) -> PASS
+GATE governed-policy: 99 run, 0 skipped, 0 failed (minimum 99) -> PASS
+GATE revocation-families: 388 run, 0 skipped, 0 failed (minimum 388) -> PASS
+GATE irreversibility: 576 run, 0 skipped, 0 failed (minimum 576) -> PASS
+================ 1460 passed, 106 skipped in 319.43s (0:05:19) =================
+plain pytest exit 0
+DETECTED: unknown-context
+removal probes exit 0

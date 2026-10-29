@@ -1,0 +1,30 @@
+# dedicated-f4-bind-step-skipped: the dedicated f4 constructor skips the shared bind step (no scalar validation, no held snapshot, no cutoff)
+# file: src/agent_control_plane/registry_f4_age_governance.py
+# verdict: KILLED (exit 1)
+
+........................................................................ [ 18%]
+....................................F
+=================================== FAILURES ===================================
+________ test_d08_a_governed_subclass_that_omits_the_hook_fails_closed _________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1659/test_d08_a_governed_subclass_t0')
+
+    def test_d08_a_governed_subclass_that_omits_the_hook_fails_closed(tmp_path):
+        """Review F4: the base hook has no 'do not bind' answer. A subclass that forgets it cannot be constructed (and would refuse any decision)."""
+        from agent_control_plane import registry_f4_age_governance as f4gov
+        from agent_control_plane.registry_governed_lifecycle import GovernedLifecycle
+    
+        class Forgetful(f4gov.GovernedAgeWorkflow):
+            _gl_configuration_members = GovernedLifecycle._gl_configuration_members
+    
+        p = T.base.tenant_proposal()
+        res = T.base.tenant_resolver_for(p)
+>       with pytest.raises(f4gov.RegistrySelectionRefused) as e:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE RegistrySelectionRefused
+
+tests/test_effective_configuration_binding.py:405: Failed
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding.py::test_d08_a_governed_subclass_that_omits_the_hook_fails_closed
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 108 passed in 93.27s (0:01:33)

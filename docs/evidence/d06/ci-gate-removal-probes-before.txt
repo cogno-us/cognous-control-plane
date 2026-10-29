@@ -1,0 +1,4 @@
+DETECTED: delegation
+DETECTED: independence
+DETECTED: unknown-context
+removal probes exit 0

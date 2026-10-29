@@ -362,12 +362,60 @@ def test_d06_an_invalid_cutoff_refuses_the_construction(tmp_path, cutoff):
     assert e.value.refusal.code == "legacy_cutoff_invalid" and e.value.boundary == "construction"
 
 
-def test_d07_a_cutoff_beyond_the_store_does_not_accept_a_later_unbound_decision(tmp_path):
-    p, res, cfg, srcs, flow, d = S.authorized(tmp_path)
+def test_d07_a_cutoff_beyond_the_store_refuses_the_construction(tmp_path):
+    """Fail closed (review F2): the decision list only grows, so a cutoff above today's count could later cover post-activation appends. It is refused at construction."""
+    p, res, cfg, srcs, flow, d = S.authorized(tmp_path)  # the store holds ONE decision
     S.rewrite_member(tmp_path, d.decision_id, lambda b: b["runtime_authority"].pop(ecb.KEY))
-    huge = S.mk(tmp_path, res, cfg, T.families(None, srcs["a"], srcs["u"]), legacy_cutoff=2 ** 31 - 1)
-    assert huge.configuration_binding_status(huge.records.decision(d.decision_id)) == ecb.UNBOUND_AFTER_CUTOFF
-    assert_binding_refusal(huge, p, d, status=ecb.UNBOUND_AFTER_CUTOFF)
+    for cutoff in (2, 5, 2 ** 31 - 1):
+        with pytest.raises(RegistryGovernedPolicyRefused) as e:
+            S.mk(tmp_path, res, cfg, T.families(None, srcs["a"], srcs["u"]), legacy_cutoff=cutoff)
+        assert e.value.refusal.code == "legacy_cutoff_invalid" and e.value.boundary == "construction"
+    equal = S.mk(tmp_path, res, cfg, T.families(None, srcs["a"], srcs["u"]), legacy_cutoff=1)  # the count itself is allowed
+    assert equal.configuration_binding_status(equal.records.decision(d.decision_id)) == ecb.LEGACY
+
+
+def test_d07b_the_reviewer_scenario_an_oversize_cutoff_cannot_come_back_to_life_when_the_store_grows(tmp_path):
+    """Probe 11 of the independent review: 3 decisions, index 1 stripped, cutoff 5. Before the fix the cutoff was accepted, the record was unbound-after-cutoff at count 3 and
+    'legacy' (executable) once two more decisions made the count 5. Now the construction is refused, and the in-process defence in depth (classify) still holds."""
+    p, res, cfg, srcs, flow, d0 = S.authorized(tmp_path)
+    d1, d2 = flow.decide(p, now=NOW), flow.decide(p, now=NOW)
+    S.rewrite_member(tmp_path, d1.decision_id, lambda b: b["runtime_authority"].pop(ecb.KEY))
+    with pytest.raises(RegistryGovernedPolicyRefused) as e:
+        S.mk(tmp_path, res, cfg, T.families(None, srcs["a"], srcs["u"]), legacy_cutoff=5)
+    assert e.value.refusal.code == "legacy_cutoff_invalid" and e.value.boundary == "construction"
+    ok = S.mk(tmp_path, res, cfg, T.families(None, srcs["a"], srcs["u"]), legacy_cutoff=0)
+    T.bind_approval(res, ok.runtime_authority_profile)
+    for _ in range(2):
+        ok.decide(p, now=NOW)
+    assert len(ok.records.load().decisions) == 5
+    assert ok.configuration_binding_status(ok.records.decision(d1.decision_id)) == ecb.UNBOUND_AFTER_CUTOFF
+    assert ecb.classify(None, ecb.mint(ok._gl_configuration_members()), index=1, cutoff=5, decision_count=3) == ecb.UNBOUND_AFTER_CUTOFF  # defence in depth at the pure rule
+
+
+def test_d08_a_governed_subclass_that_omits_the_hook_fails_closed(tmp_path):
+    """Review F4: the base hook has no 'do not bind' answer. A subclass that forgets it cannot be constructed (and would refuse any decision)."""
+    from agent_control_plane import registry_f4_age_governance as f4gov
+    from agent_control_plane.registry_governed_lifecycle import GovernedLifecycle
+
+    class Forgetful(f4gov.GovernedAgeWorkflow):
+        _gl_configuration_members = GovernedLifecycle._gl_configuration_members
+
+    p = T.base.tenant_proposal()
+    res = T.base.tenant_resolver_for(p)
+    with pytest.raises(f4gov.RegistrySelectionRefused) as e:
+        Forgetful(scope=T.SCOPE_F, selection_source=T.fsrc(), verifier=S.ev.Ed25519Verifier(), construction_time=S.REG_NOW, **T.kwargs(tmp_path, res))
+    assert e.value.refusal.code == "configuration_binding_invalid" and e.value.boundary == "construction"
+    with pytest.raises(ecb.BindingInvalid):
+        GovernedLifecycle._gl_configuration_members(object())
+
+
+def test_d09_status_of_a_malformed_LIVE_configuration_raises_instead_of_classifying(tmp_path):
+    """Documented behaviour (review F6b): the read-only classifier raises `BindingInvalid` when the LIVE configuration cannot be bound; `_resolve` turns that into the
+    adapter refusal `configuration_binding_invalid` (not a durable reason code) before any state write."""
+    p, res, cfg, srcs, flow, d = S.authorized(tmp_path)
+    flow.identity_max_age_seconds = True
+    with pytest.raises(ecb.BindingInvalid):
+        flow.configuration_binding_status(d)
 
 
 # =========================================================================================================== construction validation and held state
@@ -558,31 +606,29 @@ def test_h04_the_same_configuration_gives_the_same_binding_digest_across_constru
     assert other.effective_configuration_binding == flow.effective_configuration_binding  # `evaluated_at` is not a member
 
 
-@pytest.mark.xfail(strict=True, reason="SUPERSEDED by the coordinator's follow-up authorization (OCS-REG-FINAL3, gap 1: 'no unbound configuration in newly governed decisions'). "
-                   "The dedicated single-family workflows now mint and check the same binding; see test_h05b below and tests/test_effective_configuration_binding_dedicated.py. "
-                   "The original assertion text is kept unchanged so the supersession is visible; strict xfail fails if it ever passes again.")
 def test_h05_the_dedicated_single_family_workflows_do_not_bind_and_are_unchanged(tmp_path):
-    """Documented scope limit: the three dedicated family workflows (F4, class age, class unreadable) keep no configuration hook in this change (their modules are outside the
-    authorized file set); the composed `GovernedPolicyWorkflow` is the governed lifecycle that binds. They mint nothing, so their records are byte-identical to before."""
+    """SUCCESSOR FORM, converted in place (coordinator authorization OCS-REG-FINAL3 gap 1: 'no unbound configuration in newly governed decisions').
+
+    SUPERSESSION RECORD. The first D-06 round documented a scope limit; the ORIGINAL assertions, quoted verbatim as text (they passed at head 7bfe842 / a3c7ec6 on top of
+    b7eb11a; the original passing output is docs/evidence/d06/final-v7pin.log):
+
+        p = T.base.tenant_proposal()
+        res = T.base.tenant_resolver_for(p)
+        wf = f4gov.GovernedAgeWorkflow(scope=T.SCOPE_F, selection_source=T.fsrc(), verifier=S.ev.Ed25519Verifier(), construction_time=S.REG_NOW, **T.kwargs(tmp_path, res))
+        d = wf.decide(p, now=NOW)
+        assert d.result == "authorized" and d.binding.runtime_authority is None
+        assert wf.configuration_binding_status(d) is None
+        assert_executes(wf, p, d)
+
+    The dedicated workflows now mint and check the same binding, so the same fixture yields a one-key `runtime_authority` and a `bound` classification. Same fixtures, the two
+    'is None' assertions inverted; ordinary passing test (no xfail/skip). The function name is kept so the supersession stays traceable."""
     p = T.base.tenant_proposal()
     res = T.base.tenant_resolver_for(p)
     from agent_control_plane import registry_f4_age_governance as f4gov
     wf = f4gov.GovernedAgeWorkflow(scope=T.SCOPE_F, selection_source=T.fsrc(), verifier=S.ev.Ed25519Verifier(), construction_time=S.REG_NOW, **T.kwargs(tmp_path, res))
     d = wf.decide(p, now=NOW)
-    assert d.result == "authorized" and d.binding.runtime_authority is None
-    assert wf.configuration_binding_status(d) is None
-    assert_executes(wf, p, d)
-
-
-def test_h05b_successor_the_dedicated_f4_workflow_now_binds(tmp_path):
-    """Successor of test_h05 (documented scope change): the dedicated F4 workflow carries `runtime_authority == {"effective_configuration": ...}` and is classified, not None."""
-    p = T.base.tenant_proposal()
-    res = T.base.tenant_resolver_for(p)
-    from agent_control_plane import registry_f4_age_governance as f4gov
-    wf = f4gov.GovernedAgeWorkflow(scope=T.SCOPE_F, selection_source=T.fsrc(), verifier=S.ev.Ed25519Verifier(), construction_time=S.REG_NOW, **T.kwargs(tmp_path, res))
-    d = wf.decide(p, now=NOW)
-    assert d.result == "authorized" and set(d.binding.runtime_authority) == {ecb.KEY}
-    assert wf.configuration_binding_status(d) == ecb.BOUND
+    assert d.result == "authorized" and set(d.binding.runtime_authority) == {ecb.KEY}  # was: `is None`
+    assert wf.configuration_binding_status(d) == ecb.BOUND  # was: `is None`
     assert_executes(wf, p, d)
 
 

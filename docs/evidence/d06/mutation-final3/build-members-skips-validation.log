@@ -1,0 +1,23 @@
+# build-members-skips-validation: build_members and mint do not validate
+# file: src/agent_control_plane/effective_configuration_binding.py
+# verdict: KILLED (exit 1)
+
+...............................................F
+=================================== FAILURES ===================================
+______________ test_build_members_refuses_every_wrong_typed_value ______________
+
+    def test_build_members_refuses_every_wrong_typed_value():
+        ok = dict(scope=members()["scope"], host_profile_digest=H("a"), effective_profile_digest=None, f4_scalars={"status_max_age_seconds": 1, "approval_max_age_seconds": 2},
+                  other_scalars={"clock_tolerance_seconds": 0, "identity_max_age_seconds": 3, "mandate_max_age_seconds": MAXV}, observation_policy=None, families=[])
+        assert ecb.build_members(**ok)["other_scalars"]["mandate_max_age_seconds"] == MAXV
+        for bad in (True, 1.0, "1", -1, MAXV + 1, None):
+            for group, key in (("f4_scalars", "status_max_age_seconds"), ("other_scalars", "identity_max_age_seconds")):
+>               with pytest.raises(ecb.BindingInvalid):
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               Failed: DID NOT RAISE BindingInvalid
+
+tests/test_effective_configuration_binding_unit.py:262: Failed
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding_unit.py::test_build_members_refuses_every_wrong_typed_value
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 47 passed in 2.17s

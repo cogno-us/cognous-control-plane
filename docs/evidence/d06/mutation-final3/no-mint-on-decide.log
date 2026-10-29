@@ -1,0 +1,31 @@
+# no-mint-on-decide: authorized decisions are not stamped with the member
+# file: src/agent_control_plane/registry_governed_lifecycle.py
+# verdict: KILLED (exit 1)
+
+......................................................F
+=================================== FAILURES ===================================
+_ test_a01_every_authorized_decision_carries_the_member_and_nothing_else_changes _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1596/test_a01_every_authorized_deci0')
+
+    def test_a01_every_authorized_decision_carries_the_member_and_nothing_else_changes(tmp_path):
+        p, res, cfg, srcs, flow, d = S.authorized(tmp_path)
+>       ra = member_of(flow, d)
+             ^^^^^^^^^^^^^^^^^^
+
+tests/test_effective_configuration_binding.py:68: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+flow = <agent_control_plane.registry_governed_policy.GovernedPolicyWorkflow object at 0x7f717a6f7230>
+d = RuntimeDecision(reason_vocabulary_version='runtime-authority-reasons/0.1', rule_identity=None, reopen_conditions=[], d...c0b107f215773957e569ee85e5ca1abb94c267cd', missing=False, previous_observed_at=None, read_state=None, age_basis=None)])
+
+    def member_of(flow, d):
+>       return stored(flow, d).binding.runtime_authority[ecb.KEY]
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'effective_configuration'
+
+tests/test_effective_configuration_binding.py:41: KeyError
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding.py::test_a01_every_authorized_decision_carries_the_member_and_nothing_else_changes
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 54 passed in 2.95s
