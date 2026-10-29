@@ -1,0 +1,42 @@
+[
+ {
+  "id": "CONTROL",
+  "status": "PASS",
+  "tail": "264 passed, 1 deselected in 47.18s"
+ },
+ {
+  "id": "anchor-skip-registry-record-check",
+  "status": "KILLED",
+  "desc": "the second strict parse of the Registry record is not compared",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_anchor.py::test_g01_the_derivation_re_checks_a_forged_registry_verdict[False-no_change-anchor-effective_policy_invalid]"
+ },
+ {
+  "id": "anchor-skip-widening-check",
+  "status": "KILLED",
+  "desc": "an effective value looser than the host is not refused in the derivation",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_anchor.py::test_g01_the_derivation_re_checks_a_forged_registry_verdict[True-anchor-no_change-effective_policy_widens_host]"
+ },
+ {
+  "id": "obs-age-floor-zero",
+  "status": "KILLED",
+  "desc": "max age 0 is admitted",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_observation.py::test_g08_the_derivation_re_reads_the_record_value_and_its_floor"
+ },
+ {
+  "id": "schema-revision-check-dropped",
+  "status": "KILLED",
+  "desc": "the family schema revision is not read from the Registry table",
+  "equivalent": "expected equivalent: the Registry digest preimage itself carries the revision; the local check is defence in depth",
+  "by": "FAILED tests/test_final3_anchor.py::test_g03_a_family_schema_revision_other_than_1_from_the_registry_table_is_refused"
+ },
+ {
+  "id": "verified-skips-operational-check",
+  "status": "KILLED",
+  "desc": "operationally_authorized is not checked",
+  "equivalent": null,
+  "by": "FAILED tests/test_final3_anchor.py::test_g02_a_registry_verdict_of_the_wrong_shape_is_refused[over0-registry_decision_invalid]"
+ }
+]

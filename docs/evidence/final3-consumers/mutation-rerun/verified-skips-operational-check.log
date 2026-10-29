@@ -1,0 +1,25 @@
+.................................................................F
+=================================== FAILURES ===================================
+_ test_g02_a_registry_verdict_of_the_wrong_shape_is_refused[over0-registry_decision_invalid] _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1750/test_g02_a_registry_verdict_of0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f4134c9a660>
+over = {'operationally_authorized': True}, code = 'registry_decision_invalid'
+
+    @pytest.mark.parametrize("over,code", [(dict(operationally_authorized=True), "registry_decision_invalid"), (dict(deny_all=True), "registry_decision_invalid"),
+                                           (dict(kind="overlay_not_applied", code="selection_revoked"), "registry_not_applied")])
+    def test_g02_a_registry_verdict_of_the_wrong_shape_is_refused(tmp_path, monkeypatch, over, code):
+        import registry_successor.v8_decision as v8d
+        p = base.tenant_proposal()
+        stub = _stub_decision({FIELDS[ANC]: "anchor"}, **over)
+        monkeypatch.setattr(v8d, "verify_and_decide_v8", lambda *a, **k: stub)
+        got, ref = f3.derive_anchor(scope=SCOPES[ANC], institution_id=base.INSTITUTION, authority_domain=base.DOMAIN, host=host_with_freshness(p), material=mat(ANC),
+                                    verifier=ev.Ed25519Verifier(), now=REG_NOW)
+>       assert got is None and ref.code == code
+E       AssertionError: assert (({'anchor_deadline_to_inputs': 'anchor'}, 'sha256:86bc19b385edf5556d1f070bfd57d1b3663a098e7ae12134e802da4ab693757b') is None)
+
+tests/test_final3_anchor.py:407: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_final3_anchor.py::test_g02_a_registry_verdict_of_the_wrong_shape_is_refused[over0-registry_decision_invalid]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 65 passed, 1 deselected in 17.75s

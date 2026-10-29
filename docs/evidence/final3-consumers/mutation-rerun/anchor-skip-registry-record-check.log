@@ -1,0 +1,33 @@
+...........................................................F
+=================================== FAILURES ===================================
+_ test_g01_the_derivation_re_checks_a_forged_registry_verdict[False-no_change-anchor-effective_policy_invalid] _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1748/test_g01_the_derivation_re_che0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7faa8e0ba660>
+host_flag = False, record_value = 'no_change', forged = 'anchor'
+code = 'effective_policy_invalid'
+
+    @pytest.mark.parametrize("host_flag,record_value,forged,code", [
+        (False, "no_change", "anchor", "effective_policy_invalid"),      # not the stricter of host and record (an unrequested strengthening is also refused)
+        (True, "anchor", "no_change", "effective_policy_widens_host"),   # lowers a host True
+        (True, "no_change", "no_change", "effective_policy_widens_host"),
+        (False, "anchor", "no_change", "effective_policy_invalid"),      # ignores the record
+        (False, "no_change", "bogus", "effective_policy_invalid"),
+        (False, "no_change", True, "effective_policy_invalid"),          # a JSON boolean is never a value of this family
+    ])
+    def test_g01_the_derivation_re_checks_a_forged_registry_verdict(tmp_path, monkeypatch, host_flag, record_value, forged, code):
+        import registry_successor.v8_decision as v8d
+        p = base.tenant_proposal()
+        host = host_with_freshness(p, flag=host_flag)
+        stub = _stub_decision({FIELDS[ANC]: forged})
+        monkeypatch.setattr(v8d, "verify_and_decide_v8", lambda *a, **k: stub)
+        got, ref = f3.derive_anchor(scope=SCOPES[ANC], institution_id=base.INSTITUTION, authority_domain=base.DOMAIN, host=host, material=mat(ANC, record_value),
+                                    verifier=ev.Ed25519Verifier(), now=REG_NOW)
+>       assert got is None and ref.code == code
+E       AssertionError: assert (({'anchor_deadline_to_inputs': 'anchor'}, 'sha256:86bc19b385edf5556d1f070bfd57d1b3663a098e7ae12134e802da4ab693757b') is None)
+
+tests/test_final3_anchor.py:395: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_final3_anchor.py::test_g01_the_derivation_re_checks_a_forged_registry_verdict[False-no_change-anchor-effective_policy_invalid]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 59 passed, 1 deselected in 18.99s
