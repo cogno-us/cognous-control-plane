@@ -1,0 +1,93 @@
+
+==================================== ERRORS ====================================
+_______________ ERROR collecting tests/test_f4_age_governance.py _______________
+Registry checkout is 'b73c59e6769acd5af7263397e81dfc6fa4561f38', expected the pin 6f600ab1150f00ef3d96834159b1807e866a78b6
+____________ ERROR collecting tests/test_f5_class_age_governance.py ____________
+Registry checkout is 'b73c59e6769acd5af7263397e81dfc6fa4561f38', expected the pin 6f600ab1150f00ef3d96834159b1807e866a78b6
+=============================== warnings summary ===============================
+tests/test_microsoft_agt.py:76
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_d07/tests/test_microsoft_agt.py:76: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_microsoft_agt.py:96
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_d07/tests/test_microsoft_agt.py:96: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_microsoft_agt.py:112
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_d07/tests/test_microsoft_agt.py:112: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_microsoft_agt.py:144
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_d07/tests/test_microsoft_agt.py:144: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_microsoft_agt.py:168
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_d07/tests/test_microsoft_agt.py:168: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_microsoft_agt.py:197
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_d07/tests/test_microsoft_agt.py:197: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_microsoft_agt.py:231
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_d07/tests/test_microsoft_agt.py:231: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_microsoft_agt.py:249
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_d07/tests/test_microsoft_agt.py:249: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_microsoft_agt.py:265
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_d07/tests/test_microsoft_agt.py:265: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_scan6_agt_exact.py:47
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_d07/tests/test_scan6_agt_exact.py:47: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_scan6_agt_exact.py:56
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_d07/tests/test_scan6_agt_exact.py:56: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_scan6_agt_exact.py:63
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_d07/tests/test_scan6_agt_exact.py:63: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_scan6_agt_exact.py:70
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_d07/tests/test_scan6_agt_exact.py:70: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_scan6_agt_exact.py:81
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_d07/tests/test_scan6_agt_exact.py:81: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_scan6_agt_exact.py:92
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_d07/tests/test_scan6_agt_exact.py:92: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_scan6_agt_exact.py:103
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_d07/tests/test_scan6_agt_exact.py:103: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_wave7_agt_binding_equality.py:22
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_d07/tests/test_wave7_agt_binding_equality.py:22: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_wave7_agt_binding_equality.py:31
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_d07/tests/test_wave7_agt_binding_equality.py:31: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_wave7_agt_binding_equality.py:43
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_d07/tests/test_wave7_agt_binding_equality.py:43: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_wave7_agt_binding_equality.py:54
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_d07/tests/test_wave7_agt_binding_equality.py:54: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+ERROR tests/test_f4_age_governance.py - Failed: Registry checkout is 'b73c59e...
+ERROR tests/test_f5_class_age_governance.py - Failed: Registry checkout is 'b...
+!!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!!
+1 skipped, 20 warnings, 2 errors in 4.04s
