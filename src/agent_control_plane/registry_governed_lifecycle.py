@@ -209,17 +209,17 @@ class GovernedLifecycle(BoundedAuthorizationWorkflow):
         reasons, binding = super()._resolve(proposal, now, inputs=inputs, stage=stage, decision=decision, check_ref=check_ref)
         if reasons or binding is None:
             return reasons, binding
+        target = decision if decision is not None else _EXEC_DECISION.get()
         try:
             members = self._gl_configuration_members()
             if members is None:
                 return reasons, binding
             live = ecb.mint(members)
-        except ecb.BindingInvalid:
+            if stage == "decision" and target is None:  # MINT: every authorized decision of this lifecycle carries the member
+                return reasons, self._gl_with_member(binding, live)
+            status = self.configuration_binding_status(target) if target is not None else ecb.UNBOUND_AFTER_CUTOFF
+        except ecb.BindingInvalid:  # never a fallback to the unbound path: the whole call refuses before any state write
             raise self._gl_refuse("configuration_binding_invalid", "decision" if stage == "decision" else "effect") from None
-        target = decision if decision is not None else _EXEC_DECISION.get()
-        if stage == "decision" and target is None:  # MINT: every authorized decision of this lifecycle carries the member
-            return reasons, self._gl_with_member(binding, live)
-        status = self.configuration_binding_status(target) if target is not None else ecb.UNBOUND_AFTER_CUTOFF
         self._gl_last_binding_status = status
         if status == ecb.LEGACY:  # previous semantics: ONLY the new key is left out of the live side; nothing else is ignored
             return reasons, binding

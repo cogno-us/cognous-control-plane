@@ -536,6 +536,17 @@ def test_h02_the_activation_ledger_configuration_digest_is_unchanged_by_the_shar
     assert only.registry_governed_policy_identity["configuration_digest"] == pins["f4_only_noprofile"]
 
 
+def test_h02b_the_ledger_digest_with_the_irreversibility_family_is_unchanged_too(tmp_path):
+    import tests.test_irreversibility_governance as I
+    pins = json.loads((T.Path(__file__).resolve().parents[1] / "docs/evidence/d06/ledger-digests-b7eb11a.json").read_text())
+    full = I.ready(tmp_path / "c", ir_={I.CLASS_T1: I.IRR}, f=True, a=True, u=True, host=I.rv.with_inventory)[4]
+    only = I.ready(tmp_path / "d", ir_={I.CLASS_T1: I.IRR}, host=I.rv.with_inventory)[4]
+    assert full.registry_governed_policy_identity["configuration_digest"] == pins["irreversible_f_a_u"]
+    assert only.registry_governed_policy_identity["configuration_digest"] == pins["irreversible_only"]
+    assert [r["slot"] for r in only.effective_configuration_binding["members"]["families"]] == ["class_irreversible"]
+    assert only.effective_configuration_binding["members"]["families"][0]["family_schema_revision"] == 1 and only.effective_configuration_binding["members"]["families"][0]["contract_version"] == "r08-v7"
+
+
 def test_h03_the_digests_of_the_binding_and_of_the_ledger_are_distinct_values_of_distinct_material(tmp_path):
     p, res, cfg, srcs, flow = S.ready(tmp_path)
     assert flow.effective_configuration_binding["digest"] != flow.registry_governed_policy_identity["configuration_digest"]
