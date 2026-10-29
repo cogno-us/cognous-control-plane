@@ -1,0 +1,58 @@
+# dedicated-age-hook-binds-nothing: the dedicated class-age workflow mints/checks no binding
+# file: src/agent_control_plane/registry_f5_class_age_governance.py
+# verdict: KILLED (exit 1)
+
+........................................................................ [ 18%]
+........................................................................ [ 36%]
+.....................................................F
+=================================== FAILURES ===================================
+_ test_d01_every_authorized_decision_of_a_dedicated_workflow_carries_the_member[dedicated_age] _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1638/test_d01_every_authorized_deci1')
+kind = 'dedicated_age'
+
+    @pytest.mark.parametrize("kind", KINDS)
+    def test_d01_every_authorized_decision_of_a_dedicated_workflow_carries_the_member(tmp_path, kind):
+>       p, res, cfg, store, flow, d = authorized(kind, tmp_path)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_effective_configuration_binding_dedicated.py:99: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_effective_configuration_binding_dedicated.py:79: in authorized
+    d = flow.decide(p, now=NOW)
+        ^^^^^^^^^^^^^^^^^^^^^^^
+src/agent_control_plane/registry_governed_lifecycle.py:328: in decide
+    return super().decide(proposal, now=now)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/agent_control_plane/bounded.py:1635: in decide
+    reasons, binding = self._resolve(frozen, now, inputs=inputs, **({"stage":"decision"} if self.runtime_authority_profile else {}),
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <agent_control_plane.registry_f5_class_age_governance.GovernedClassAgeWorkflow object at 0x7f67711d6e40>
+proposal = TenantRuntimeProposal(manifest_id='refund-integration-pilot-v1', manifest_version='1.1', manifest_digest='sha256:4d1ad...'run-1', expected_side_effects=[], evidence_refs=['urn:cognous:evidence:refund-entitlement'], tenant_id='tenant-alpha')
+now = datetime.datetime(2026, 10, 5, 19, 0, tzinfo=datetime.timezone.utc)
+inputs = [ResolutionInput(input_type='manifest', input_id='refund-integration-pilot-v1', expected={}, observed={}, record_commi...e18225ab73360165d0152b817ec77c49cafa', missing=False, previous_observed_at=None, read_state=None, age_basis=None), ...]
+stage = 'decision', decision = None, check_ref = None
+
+    def _resolve(self, proposal, now, *, inputs=None, stage="decision", decision=None, check_ref=None):
+        """The base resolution, then (only for an authorized result) the configuration binding. A hold or any refusal the base produced is returned unchanged: the binding can
+        add a refusal through the existing `current != persisted.binding` comparison, never remove one and never turn a hold into an authorization."""
+        reasons, binding = super()._resolve(proposal, now, inputs=inputs, stage=stage, decision=decision, check_ref=check_ref)
+        if reasons or binding is None:
+            return reasons, binding
+        target = decision if decision is not None else _EXEC_DECISION.get()
+        try:
+            members = self._gl_configuration_members()
+            live = ecb.mint(members)
+            if stage == "decision" and target is None:  # MINT: every authorized decision of this lifecycle carries the member
+                return reasons, self._gl_with_member(binding, live)
+            status = self.configuration_binding_status(target) if target is not None else ecb.UNBOUND_AFTER_CUTOFF
+        except ecb.BindingInvalid:  # never a fallback to the unbound path: the whole call refuses before any state write
+>           raise self._gl_refuse("configuration_binding_invalid", "decision" if stage == "decision" else "effect") from None
+E           agent_control_plane.registry_f5_class_age_governance.RegistryClassAgeRefused: registry_f5_selection_refused:decision:configuration_binding_invalid
+
+src/agent_control_plane/registry_governed_lifecycle.py:277: RegistryClassAgeRefused
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding_dedicated.py::test_d01_every_authorized_decision_of_a_dedicated_workflow_carries_the_member[dedicated_age]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 197 passed in 131.02s (0:02:11)

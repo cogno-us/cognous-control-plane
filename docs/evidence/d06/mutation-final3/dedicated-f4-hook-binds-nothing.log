@@ -1,0 +1,72 @@
+# dedicated-f4-hook-binds-nothing: the dedicated F4 workflow mints/checks no binding
+# file: src/agent_control_plane/registry_f4_age_governance.py
+# verdict: KILLED (exit 1)
+
+........................................................................ [ 18%]
+........................................................................ [ 36%]
+.......................F
+=================================== FAILURES ===================================
+_ test_h05_the_dedicated_single_family_workflows_do_not_bind_and_are_unchanged _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1637/test_h05_the_dedicated_single_0')
+
+    def test_h05_the_dedicated_single_family_workflows_do_not_bind_and_are_unchanged(tmp_path):
+        """SUCCESSOR FORM, converted in place (coordinator authorization OCS-REG-FINAL3 gap 1: 'no unbound configuration in newly governed decisions').
+    
+        SUPERSESSION RECORD. The first D-06 round documented a scope limit; the ORIGINAL assertions, quoted verbatim as text (they passed at head 7bfe842 / a3c7ec6 on top of
+        b7eb11a; the original passing output is docs/evidence/d06/final-v7pin.log):
+    
+            p = T.base.tenant_proposal()
+            res = T.base.tenant_resolver_for(p)
+            wf = f4gov.GovernedAgeWorkflow(scope=T.SCOPE_F, selection_source=T.fsrc(), verifier=S.ev.Ed25519Verifier(), construction_time=S.REG_NOW, **T.kwargs(tmp_path, res))
+            d = wf.decide(p, now=NOW)
+            assert d.result == "authorized" and d.binding.runtime_authority is None
+            assert wf.configuration_binding_status(d) is None
+            assert_executes(wf, p, d)
+    
+        The dedicated workflows now mint and check the same binding, so the same fixture yields a one-key `runtime_authority` and a `bound` classification. Same fixtures, the two
+        'is None' assertions inverted; ordinary passing test (no xfail/skip). The function name is kept so the supersession stays traceable."""
+        p = T.base.tenant_proposal()
+        res = T.base.tenant_resolver_for(p)
+        from agent_control_plane import registry_f4_age_governance as f4gov
+        wf = f4gov.GovernedAgeWorkflow(scope=T.SCOPE_F, selection_source=T.fsrc(), verifier=S.ev.Ed25519Verifier(), construction_time=S.REG_NOW, **T.kwargs(tmp_path, res))
+>       d = wf.decide(p, now=NOW)
+            ^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_effective_configuration_binding.py:629: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/agent_control_plane/registry_governed_lifecycle.py:328: in decide
+    return super().decide(proposal, now=now)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/agent_control_plane/bounded.py:1635: in decide
+    reasons, binding = self._resolve(frozen, now, inputs=inputs, **({"stage":"decision"} if self.runtime_authority_profile else {}),
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <agent_control_plane.registry_f4_age_governance.GovernedAgeWorkflow object at 0x7f51ad792e40>
+proposal = TenantRuntimeProposal(manifest_id='refund-integration-pilot-v1', manifest_version='1.1', manifest_digest='sha256:4d1ad...'run-1', expected_side_effects=[], evidence_refs=['urn:cognous:evidence:refund-entitlement'], tenant_id='tenant-alpha')
+now = datetime.datetime(2026, 10, 5, 19, 0, tzinfo=datetime.timezone.utc)
+inputs = [ResolutionInput(input_type='manifest', input_id='refund-integration-pilot-v1', expected={}, observed={}, record_commi...e18225ab73360165d0152b817ec77c49cafa', missing=False, previous_observed_at=None, read_state=None, age_basis=None), ...]
+stage = 'decision', decision = None, check_ref = None
+
+    def _resolve(self, proposal, now, *, inputs=None, stage="decision", decision=None, check_ref=None):
+        """The base resolution, then (only for an authorized result) the configuration binding. A hold or any refusal the base produced is returned unchanged: the binding can
+        add a refusal through the existing `current != persisted.binding` comparison, never remove one and never turn a hold into an authorization."""
+        reasons, binding = super()._resolve(proposal, now, inputs=inputs, stage=stage, decision=decision, check_ref=check_ref)
+        if reasons or binding is None:
+            return reasons, binding
+        target = decision if decision is not None else _EXEC_DECISION.get()
+        try:
+            members = self._gl_configuration_members()
+            live = ecb.mint(members)
+            if stage == "decision" and target is None:  # MINT: every authorized decision of this lifecycle carries the member
+                return reasons, self._gl_with_member(binding, live)
+            status = self.configuration_binding_status(target) if target is not None else ecb.UNBOUND_AFTER_CUTOFF
+        except ecb.BindingInvalid:  # never a fallback to the unbound path: the whole call refuses before any state write
+>           raise self._gl_refuse("configuration_binding_invalid", "decision" if stage == "decision" else "effect") from None
+E           agent_control_plane.registry_governed_lifecycle.RegistrySelectionRefused: registry_f4_selection_refused:decision:configuration_binding_invalid
+
+src/agent_control_plane/registry_governed_lifecycle.py:277: RegistrySelectionRefused
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding.py::test_h05_the_dedicated_single_family_workflows_do_not_bind_and_are_unchanged
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 167 passed in 95.25s (0:01:35)
