@@ -37,7 +37,8 @@ PROTECTED_BLOBS = {  # git blob ids at the base fff27ebf356007e1eb3bb24198efc7e3
     "src/agent_control_plane/bounded.py": "2cc8d998ff0a8fec3112a8b0634111fcf8fbef17",
     "src/agent_control_plane/policy_binding.py": "426d47797e92f19690a21b4e8b5dc1c35d1b579c",
     # D-07 Option A (Architect-authorized 2026-10-29): the ONLY protected-file change; previous git blob 0b2c5e49c0cd3e0738e5c4c9e9d4fc8590563fa2.
-    "src/agent_control_plane/runtime_authority.py": "f9bca4031858c25d6d57b2d0033483876f7a0f1b",
+    # Chain: 0b2c5e49... -> D-07 head fb24ed0 blob f9bca4031858c25d6d57b2d0033483876f7a0f1b -> this blob (comment-only prose correction; code tokens identical).
+    "src/agent_control_plane/runtime_authority.py": "03b4efdfd67c2e384c00ac7342ef3bbf18160811",
 }
 CLASSES = {"LocalExecutionClaim": LocalExecutionClaim, "TenantLocalExecutionClaim": TenantLocalExecutionClaim}
 

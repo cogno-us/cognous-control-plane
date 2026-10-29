@@ -267,14 +267,15 @@ HASHES = {  # bytes of the protected evaluators; ONLY runtime_authority.py diffe
     "holder_inventory.py": "76f5aaa63f49bac182439ea3768798bf42ecbda2c586f20fd450a7053271f7ba",
 }
 PREDECESSOR_RUNTIME_AUTHORITY = "a4b4ac36cca6e75d8fc3408b8738163acfb609a7265633aec2f799700ff9ea66"
-CORRECTED_RUNTIME_AUTHORITY = "ad7b95e5d3bc3ddcba110a6758cf63e7f22b537766d3d072cbc7af17385bce01"
+FB24ED0_RUNTIME_AUTHORITY = "ad7b95e5d3bc3ddcba110a6758cf63e7f22b537766d3d072cbc7af17385bce01"  # D-07 head fb24ed0 (code identical to the corrected file; only a comment differs)
+CORRECTED_RUNTIME_AUTHORITY = "45a27db8695ff9d23516e1937f3bafa2391bbc1587ed0fb09f56ea8f3e01d23f"
 
 
 def test_d07_only_runtime_authority_changed_among_the_protected_evaluators():
     for name, expected in HASHES.items():
         assert hashlib.sha256((SRC / name).read_bytes()).hexdigest() == expected, f"{name} must stay byte-identical to the predecessor"
     now = hashlib.sha256((SRC / "runtime_authority.py").read_bytes()).hexdigest()
-    assert now == CORRECTED_RUNTIME_AUTHORITY != PREDECESSOR_RUNTIME_AUTHORITY
+    assert now == CORRECTED_RUNTIME_AUTHORITY != FB24ED0_RUNTIME_AUTHORITY != PREDECESSOR_RUNTIME_AUTHORITY
 
 
 def test_d07_the_deadline_registration_is_no_longer_guarded_by_the_policy_binding():
