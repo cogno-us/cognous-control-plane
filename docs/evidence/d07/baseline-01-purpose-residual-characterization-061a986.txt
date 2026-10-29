@@ -1,0 +1,18 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.17, pytest-9.1.1, pluggy-1.7.0 -- /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/venv-g1-212/bin/python
+rootdir: /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_d07
+configfile: pyproject.toml
+collecting ... collected 10 items
+
+tests/test_freshness_purpose_residual.py::test_residual_purpose_observation_age_at_dispatch_is_twice_the_narrowed_ceiling_when_anchored_without_a_binding PASSED [ 10%]
+tests/test_freshness_purpose_residual.py::test_residual_purpose_observation_is_dispatched_up_to_the_end_of_the_unanchored_window PASSED [ 20%]
+tests/test_freshness_purpose_residual.py::test_residual_window_is_closed_only_by_the_class_deadline_not_by_the_purpose_age PASSED [ 30%]
+tests/test_freshness_purpose_residual.py::test_residual_cached_purpose_snapshot_age_at_dispatch_is_twice_the_narrowed_ceiling_when_anchored_without_a_binding PASSED [ 40%]
+tests/test_freshness_purpose_residual.py::test_contrast_with_a_policy_binding_the_live_purpose_observation_is_anchored_and_the_same_stall_is_refused PASSED [ 50%]
+tests/test_freshness_purpose_residual.py::test_contrast_with_a_policy_binding_the_cached_purpose_snapshot_is_anchored_and_the_same_stall_is_refused PASSED [ 60%]
+tests/test_freshness_purpose_residual.py::test_control_grant_status_is_anchored_with_the_flag_and_no_binding PASSED [ 70%]
+tests/test_freshness_purpose_residual.py::test_control_identity_and_mandate_are_anchored_with_the_flag_and_no_binding[identity_max_age_seconds-identities-None] PASSED [ 80%]
+tests/test_freshness_purpose_residual.py::test_control_identity_and_mandate_are_anchored_with_the_flag_and_no_binding[mandate_max_age_seconds-mandates-None] PASSED [ 90%]
+tests/test_freshness_purpose_residual.py::test_control_without_the_flag_grant_status_has_the_documented_two_times_window PASSED [100%]
+
+============================== 10 passed in 4.33s ==============================
