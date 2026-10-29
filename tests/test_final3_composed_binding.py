@@ -348,3 +348,25 @@ def test_f04_the_new_module_adds_no_workflow_class_no_evaluator_import_and_no_ne
     code = ast.unparse(tree)
     assert "eval(" not in code and "exec(" not in code and "approval_commitment" not in code
     assert "authorization_binding_changed" not in code and "observation_stale" not in code  # the module introduces and emits no durable reason code
+
+
+def test_g01_a_host_change_masked_by_the_registry_value_still_changes_the_activation_ledger_identity(tmp_path):
+    """The activation ledger identity covers the HOST observation values (unlike the persisted binding, which carries the effective ones): a differently configured second workflow
+    for the same scope is refused even when both enforce the same effective policy."""
+    a = stage(tmp_path / "a", BASE)[4]
+    b = stage(tmp_path / "b", dict(BASE, host=[299, 5]))[4]
+    assert a.registry_governed_policy_identity["configuration_digest"] != b.registry_governed_policy_identity["configuration_digest"]
+    assert a.effective_configuration_binding["digest"] == b.effective_configuration_binding["digest"]
+    ledger = pol.GovernedActivationLedger()
+    p, res, cfg = base.prepared(tmp_path / "l", t1=R_, freshness=FreshnessProfile())
+    build(tmp_path / "l", res, cfg, fams(anc=Source(mat(ANC)), age=Source(mat(AGE, 60))), activation_ledger=ledger)
+    with pytest.raises(RegistryGovernedPolicyRefused) as e:
+        build(tmp_path / "l2", res, cfg, fams(anc=Source(mat(ANC)), age=Source(mat(AGE, 60))), obs=op(299, 5), activation_ledger=ledger)
+    refused(e, "conflicting_governed_configuration", "construction")
+
+
+def test_g02_the_configuration_digest_is_a_function_of_the_anchor_state_and_of_every_declared_family(tmp_path):
+    ids = {}
+    for name, conf, flag in (("base", BASE, False), ("flag", BASE, True), ("no_anc", {"age": 60, "tol": 2}, False), ("no_tol", {"anc": "anchor", "age": 60}, False)):
+        ids[name] = stage(tmp_path / name, conf, flag)[4].registry_governed_policy_identity["configuration_digest"]
+    assert len(set(ids.values())) == 4

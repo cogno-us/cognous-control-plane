@@ -469,3 +469,28 @@ def test_g05_host_observation_values_and_unknown_family_units():
     got, ref = f3.derive_observation(family=AGE, scope=SCOPES[AGE], institution_id="i", authority_domain="d", host_value=True, material=None, verifier=None, now=REG_NOW)
     assert got is None and ref.code == "host_observation_policy_invalid"
     assert f3.effective_observation_values({"max_age_seconds": 300, "clock_tolerance_seconds": 5}, {}) == {"max_age_seconds": 300, "clock_tolerance_seconds": 5}
+
+
+def test_g06_a_verifier_that_is_not_the_admitted_ed25519_verifier_wrong_material_types_and_an_unavailable_registry_are_refused(tmp_path, monkeypatch):
+    kw = dict(family=AGE, scope=SCOPES[AGE], institution_id=base.INSTITUTION, authority_domain=base.DOMAIN, host_value=300, now=REG_NOW)
+    got, ref = f3.derive_observation(material=mat(AGE, 60), verifier=object(), **kw)
+    assert got is None and ref.code == "verifier_not_admitted"
+    for bad in (None, "text", base.SelectionMaterial(5, "x", None), base.SelectionMaterial("x", b"y", None)):
+        got, ref = f3.derive_observation(material=bad, verifier=ev.Ed25519Verifier(), **kw)
+        assert got is None and ref.code == "material_invalid"
+    import importlib as _il
+    real = _il.import_module
+    monkeypatch.setattr(f3.importlib, "import_module", lambda name, *a, **k: (_ for _ in ()).throw(ImportError(name)) if name.startswith("registry_successor") else real(name, *a, **k))
+    got, ref = f3.derive_observation(material=mat(AGE, 60), verifier=ev.Ed25519Verifier(), **kw)
+    assert got is None and ref.code == "registry_unavailable"
+
+
+def test_g07_a_registry_call_that_raises_is_a_refusal(tmp_path, monkeypatch):
+    import registry_successor.v8_decision as v8d
+
+    def boom(*a, **k):
+        raise RuntimeError("boom")
+    monkeypatch.setattr(v8d, "verify_and_decide_v8", boom)
+    got, ref = f3.derive_observation(family=TOL, scope=SCOPES[TOL], institution_id=base.INSTITUTION, authority_domain=base.DOMAIN, host_value=5, material=mat(TOL, 1),
+                                     verifier=ev.Ed25519Verifier(), now=REG_NOW)
+    assert got is None and ref.code == "registry_call_failed"
