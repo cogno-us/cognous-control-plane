@@ -1,0 +1,27 @@
+........................................................................ [ 27%]
+........................................................................ [ 54%]
+...................................................................F
+=================================== FAILURES ===================================
+_______ test_g08_the_derivation_re_reads_the_record_value_and_its_floor ________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1746/test_g08_the_derivation_re_rea0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f3486eba040>
+
+    def test_g08_the_derivation_re_reads_the_record_value_and_its_floor(tmp_path, monkeypatch):
+        """A forged Registry verdict of 0 (max age) over a record that also says 0 is refused by the consumer's own floor (max age >= 1), whatever the verdict says."""
+        import registry_successor.v8_decision as v8d
+        stub = _decision_stub({FIELDS[AGE]: 0})
+        monkeypatch.setattr(v8d, "verify_and_decide_v8", lambda *a, **k: stub)
+        got, ref = f3.derive_observation(family=AGE, scope=SCOPES[AGE], institution_id=base.INSTITUTION, authority_domain=base.DOMAIN, host_value=300,
+                                         material=mat(AGE, record=t8.record({FIELDS[AGE]: 0}, family=AGE)), verifier=ev.Ed25519Verifier(), now=REG_NOW)
+>       assert got is None and ref.code == "effective_policy_invalid"
+E       AssertionError: assert (None is None and 'effective_po...t_unavailable' == 'effective_policy_invalid'
+E         
+E         - effective_policy_invalid
+E         + effective_policy_digest_unavailable)
+
+tests/test_final3_observation.py:506: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_final3_observation.py::test_g08_the_derivation_re_reads_the_record_value_and_its_floor
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 211 passed, 1 deselected in 33.58s

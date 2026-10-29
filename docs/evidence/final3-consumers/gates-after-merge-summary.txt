@@ -1,0 +1,7 @@
+f4: 73 run, 0 skipped, 0 failed
+f5age: 111 run, 0 skipped, 0 failed
+unreadable: 148 run, 0 skipped, 0 failed
+composed: 99 run, 0 skipped, 0 failed
+revocation: 388 run, 0 skipped, 0 failed
+irreversibility: 576 run, 0 skipped, 0 failed
+final3: 841 run, 0 skipped, 0 failed

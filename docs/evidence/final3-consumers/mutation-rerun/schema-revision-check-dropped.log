@@ -1,0 +1,20 @@
+....................................................................F
+=================================== FAILURES ===================================
+_ test_g03_a_family_schema_revision_other_than_1_from_the_registry_table_is_refused _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1749/test_g03_a_family_schema_revis0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7ff3e5b26200>
+
+    def test_g03_a_family_schema_revision_other_than_1_from_the_registry_table_is_refused(tmp_path, monkeypatch):
+        monkeypatch.setattr(v8id, "registered_family_version", lambda family, contract: 2)
+        p = base.tenant_proposal()
+        got, ref = f3.derive_anchor(scope=SCOPES[ANC], institution_id=base.INSTITUTION, authority_domain=base.DOMAIN, host=host_with_freshness(p), material=mat(ANC),
+                                    verifier=ev.Ed25519Verifier(), now=REG_NOW)
+>       assert got is None and ref.code == "effective_policy_digest_unavailable"
+E       AssertionError: assert (({'anchor_deadline_to_inputs': 'anchor'}, 'sha256:86bc19b385edf5556d1f070bfd57d1b3663a098e7ae12134e802da4ab693757b') is None)
+
+tests/test_final3_anchor.py:415: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_final3_anchor.py::test_g03_a_family_schema_revision_other_than_1_from_the_registry_table_is_refused
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 68 passed, 1 deselected in 17.87s

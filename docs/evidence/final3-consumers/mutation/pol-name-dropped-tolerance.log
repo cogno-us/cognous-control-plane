@@ -1,0 +1,113 @@
+...........................................................F
+=================================== FAILURES ===================================
+____ test_a01_registry_stricter_than_host_narrows_each_field_independently _____
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1721/test_a01_registry_stricter_tha0')
+
+    def test_a01_registry_stricter_than_host_narrows_each_field_independently(tmp_path):
+>       p, res, flow = flow_for(tmp_path, age=mat(AGE, 60), tol=mat(TOL, 2))
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_final3_observation.py:54: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_final3_observation.py:42: in flow_for
+    flow = build(tmp_path, res, None, fams(age=Source(age) if age is not None else None, tol=Source(tol) if tol is not None else None), obs=host if host is not None else op(),
+tests/final3_support.py:84: in build
+    return GovernedPolicyWorkflow(families=families, verifier=ev.Ed25519Verifier(), runtime_authority_profile=cfg, construction_time=REG_NOW, **k)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/agent_control_plane/registry_governed_policy.py:380: in __init__
+    derived, refusal = derive_policy(families=families, host=host, host_scalars=host_scalars, host_ages=host_ages, host_values=host_values, materials=materials,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+families = GovernedFamilies(f4_ages=None, class_age=None, class_unreadable=None, class_revocation_assurance=None, terminal_revoca...='refund-issue-obstol'), selection_source=<tests.test_f5_class_unreadable_governance.Source object at 0x7f090987cec0>))
+host = None
+host_scalars = {'status_max_age_seconds': 60, 'approval_max_age_seconds': 60}
+host_ages = None, host_values = None
+materials = {'observation_max_age': SelectionMaterial(record_text='{"contract_version": "r08-v8", "evaluator": {"binding": "regist...', operation='refund-issue-obsage'),)),), revoked_key_ids=frozenset(), revoked_selections=frozenset(), min_epochs=()))}
+verifier = <registry_adapters.ed25519_verifier.Ed25519Verifier object at 0x7f090b917830>
+institution_id = 'urn:cognous:institution:synthetic-customer-service'
+authority_domain = 'customer-refunds'
+now = datetime.datetime(2026, 10, 5, 19, 0, tzinfo=datetime.timezone.utc)
+host_assurance = None, host_terminal = None, host_irreversible = None
+host_observation = {'max_age_seconds': 300, 'clock_tolerance_seconds': 5}
+
+    def derive_policy(*, families: GovernedFamilies, host: Optional[RuntimeAuthorityProfile], host_scalars: Mapping[str, int], host_ages: Optional[Mapping[str, int]],
+                      host_values: Optional[Mapping[str, str]], materials: Mapping[str, Any], verifier: Any, institution_id: str, authority_domain: str, now: datetime,
+                      host_assurance: Optional[Mapping[str, str]] = None, host_terminal: Optional[str] = None, host_irreversible: Optional[Mapping[str, str]] = None,
+                      host_observation: Optional[Mapping[str, int]] = None):
+        """Pure verification of EVERY declared family and composition of the one effective configuration. Returns `((profile or None, scalars or None, bound), None)` or `(None, Refusal)`.
+        Builds no workflow and writes nothing."""
+        scalars = age_part = unreadable = assurance = terminal = irreversible = anchor = obs_age = obs_tol = None
+        base = host
+        if families.f4_ages is not None:
+            values, digest, refusal = f4mod.verify_scope_selection(scope=families.f4_ages.scope, institution_id=institution_id, authority_domain=authority_domain,
+                                                                   caller_ages=host_scalars, material=materials["f4_ages"], verifier=verifier, now=now)
+            if refusal is not None:
+                return None, _prefixed("f4_ages", refusal)
+            scalars = (dict(values), digest)
+        if families.class_age is not None:
+            derived, refusal = agemod.derive_effective(scope=families.class_age.scope, institution_id=institution_id, authority_domain=authority_domain, host=host,
+                                                       host_ages=host_ages, material=materials["class_age"], verifier=verifier, now=now)
+            if refusal is not None:
+                return None, _prefixed("class_age", refusal)
+            base, age_effective, age_digest, age_pdigest = derived
+            age_part = (dict(age_effective), age_digest, age_pdigest)
+        if families.class_unreadable is not None:
+            derived_u, refusal = unrmod.derive_unreadable(scope=families.class_unreadable.scope, institution_id=institution_id, authority_domain=authority_domain, host=host,
+                                                          host_values=host_values, material=materials["class_unreadable"], verifier=verifier, now=now)
+            if refusal is not None:
+                return None, _prefixed("class_unreadable", refusal)
+            effective, digest = derived_u
+            try:
+                base = unrmod.compose_unreadable(base, effective)
+            except Exception:
+                return None, Refusal("effective_profile_invalid")
+            unreadable = (dict(effective), digest)
+        if families.class_revocation_assurance is not None:
+            derived_a, refusal = revmod.derive_assurance(scope=families.class_revocation_assurance.scope, institution_id=institution_id, authority_domain=authority_domain, host=host,
+                                                         host_values=host_assurance, material=materials["class_revocation_assurance"], verifier=verifier, now=now)
+            if refusal is not None:
+                return None, _prefixed("class_revocation_assurance", refusal)
+            effective, digest = derived_a
+            try:
+                base = revmod.compose_assurance(base, effective)
+            except Exception:
+                return None, Refusal("effective_profile_invalid")
+            assurance = (dict(effective), digest)
+        if families.class_irreversible is not None:
+            derived_i, refusal = irmod.derive_irreversible(scope=families.class_irreversible.scope, institution_id=institution_id, authority_domain=authority_domain, host=host,
+                                                           host_values=host_irreversible, material=materials["class_irreversible"], verifier=verifier, now=now)
+            if refusal is not None:
+                return None, _prefixed("class_irreversible", refusal)
+            effective, digest = derived_i
+            try:
+                base = irmod.compose_irreversible(base, effective)
+            except Exception:
+                return None, Refusal("effective_profile_invalid")
+            irreversible = (dict(effective), digest)
+        if families.anchor_deadline is not None:
+            derived_n, refusal = f3mod.derive_anchor(scope=families.anchor_deadline.scope, institution_id=institution_id, authority_domain=authority_domain, host=host,
+                                                     material=materials["anchor_deadline"], verifier=verifier, now=now)
+            if refusal is not None:
+                return None, _prefixed("anchor_deadline", refusal)
+            try:
+                base = f3mod.compose_anchor(base, derived_n[0])
+            except Exception:
+                return None, Refusal("effective_profile_invalid")
+            anchor = (dict(derived_n[0]), derived_n[1])
+        for slot, family, attr in (("observation_max_age", f3mod.FAMILY_OBS_AGE, "max_age_seconds"), ("observation_clock_tolerance", f3mod.FAMILY_OBS_TOL, "clock_tolerance_seconds")):
+            fam = getattr(families, slot)
+            if fam is None:
+                continue
+            if host_observation is None or attr not in host_observation:
+                return None, _prefixed(slot, Refusal(f3mod.HOST_OBS_MISSING))
+            derived_o, refusal = f3mod.derive_observation(family=family, scope=fam.scope, institution_id=institution_id, authority_domain=authority_domain,
+>                                                         host_value=host_observation[attr], material=materials[slot], verifier=verifier, now=now)
+                                                                                                      ^^^^^^^^^^^^^^^
+E           KeyError: 'observation_clock_tolerance'
+
+src/agent_control_plane/registry_governed_policy.py:258: KeyError
+=========================== short test summary info ============================
+FAILED tests/test_final3_observation.py::test_a01_registry_stricter_than_host_narrows_each_field_independently
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 59 passed, 1 deselected in 36.43s

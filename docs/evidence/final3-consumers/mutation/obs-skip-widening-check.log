@@ -1,0 +1,30 @@
+........................................................................ [ 28%]
+........................................................................ [ 57%]
+...........................................F
+=================================== FAILURES ===================================
+_ test_g03_the_derivation_re_checks_a_forged_registry_decision[effective0-effective_policy_widens_host] _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1680/test_g03_the_derivation_re_che0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f57bf3ec590>
+effective = {'observation_max_age_seconds': 301}
+code = 'effective_policy_widens_host'
+
+    @pytest.mark.parametrize("effective,code", [({FIELDS[AGE]: 301}, "effective_policy_widens_host"), ({FIELDS[AGE]: 0}, "effective_policy_invalid"), ({FIELDS[AGE]: True}, "effective_policy_invalid"),
+                                                ({FIELDS[AGE]: 60, "x": 1}, "effective_policy_invalid"), ({FIELDS[AGE]: 200}, "effective_policy_invalid"), ({}, "effective_policy_invalid")])
+    def test_g03_the_derivation_re_checks_a_forged_registry_decision(tmp_path, monkeypatch, effective, code):
+        stub = _decision_stub(effective)
+        import registry_successor.v8_decision as v8d
+        monkeypatch.setattr(v8d, "verify_and_decide_v8", lambda *a, **k: stub)
+        got, ref = f3.derive_observation(family=AGE, scope=SCOPES[AGE], institution_id=base.INSTITUTION, authority_domain=base.DOMAIN, host_value=300, material=mat(AGE, 60),
+                                         verifier=ev.Ed25519Verifier(), now=REG_NOW)
+>       assert got is None and ref.code == code
+E       AssertionError: assert (None is None and 'effective_policy_invalid' == 'effective_policy_widens_host'
+E         
+E         - effective_policy_widens_host
+E         + effective_policy_invalid)
+
+tests/test_final3_observation.py:447: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_final3_observation.py::test_g03_the_derivation_re_checks_a_forged_registry_decision[effective0-effective_policy_widens_host]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 187 passed, 1 deselected in 76.46s (0:01:16)

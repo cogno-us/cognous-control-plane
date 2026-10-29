@@ -1,0 +1,25 @@
+.................F
+=================================== FAILURES ===================================
+_ test_c04_a_forged_composer_that_lowers_or_changes_something_else_is_refused_at_construction _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1715/test_c04_a_forged_composer_tha0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f3a5a213390>
+
+    def test_c04_a_forged_composer_that_lowers_or_changes_something_else_is_refused_at_construction(tmp_path, monkeypatch):
+        p, res, cfg = base.prepared(tmp_path, t1=R_, freshness=FreshnessProfile(anchor_deadline_to_inputs=True))
+        real = f3.compose_anchor
+    
+        def lowers(base_, eff):
+            doc = base_.model_dump(mode="json")
+            doc["freshness"].pop("anchor_deadline_to_inputs", None)
+            return type(base_).model_validate(doc)
+        monkeypatch.setattr(f3, "compose_anchor", lowers)
+>       with pytest.raises(RegistryGovernedPolicyRefused) as e:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE RegistryGovernedPolicyRefused
+
+tests/test_final3_anchor.py:181: Failed
+=========================== short test summary info ============================
+FAILED tests/test_final3_anchor.py::test_c04_a_forged_composer_that_lowers_or_changes_something_else_is_refused_at_construction
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 17 passed, 1 deselected in 13.21s

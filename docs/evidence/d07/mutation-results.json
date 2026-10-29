@@ -1,0 +1,178 @@
+[
+ {
+  "id": "M01",
+  "description": "restore the PolicyBinding guard (the original defect)",
+  "file": "src/agent_control_plane/runtime_authority.py",
+  "behavioral": "KILLED",
+  "first_failures": [
+   "FAILED tests/test_freshness_purpose_anchor_successor.py::test_grid_the_correction_only_adds_a_min_and_never_accepts_what_the_old_code_refused[cached_reversible|30|10|0|anchor_nobinding]"
+  ],
+  "summary": "1 failed, 7 passed, 2 deselected in 2.43s",
+  "static_pins": "caught"
+ },
+ {
+  "id": "M02",
+  "description": "anchor only the live observation, not the cached snapshot",
+  "file": "src/agent_control_plane/runtime_authority.py",
+  "behavioral": "KILLED",
+  "first_failures": [
+   "FAILED tests/test_freshness_purpose_anchor_successor.py::test_grid_the_correction_only_adds_a_min_and_never_accepts_what_the_old_code_refused[cached_reversible|30|10|0|anchor_binding]"
+  ],
+  "summary": "1 failed, 6 passed, 2 deselected in 2.40s",
+  "static_pins": "caught"
+ },
+ {
+  "id": "M03",
+  "description": "anchor only the cached snapshot, not the live observation",
+  "file": "src/agent_control_plane/runtime_authority.py",
+  "behavioral": "KILLED",
+  "first_failures": [
+   "FAILED tests/test_freshness_purpose_anchor_successor.py::test_grid_the_correction_only_adds_a_min_and_never_accepts_what_the_old_code_refused[live_irreversible|30|10|0|anchor_binding]"
+  ],
+  "summary": "1 failed, 42 passed, 2 deselected in 14.66s",
+  "static_pins": "caught"
+ },
+ {
+  "id": "M04",
+  "description": "drop the cached recorded bound (always the class bound)",
+  "file": "src/agent_control_plane/runtime_authority.py",
+  "behavioral": "KILLED",
+  "first_failures": [
+   "FAILED tests/test_freshness_purpose_anchor_successor.py::test_extension_raises_only_the_recorded_cached_bound_and_the_anchor_follows_that_recorded_bound[9-dispatched]"
+  ],
+  "summary": "1 failed, 171 passed, 2 deselected in 54.66s",
+  "static_pins": "caught"
+ },
+ {
+  "id": "M05",
+  "description": "anchor bound off by +1 s",
+  "file": "src/agent_control_plane/runtime_authority.py",
+  "behavioral": "KILLED",
+  "first_failures": [
+   "FAILED tests/test_freshness_purpose_anchor_successor.py::test_grid_the_correction_only_adds_a_min_and_never_accepts_what_the_old_code_refused[cached_reversible|30|10|0|anchor_binding]"
+  ],
+  "summary": "1 failed, 6 passed, 2 deselected in 2.43s",
+  "static_pins": "caught"
+ },
+ {
+  "id": "M06",
+  "description": "anchor at observed_at (bound forgotten)",
+  "file": "src/agent_control_plane/runtime_authority.py",
+  "behavioral": "KILLED",
+  "first_failures": [
+   "FAILED tests/test_freshness_purpose_anchor_successor.py::test_grid_the_correction_only_adds_a_min_and_never_accepts_what_the_old_code_refused[cached_reversible|30|0|0|anchor_nobinding]"
+  ],
+  "summary": "1 failed, 2 passed, 2 deselected in 1.09s",
+  "static_pins": "caught"
+ },
+ {
+  "id": "M07",
+  "description": "anchor bound doubled",
+  "file": "src/agent_control_plane/runtime_authority.py",
+  "behavioral": "KILLED",
+  "first_failures": [
+   "FAILED tests/test_freshness_purpose_anchor_successor.py::test_grid_the_correction_only_adds_a_min_and_never_accepts_what_the_old_code_refused[cached_reversible|30|10|0|anchor_binding]"
+  ],
+  "summary": "1 failed, 6 passed, 2 deselected in 2.14s",
+  "static_pins": "caught"
+ },
+ {
+  "id": "M08",
+  "description": "anchor a live observation with an extension-sized bound (+60 s)",
+  "file": "src/agent_control_plane/runtime_authority.py",
+  "behavioral": "KILLED",
+  "first_failures": [
+   "FAILED tests/test_freshness_purpose_anchor_successor.py::test_grid_the_correction_only_adds_a_min_and_never_accepts_what_the_old_code_refused[live_irreversible|30|10|0|anchor_binding]"
+  ],
+  "summary": "1 failed, 42 passed, 2 deselected in 14.76s",
+  "static_pins": "caught"
+ },
+ {
+  "id": "M09",
+  "description": "max instead of min over the collected anchors",
+  "file": "src/agent_control_plane/bounded.py",
+  "behavioral": "KILLED",
+  "first_failures": [
+   "FAILED tests/test_freshness_purpose_anchor_successor.py::test_grid_the_correction_only_adds_a_min_and_never_accepts_what_the_old_code_refused[cached_reversible|30|10|0|anchor_binding]"
+  ],
+  "summary": "1 failed, 6 passed, 2 deselected in 2.39s",
+  "static_pins": "caught"
+ },
+ {
+  "id": "M10",
+  "description": "invert the anchor-flag test (collector only when the flag is False)",
+  "file": "src/agent_control_plane/bounded.py",
+  "behavioral": "KILLED",
+  "first_failures": [
+   "FAILED tests/test_freshness_purpose_anchor_successor.py::test_grid_the_correction_only_adds_a_min_and_never_accepts_what_the_old_code_refused[cached_reversible|30|10|0|anchor_binding]"
+  ],
+  "summary": "1 failed, 6 passed, 2 deselected in 2.47s",
+  "static_pins": "caught"
+ },
+ {
+  "id": "M11",
+  "description": "flag ignored: collector whenever a freshness profile exists",
+  "file": "src/agent_control_plane/bounded.py",
+  "behavioral": "KILLED",
+  "first_failures": [
+   "FAILED tests/test_freshness_purpose_anchor_successor.py::test_grid_the_correction_only_adds_a_min_and_never_accepts_what_the_old_code_refused[cached_reversible|30|10|0|flag_false_nobinding]"
+  ],
+  "summary": "1 failed, 8 passed, 2 deselected in 4.59s",
+  "static_pins": "caught"
+ },
+ {
+  "id": "M12",
+  "description": "strict boundary becomes inclusive (now >= deadline)",
+  "file": "src/agent_control_plane/bounded.py",
+  "behavioral": "KILLED",
+  "first_failures": [
+   "FAILED tests/test_freshness_purpose_anchor_successor.py::test_grid_the_correction_only_adds_a_min_and_never_accepts_what_the_old_code_refused[cached_reversible|30|0|30|anchor_nobinding]"
+  ],
+  "summary": "1 failed, 4 passed, 2 deselected in 2.18s",
+  "static_pins": "caught"
+ },
+ {
+  "id": "M13",
+  "description": "the later of opening deadline and anchored deadline wins",
+  "file": "src/agent_control_plane/bounded.py",
+  "behavioral": "KILLED",
+  "first_failures": [
+   "FAILED tests/test_freshness_purpose_anchor_successor.py::test_grid_the_correction_only_adds_a_min_and_never_accepts_what_the_old_code_refused[cached_reversible|30|10|21|anchor_binding]"
+  ],
+  "summary": "1 failed, 15 passed, 2 deselected in 8.88s",
+  "static_pins": "caught"
+ },
+ {
+  "id": "M14",
+  "description": "anchored deadline never replaces the opening deadline",
+  "file": "src/agent_control_plane/bounded.py",
+  "behavioral": "KILLED",
+  "first_failures": [
+   "FAILED tests/test_freshness_purpose_anchor_successor.py::test_grid_the_correction_only_adds_a_min_and_never_accepts_what_the_old_code_refused[cached_reversible|30|10|0|anchor_binding]"
+  ],
+  "summary": "1 failed, 6 passed, 2 deselected in 3.94s",
+  "static_pins": "caught"
+ },
+ {
+  "id": "M15",
+  "description": "monotonic allowance not tightened to the anchored window",
+  "file": "src/agent_control_plane/bounded.py",
+  "behavioral": "KILLED",
+  "first_failures": [
+   "FAILED tests/test_freshness_purpose_anchor_successor.py::test_grid_the_correction_only_adds_a_min_and_never_accepts_what_the_old_code_refused[cached_reversible|30|30|0|anchor_binding]"
+  ],
+  "summary": "1 failed, 28 passed, 2 deselected in 17.31s",
+  "static_pins": "caught"
+ },
+ {
+  "id": "M16",
+  "description": "cached snapshot records an extension-sized bound (+60 s)",
+  "file": "src/agent_control_plane/bounded.py",
+  "behavioral": "KILLED",
+  "first_failures": [
+   "FAILED tests/test_freshness_purpose_anchor_successor.py::test_grid_the_correction_only_adds_a_min_and_never_accepts_what_the_old_code_refused[cached_reversible|30|10|0|anchor_binding]"
+  ],
+  "summary": "1 failed, 6 passed, 2 deselected in 3.21s",
+  "static_pins": "caught"
+ }
+]

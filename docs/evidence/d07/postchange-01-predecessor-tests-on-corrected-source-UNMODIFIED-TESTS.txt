@@ -1,0 +1,239 @@
+FF.F.................................................................... [ 34%]
+......................................F................................. [ 68%]
+.................................................................F.      [100%]
+=================================== FAILURES ===================================
+_ test_residual_purpose_observation_age_at_dispatch_is_twice_the_narrowed_ceiling_when_anchored_without_a_binding _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1374/test_residual_purpose_observat0')
+clock = <tests.test_freshness.Clock object at 0x7f67769b2cf0>
+
+    def test_residual_purpose_observation_age_at_dispatch_is_twice_the_narrowed_ceiling_when_anchored_without_a_binding(tmp_path, clock):
+        p, r, f = _purpose_flow(tmp_path, with_binding=False)
+        d = f.decide(p, now=NOW)
+        assert d.result == "authorized", d.reasons                                   # age 30 <= 30 at evaluation
+        _stall_once(f, clock, CEILING - 1)                                           # dispatch stalled 29 s
+>       attempt, _ = execute(f, p, d)
+                     ^^^^^^^^^^^^^^^^
+
+tests/test_freshness_purpose_residual.py:80: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_freshness.py:74: in execute
+    return f.execute(p, d, adapter_id=p.adapter_id, now=now)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/agent_control_plane/bounded.py:1788: in execute
+    self._refuse_expired_before_dispatch(check_id=check_ref[0], deadline=deadline, attempt=attempt,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <agent_control_plane.bounded.BoundedAuthorizationWorkflow object at 0x7f6774e42990>
+check_id = '92c16e2b-791a-48ce-90ab-1c8270aa3542'
+deadline = '2026-10-05T19:00:00+00:00'
+attempt = EffectAttempt(attempt_id='87c3cebb-ba03-4b96-a4f9-865a94146050', effect_id='sha256:d19d83b15e0ec164f3da356fe7a1ecef647...:00:29+00:00', time_source='test_override', status='failed', acknowledgement={}, error='check_expired_before_dispatch')
+persisted = RuntimeDecision(reason_vocabulary_version='runtime-authority-reasons/0.1', rule_identity=None, reopen_conditions=[], d...da70459752e7ad6cbb358333a79', missing=False, previous_observed_at=None, read_state=None, age_basis='source_asserted')])
+frozen = RuntimeProposal(manifest_id='refund-integration-pilot-v1', manifest_version='1.1', manifest_digest='sha256:4d1ad6c96bc...ation_id='case-1', run_id='run-1', expected_side_effects=[], evidence_refs=['urn:cognous:evidence:refund-entitlement'])
+inputs = [ResolutionInput(input_type='manifest', input_id='refund-integration-pilot-v1', expected={}, observed={}, record_commi...', missing=False, previous_observed_at='2026-10-05T19:00:00+00:00', read_state=None, age_basis='source_asserted'), ...]
+now = datetime.datetime(2026, 10, 5, 19, 0, tzinfo=datetime.timezone.utc)
+
+    def _refuse_expired_before_dispatch(self, *, check_id: str, deadline: str, attempt: EffectAttempt,
+                                        persisted: RuntimeDecision, frozen, inputs, now: datetime) -> None:
+        """Withdraw the licence of a check whose deadline passed before dispatch: nothing is sent to the destination."""
+        code = _fresh_profile.CODE_EXPIRED_BEFORE_DISPATCH
+        assert code == "check_expired_before_dispatch"
+        attempt.status, attempt.error = "failed", code  # definitive: never dispatched (see prior-attempt filter in execute)
+        self._stamp_attempt(attempt, now)
+        refusal = EffectTimeRefusal(
+            check_id=check_id, refusal_id=str(uuid.uuid4()), decision_id=persisted.decision_id, effect_id=persisted.effect_id,
+            recorded_at=self._svc(), evaluated_at=_iso(now), deadline=deadline, time_source=self.time_source,
+            original_operation_horizon=persisted.operation_horizon, operation_horizon=self._horizon(frozen),
+            reason_vocabulary_version=VOCABULARY_VERSION_0_2, rule_identity=self._rule_identity(inputs),
+            reasons=["check_expired_before_dispatch"], changed_inputs=[], resolution_inputs=inputs)
+        opening = self.records.check_opening(check_id)
+        event = CheckEvent.model_validate(
+            dict(opening, phase="expired", recorded_at=self._svc(), reasons=["check_expired_before_dispatch"], input=None,
+                 reason_vocabulary_version=VOCABULARY_VERSION_0_2))
+        self.records.record_gate_refusal(attempt, refusal, event)  # one write: all three rows or none
+>       raise PermissionError(code)
+E       PermissionError: check_expired_before_dispatch
+
+src/agent_control_plane/bounded.py:1452: PermissionError
+_ test_residual_purpose_observation_is_dispatched_up_to_the_end_of_the_unanchored_window _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1374/test_residual_purpose_observat1')
+clock = <tests.test_freshness.Clock object at 0x7f6774e43390>
+
+    def test_residual_purpose_observation_is_dispatched_up_to_the_end_of_the_unanchored_window(tmp_path, clock):
+        """Boundary of the window: the deadline is NOW + 30, so a 30 s stall still dispatches (purpose age 60 = 2x) and 31 s refuses."""
+        p, r, f = _purpose_flow(tmp_path, with_binding=False)
+        d = f.decide(p, now=NOW)
+        _stall_once(f, clock, CEILING)
+>       attempt, _ = execute(f, p, d)
+                     ^^^^^^^^^^^^^^^^
+
+tests/test_freshness_purpose_residual.py:93: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_freshness.py:74: in execute
+    return f.execute(p, d, adapter_id=p.adapter_id, now=now)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/agent_control_plane/bounded.py:1788: in execute
+    self._refuse_expired_before_dispatch(check_id=check_ref[0], deadline=deadline, attempt=attempt,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <agent_control_plane.bounded.BoundedAuthorizationWorkflow object at 0x7f6774ed4d60>
+check_id = '9e940c5e-22a9-4c07-9f8b-5f891efcc93f'
+deadline = '2026-10-05T19:00:00+00:00'
+attempt = EffectAttempt(attempt_id='28393a7b-032e-4d86-8568-0c4523aca3a7', effect_id='sha256:d19d83b15e0ec164f3da356fe7a1ecef647...:00:30+00:00', time_source='test_override', status='failed', acknowledgement={}, error='check_expired_before_dispatch')
+persisted = RuntimeDecision(reason_vocabulary_version='runtime-authority-reasons/0.1', rule_identity=None, reopen_conditions=[], d...da70459752e7ad6cbb358333a79', missing=False, previous_observed_at=None, read_state=None, age_basis='source_asserted')])
+frozen = RuntimeProposal(manifest_id='refund-integration-pilot-v1', manifest_version='1.1', manifest_digest='sha256:4d1ad6c96bc...ation_id='case-1', run_id='run-1', expected_side_effects=[], evidence_refs=['urn:cognous:evidence:refund-entitlement'])
+inputs = [ResolutionInput(input_type='manifest', input_id='refund-integration-pilot-v1', expected={}, observed={}, record_commi...', missing=False, previous_observed_at='2026-10-05T19:00:00+00:00', read_state=None, age_basis='source_asserted'), ...]
+now = datetime.datetime(2026, 10, 5, 19, 0, tzinfo=datetime.timezone.utc)
+
+    def _refuse_expired_before_dispatch(self, *, check_id: str, deadline: str, attempt: EffectAttempt,
+                                        persisted: RuntimeDecision, frozen, inputs, now: datetime) -> None:
+        """Withdraw the licence of a check whose deadline passed before dispatch: nothing is sent to the destination."""
+        code = _fresh_profile.CODE_EXPIRED_BEFORE_DISPATCH
+        assert code == "check_expired_before_dispatch"
+        attempt.status, attempt.error = "failed", code  # definitive: never dispatched (see prior-attempt filter in execute)
+        self._stamp_attempt(attempt, now)
+        refusal = EffectTimeRefusal(
+            check_id=check_id, refusal_id=str(uuid.uuid4()), decision_id=persisted.decision_id, effect_id=persisted.effect_id,
+            recorded_at=self._svc(), evaluated_at=_iso(now), deadline=deadline, time_source=self.time_source,
+            original_operation_horizon=persisted.operation_horizon, operation_horizon=self._horizon(frozen),
+            reason_vocabulary_version=VOCABULARY_VERSION_0_2, rule_identity=self._rule_identity(inputs),
+            reasons=["check_expired_before_dispatch"], changed_inputs=[], resolution_inputs=inputs)
+        opening = self.records.check_opening(check_id)
+        event = CheckEvent.model_validate(
+            dict(opening, phase="expired", recorded_at=self._svc(), reasons=["check_expired_before_dispatch"], input=None,
+                 reason_vocabulary_version=VOCABULARY_VERSION_0_2))
+        self.records.record_gate_refusal(attempt, refusal, event)  # one write: all three rows or none
+>       raise PermissionError(code)
+E       PermissionError: check_expired_before_dispatch
+
+src/agent_control_plane/bounded.py:1452: PermissionError
+_ test_residual_cached_purpose_snapshot_age_at_dispatch_is_twice_the_narrowed_ceiling_when_anchored_without_a_binding _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1374/test_residual_cached_purpose_s0')
+clock = <tests.test_freshness.Clock object at 0x7f6774ed5350>
+
+    def test_residual_cached_purpose_snapshot_age_at_dispatch_is_twice_the_narrowed_ceiling_when_anchored_without_a_binding(tmp_path, clock):
+        p, r, f = _cached_flow(tmp_path, with_binding=False)
+        d = f.decide(p, now=NOW)
+        assert d.result == "authorized", d.reasons
+        assert any(x.input_type == "purpose" and x.read_state == "cached_positive" for x in d.resolution_inputs)
+        _stall_once(f, clock, CEILING - 1)
+>       attempt, _ = execute(f, p, d)
+                     ^^^^^^^^^^^^^^^^
+
+tests/test_freshness_purpose_residual.py:130: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_freshness.py:74: in execute
+    return f.execute(p, d, adapter_id=p.adapter_id, now=now)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/agent_control_plane/bounded.py:1788: in execute
+    self._refuse_expired_before_dispatch(check_id=check_ref[0], deadline=deadline, attempt=attempt,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <agent_control_plane.bounded.BoundedAuthorizationWorkflow object at 0x7f6774dc45a0>
+check_id = 'ff10f9b9-6edb-4937-a9fc-cfba0488b3c5'
+deadline = '2026-10-05T19:00:00+00:00'
+attempt = EffectAttempt(attempt_id='62100b58-dd85-48be-a332-c81a7f3faa9b', effect_id='sha256:d19d83b15e0ec164f3da356fe7a1ecef647...:00:29+00:00', time_source='test_override', status='failed', acknowledgement={}, error='check_expired_before_dispatch')
+persisted = RuntimeDecision(reason_vocabulary_version='runtime-authority-reasons/0.1', rule_identity=None, reopen_conditions=[], d...d6cbb358333a79', missing=False, previous_observed_at=None, read_state='cached_positive', age_basis='source_asserted')])
+frozen = RuntimeProposal(manifest_id='refund-integration-pilot-v1', manifest_version='1.1', manifest_digest='sha256:4d1ad6c96bc...ation_id='case-1', run_id='run-1', expected_side_effects=[], evidence_refs=['urn:cognous:evidence:refund-entitlement'])
+inputs = [ResolutionInput(input_type='manifest', input_id='refund-integration-pilot-v1', expected={}, observed={}, record_commi...', missing=False, previous_observed_at='2026-10-05T19:00:00+00:00', read_state=None, age_basis='source_asserted'), ...]
+now = datetime.datetime(2026, 10, 5, 19, 0, tzinfo=datetime.timezone.utc)
+
+    def _refuse_expired_before_dispatch(self, *, check_id: str, deadline: str, attempt: EffectAttempt,
+                                        persisted: RuntimeDecision, frozen, inputs, now: datetime) -> None:
+        """Withdraw the licence of a check whose deadline passed before dispatch: nothing is sent to the destination."""
+        code = _fresh_profile.CODE_EXPIRED_BEFORE_DISPATCH
+        assert code == "check_expired_before_dispatch"
+        attempt.status, attempt.error = "failed", code  # definitive: never dispatched (see prior-attempt filter in execute)
+        self._stamp_attempt(attempt, now)
+        refusal = EffectTimeRefusal(
+            check_id=check_id, refusal_id=str(uuid.uuid4()), decision_id=persisted.decision_id, effect_id=persisted.effect_id,
+            recorded_at=self._svc(), evaluated_at=_iso(now), deadline=deadline, time_source=self.time_source,
+            original_operation_horizon=persisted.operation_horizon, operation_horizon=self._horizon(frozen),
+            reason_vocabulary_version=VOCABULARY_VERSION_0_2, rule_identity=self._rule_identity(inputs),
+            reasons=["check_expired_before_dispatch"], changed_inputs=[], resolution_inputs=inputs)
+        opening = self.records.check_opening(check_id)
+        event = CheckEvent.model_validate(
+            dict(opening, phase="expired", recorded_at=self._svc(), reasons=["check_expired_before_dispatch"], input=None,
+                 reason_vocabulary_version=VOCABULARY_VERSION_0_2))
+        self.records.record_gate_refusal(attempt, refusal, event)  # one write: all three rows or none
+>       raise PermissionError(code)
+E       PermissionError: check_expired_before_dispatch
+
+src/agent_control_plane/bounded.py:1452: PermissionError
+_ test_legacy_profile_without_a_policy_binding_keeps_its_behaviour_for_the_purpose_status _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1374/test_legacy_profile_without_a_0')
+clock = <tests.test_freshness.Clock object at 0x7f6774d40870>
+
+    def test_legacy_profile_without_a_policy_binding_keeps_its_behaviour_for_the_purpose_status(tmp_path, clock):
+        """Pinned legacy behaviour (not a guarantee): without a binding the purpose age is judged at evaluation and is not anchored."""
+        p, r, f = _purpose_flow(tmp_path, bound_binding=False)
+        d = decide(f, p)
+        assert d.result == "authorized", d.reasons
+        _stall_once(f, clock, 2)
+>       attempt, _ = execute(f, p, d)
+                     ^^^^^^^^^^^^^^^^
+
+tests/test_policy_binding_approval_generation.py:592: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_freshness.py:74: in execute
+    return f.execute(p, d, adapter_id=p.adapter_id, now=now)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/agent_control_plane/bounded.py:1788: in execute
+    self._refuse_expired_before_dispatch(check_id=check_ref[0], deadline=deadline, attempt=attempt,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <agent_control_plane.bounded.BoundedAuthorizationWorkflow object at 0x7f6774adcef0>
+check_id = '951cb132-ea86-4aeb-bb67-c8447910800b'
+deadline = '2026-10-05T19:00:01+00:00'
+attempt = EffectAttempt(attempt_id='30afedc1-06f7-4613-9ec2-097a10d1419e', effect_id='sha256:d19d83b15e0ec164f3da356fe7a1ecef647...:00:02+00:00', time_source='test_override', status='failed', acknowledgement={}, error='check_expired_before_dispatch')
+persisted = RuntimeDecision(reason_vocabulary_version='runtime-authority-reasons/0.1', rule_identity=None, reopen_conditions=[], d...933541400fe64b8b39f4aef5500', missing=False, previous_observed_at=None, read_state=None, age_basis='source_asserted')])
+frozen = RuntimeProposal(manifest_id='refund-integration-pilot-v1', manifest_version='1.1', manifest_digest='sha256:4d1ad6c96bc...ation_id='case-1', run_id='run-1', expected_side_effects=[], evidence_refs=['urn:cognous:evidence:refund-entitlement'])
+inputs = [ResolutionInput(input_type='manifest', input_id='refund-integration-pilot-v1', expected={}, observed={}, record_commi...', missing=False, previous_observed_at='2026-10-05T19:00:00+00:00', read_state=None, age_basis='source_asserted'), ...]
+now = datetime.datetime(2026, 10, 5, 19, 0, tzinfo=datetime.timezone.utc)
+
+    def _refuse_expired_before_dispatch(self, *, check_id: str, deadline: str, attempt: EffectAttempt,
+                                        persisted: RuntimeDecision, frozen, inputs, now: datetime) -> None:
+        """Withdraw the licence of a check whose deadline passed before dispatch: nothing is sent to the destination."""
+        code = _fresh_profile.CODE_EXPIRED_BEFORE_DISPATCH
+        assert code == "check_expired_before_dispatch"
+        attempt.status, attempt.error = "failed", code  # definitive: never dispatched (see prior-attempt filter in execute)
+        self._stamp_attempt(attempt, now)
+        refusal = EffectTimeRefusal(
+            check_id=check_id, refusal_id=str(uuid.uuid4()), decision_id=persisted.decision_id, effect_id=persisted.effect_id,
+            recorded_at=self._svc(), evaluated_at=_iso(now), deadline=deadline, time_source=self.time_source,
+            original_operation_horizon=persisted.operation_horizon, operation_horizon=self._horizon(frozen),
+            reason_vocabulary_version=VOCABULARY_VERSION_0_2, rule_identity=self._rule_identity(inputs),
+            reasons=["check_expired_before_dispatch"], changed_inputs=[], resolution_inputs=inputs)
+        opening = self.records.check_opening(check_id)
+        event = CheckEvent.model_validate(
+            dict(opening, phase="expired", recorded_at=self._svc(), reasons=["check_expired_before_dispatch"], input=None,
+                 reason_vocabulary_version=VOCABULARY_VERSION_0_2))
+        self.records.record_gate_refusal(attempt, refusal, event)  # one write: all three rows or none
+>       raise PermissionError(code)
+E       PermissionError: check_expired_before_dispatch
+
+src/agent_control_plane/bounded.py:1452: PermissionError
+_ test_z03_protected_evaluators_are_unmodified_by_the_consolidation[runtime_authority.py] _
+
+name = 'runtime_authority.py'
+
+    @pytest.mark.parametrize("name", sorted(PROTECTED))
+    def test_z03_protected_evaluators_are_unmodified_by_the_consolidation(name):
+>       assert hashlib.sha256((SRC / name).read_bytes()).hexdigest() == PROTECTED[name], name
+E       AssertionError: runtime_authority.py
+E       assert 'ad7b95e5d3bc...7af17385bce01' == 'a4b4ac36cca6...799700ff9ea66'
+E         
+E         - a4b4ac36cca6e75d8fc3408b8738163acfb609a7265633aec2f799700ff9ea66
+E         + ad7b95e5d3bc3ddcba110a6758cf63e7f22b537766d3d072cbc7af17385bce01
+
+tests/test_governed_policy_composition.py:792: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_freshness_purpose_residual.py::test_residual_purpose_observation_age_at_dispatch_is_twice_the_narrowed_ceiling_when_anchored_without_a_binding
+FAILED tests/test_freshness_purpose_residual.py::test_residual_purpose_observation_is_dispatched_up_to_the_end_of_the_unanchored_window
+FAILED tests/test_freshness_purpose_residual.py::test_residual_cached_purpose_snapshot_age_at_dispatch_is_twice_the_narrowed_ceiling_when_anchored_without_a_binding
+FAILED tests/test_policy_binding_approval_generation.py::test_legacy_profile_without_a_policy_binding_keeps_its_behaviour_for_the_purpose_status
+FAILED tests/test_governed_policy_composition.py::test_z03_protected_evaluators_are_unmodified_by_the_consolidation[runtime_authority.py]
+5 failed, 206 passed in 24.07s

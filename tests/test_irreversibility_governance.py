@@ -376,8 +376,12 @@ def test_c01_every_combination_with_the_other_five_families_authorizes_and_execu
     assert attempt.status == "acknowledged" and observed.state == "applied"
 
 
-def test_c02_the_composition_order_is_fixed_and_irreversibility_sits_between_assurance_and_terminal_revocation():
-    assert pol.FAMILY_NAMES == ("f4_ages", "class_age", "class_unreadable", "class_revocation_assurance", "class_irreversible", "terminal_revocation")
+def test_c02_the_composition_order_is_fixed_and_the_three_final3_slots_sit_between_irreversibility_and_terminal_revocation():
+    # FINAL3 successor: the three r08-v8 slots were appended AFTER irreversibility and BEFORE terminal revocation; the six earlier names keep their relative order.
+    assert pol.FAMILY_NAMES == ("f4_ages", "class_age", "class_unreadable", "class_revocation_assurance", "class_irreversible", "anchor_deadline", "observation_max_age",
+                                "observation_clock_tolerance", "terminal_revocation")
+    assert [n for n in pol.FAMILY_NAMES if n not in ("anchor_deadline", "observation_max_age", "observation_clock_tolerance")] == [
+        "f4_ages", "class_age", "class_unreadable", "class_revocation_assurance", "class_irreversible", "terminal_revocation"]
 
 
 def test_c03_the_final_profile_equals_the_sequential_application_of_each_family(tmp_path):

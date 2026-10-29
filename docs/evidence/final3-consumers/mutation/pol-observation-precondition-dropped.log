@@ -1,0 +1,19 @@
+............................................................F
+=================================== FAILURES ===================================
+_ test_a02_host_stricter_than_registry_is_a_no_op_and_the_registry_never_widens _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1711/test_a02_host_stricter_than_re0')
+
+    def test_a02_host_stricter_than_registry_is_a_no_op_and_the_registry_never_widens(tmp_path):
+        p, res, flow = flow_for(tmp_path, age=mat(AGE, 900), tol=mat(TOL, 30), host=op(120, 1))
+>       assert (flow.observation_policy.max_age_seconds, flow.observation_policy.clock_tolerance_seconds) == (120, 1)
+E       assert (300, 5) == (120, 1)
+E         
+E         At index 0 diff: 300 != 120
+E         Use -v to get more diff
+
+tests/test_final3_observation.py:64: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_final3_observation.py::test_a02_host_stricter_than_registry_is_a_no_op_and_the_registry_never_widens
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 60 passed, 1 deselected in 36.35s

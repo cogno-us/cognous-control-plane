@@ -1,0 +1,22 @@
+........................................................................ [ 28%]
+........................................................................ [ 57%]
+.........................................F
+=================================== FAILURES ===================================
+_ test_g01_observation_defect_checks_the_final_values_against_the_original_host _
+
+    def test_g01_observation_defect_checks_the_final_values_against_the_original_host():
+        host = {"max_age_seconds": 300, "clock_tolerance_seconds": 5}
+        ok = dict(host, max_age_seconds=60)
+        assert f3.observation_defect(host, ok, age_declared=True, tolerance_declared=False) is None
+        assert f3.observation_defect(host, host, age_declared=True, tolerance_declared=True) is None
+>       assert f3.observation_defect(host, dict(host, max_age_seconds=301), age_declared=True, tolerance_declared=False) == "composed_widens_host"
+E       AssertionError: assert None == 'composed_widens_host'
+E        +  where None = <function observation_defect at 0x7f9b4dce8180>({'max_age_seconds': 300, 'clock_tolerance_seconds': 5}, {'max_age_seconds': 301, 'clock_tolerance_seconds': 5}, age_declared=True, tolerance_declared=False)
+E        +    where <function observation_defect at 0x7f9b4dce8180> = f3.observation_defect
+E        +    and   {'max_age_seconds': 301, 'clock_tolerance_seconds': 5} = dict({'max_age_seconds': 300, 'clock_tolerance_seconds': 5}, max_age_seconds=301)
+
+tests/test_final3_observation.py:408: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_final3_observation.py::test_g01_observation_defect_checks_the_final_values_against_the_original_host
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 185 passed, 1 deselected in 64.04s (0:01:04)

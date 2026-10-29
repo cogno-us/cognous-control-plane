@@ -1,0 +1,39 @@
+........F
+=================================== FAILURES ===================================
+___ test_b03_policy_binding_is_still_refused_for_the_profile_bearing_family ____
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1709/test_b03_policy_binding_is_sti0')
+
+    def test_b03_policy_binding_is_still_refused_for_the_profile_bearing_family(tmp_path):
+        p, res, cfg, binding = D.pin_prepared(tmp_path)
+        with pytest.raises(RegistryGovernedPolicyRefused) as e:
+            build(tmp_path, res, cfg, fams(anc=Source(mat(ANC))))
+>       refused(e, "policy_binding_unsupported", "construction")
+
+tests/test_final3_anchor.py:113: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/final3_support.py:88: in refused
+    return comp.refused(exc, code, boundary, registry_code)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+exc = <ExceptionInfo RegistryGovernedPolicyRefused('registry_governed_policy_refused:construction:host_freshness_profile_missing') tblen=3>
+code = 'policy_binding_unsupported', boundary = 'construction'
+registry_code = None
+
+    def refused(exc, code=None, boundary=None, registry_code=None):
+        e = exc.value
+        assert isinstance(e, PermissionError) and isinstance(e, RegistryGovernedPolicyRefused) and e.refusal.non_authorizing is True
+        if code:
+>           assert e.refusal.code == code, e.refusal
+E           AssertionError: Refusal(code='host_freshness_profile_missing', registry_code=None, registry_kind=None, non_authorizing=True, classification='BUILDER_TESTED; not independently qualified; non-authorizing')
+E           assert 'host_freshne...ofile_missing' == 'policy_binding_unsupported'
+E             
+E             - policy_binding_unsupported
+E             + host_freshness_profile_missing
+
+tests/test_governed_policy_composition.py:99: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_final3_anchor.py::test_b03_policy_binding_is_still_refused_for_the_profile_bearing_family
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 8 passed, 1 deselected in 12.23s

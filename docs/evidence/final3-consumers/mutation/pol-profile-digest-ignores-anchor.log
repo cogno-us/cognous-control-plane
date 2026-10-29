@@ -1,0 +1,27 @@
+F
+=================================== FAILURES ===================================
+____ test_a01_registry_anchor_sets_the_flag_false_to_true_and_nothing_else _____
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1732/test_a01_registry_anchor_sets_0')
+
+    def test_a01_registry_anchor_sets_the_flag_false_to_true_and_nothing_else(tmp_path):
+        p, res, cfg, src, flow = ready(tmp_path)
+        assert cfg.freshness.anchor_deadline_to_inputs is False and flow.runtime_authority_profile.freshness.anchor_deadline_to_inputs is True
+        assert dump(flow.runtime_authority_profile, True) == dump(cfg, True)  # byte for byte but the flag
+        ctx = res.contexts[PROFILE]
+        assert approval_commitment(flow.runtime_authority_profile, ctx) != approval_commitment(cfg, ctx)  # approvals are issued against the FINAL profile
+        ident = flow.registry_governed_policy_identity
+        assert ident["families"] == ["anchor_deadline"] and ident["anchor_deadline"]["effective"] == {FIELDS[ANC]: "anchor"} and ident["host"]["anchor_deadline"] == "no_change"
+        assert ident["anchor_deadline"]["effective_policy_digest"] == v8id.effective_policy_digest(ANC, {FIELDS[ANC]: "anchor"}, "r08-v8")
+>       assert ident["effective_profile_digest"] == base.agegov.profile_digest(flow.runtime_authority_profile) != base.agegov.profile_digest(cfg)
+E       AssertionError: assert None == 'sha256:9c3b2a86b28fdde223e4588d1f549d6885ec6d762457cb38c0503bc418aabfcc'
+E        +  where 'sha256:9c3b2a86b28fdde223e4588d1f549d6885ec6d762457cb38c0503bc418aabfcc' = <function profile_digest at 0x7f7701a4e200>(RuntimeAuthorityProfile(version='runtime-authority/0.1', catalogue_version='synthetic-catalogue/1', actions={'urn:cogn...ue), holder_inventory=None, merge=None, reversibility=None, dedupe=None, terminal_revocation=None, policy_binding=None))
+E        +    where <function profile_digest at 0x7f7701a4e200> = <module 'agent_control_plane.registry_f5_class_age_governance' from '/tmp/final3-mut-zkheh73p/src/agent_control_plane/registry_f5_class_age_governance.py'>.profile_digest
+E        +      where <module 'agent_control_plane.registry_f5_class_age_governance' from '/tmp/final3-mut-zkheh73p/src/agent_control_plane/registry_f5_class_age_governance.py'> = base.agegov
+E        +    and   RuntimeAuthorityProfile(version='runtime-authority/0.1', catalogue_version='synthetic-catalogue/1', actions={'urn:cogn...ue), holder_inventory=None, merge=None, reversibility=None, dedupe=None, terminal_revocation=None, policy_binding=None) = <agent_control_plane.registry_governed_policy.GovernedPolicyWorkflow object at 0x7f7700c074d0>.runtime_authority_profile
+
+tests/test_final3_anchor.py:58: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_final3_anchor.py::test_a01_registry_anchor_sets_the_flag_false_to_true_and_nothing_else
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 1 deselected in 7.54s

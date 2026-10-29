@@ -1,0 +1,23 @@
+........................................................................ [ 28%]
+........................................................................ [ 57%]
+........................................................................ [ 85%]
+...............................F
+=================================== FAILURES ===================================
+_ test_f01_workflows_without_the_new_families_keep_their_pinned_configuration_digests _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1728/test_f01_workflows_without_the0')
+
+    def test_f01_workflows_without_the_new_families_keep_their_pinned_configuration_digests(tmp_path):
+        pins = json.loads((ROOT / "docs/evidence/d06/ledger-digests-b7eb11a.json").read_text())
+        p, res, cfg, srcs, flow = D.ready(tmp_path / "a", f=True)
+>       assert flow.registry_governed_policy_identity["configuration_digest"] == pins["composed_f_a_u"]
+E       AssertionError: assert 'sha256:7ef81...505748cb33a38' == 'sha256:fc339...07c6b5096bcf1'
+E         
+E         - sha256:fc3399bee36ee3b64035c08eee7c718fd8c916fa917b9599a4c07c6b5096bcf1
+E         + sha256:7ef81260abd7d66cea4a742841ee3334c3d0702ee2a67922b3f505748cb33a38
+
+tests/test_final3_composed_binding.py:314: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_final3_composed_binding.py::test_f01_workflows_without_the_new_families_keep_their_pinned_configuration_digests
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 247 passed, 1 deselected in 118.94s (0:01:58)

@@ -1,0 +1,21 @@
+...........F
+=================================== FAILURES ===================================
+_ test_c01_final_composition_allows_only_the_flag_false_to_true_and_only_when_declared _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1717/test_c01_final_composition_all0')
+
+    def test_c01_final_composition_allows_only_the_flag_false_to_true_and_only_when_declared(tmp_path):
+        p, res, cfg = base.prepared(tmp_path, t1=R_, freshness=FreshnessProfile())
+        on = f3.compose_anchor(cfg, {FIELDS[ANC]: "anchor"})
+        sc = {"status_max_age_seconds": 60, "approval_max_age_seconds": 60}
+        assert final_composition_defect(cfg, on, sc, None, anchor_declared=True) is None
+>       assert final_composition_defect(cfg, on, sc, None) == "composed_profile_invalid"  # not declared: any difference is a foreign change
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert None == 'composed_profile_invalid'
+E        +  where None = final_composition_defect(RuntimeAuthorityProfile(version='runtime-authority/0.1', catalogue_version='synthetic-catalogue/1', actions={'urn:cogn...se), holder_inventory=None, merge=None, reversibility=None, dedupe=None, terminal_revocation=None, policy_binding=None), RuntimeAuthorityProfile(version='runtime-authority/0.1', catalogue_version='synthetic-catalogue/1', actions={'urn:cogn...ue), holder_inventory=None, merge=None, reversibility=None, dedupe=None, terminal_revocation=None, policy_binding=None), {'status_max_age_seconds': 60, 'approval_max_age_seconds': 60}, None)
+
+tests/test_final3_anchor.py:146: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_final3_anchor.py::test_c01_final_composition_allows_only_the_flag_false_to_true_and_only_when_declared
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 11 passed, 1 deselected in 12.98s

@@ -1,0 +1,1 @@
+reviewer E3-1 evidence: in a depth-1 clone git rev-parse 86148b6 fails and git show returns empty (old test_f03); old output kept in /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/review_e3/v8gate.log

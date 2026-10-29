@@ -583,14 +583,25 @@ def test_purpose_status_deadline_is_exactly_observed_at_plus_the_bound(tmp_path,
         assert f.destination.snapshot()["effects"] == {}
 
 
-def test_legacy_profile_without_a_policy_binding_keeps_its_behaviour_for_the_purpose_status(tmp_path, clock):
-    """Pinned legacy behaviour (not a guarantee): without a binding the purpose age is judged at evaluation and is not anchored."""
+def test_legacy_profile_without_a_policy_binding_now_anchors_the_purpose_status_d07_successor(tmp_path, clock):
+    """D-07 SUCCESSOR of ``test_legacy_profile_without_a_policy_binding_keeps_its_behaviour_for_the_purpose_status``.
+
+    Predecessor (in git history, pinned until CP #94 head 061a986): "Pinned legacy behaviour (not a guarantee): without a binding the purpose
+    age is judged at evaluation and is not anchored" -- the same fixture (freshness anchor flag True, no ``policy_binding``, 60 s bound, purpose
+    age 59 s at evaluation, 2 s dispatch stall = 61 s) was DISPATCHED (``attempt.status == "acknowledged"``).
+    What changed and why: the Architect authorized D-07 Option A (2026-10-29; ``family-migration/final-three/02-architect-authorization-and-
+    contract-freeze-2026-10-29.md`` section 6) -- the purpose-observation anchoring in ``runtime_authority.py`` no longer depends on a
+    ``PolicyBinding`` being present, because that dependence left a window of up to 2x the (Registry-narrowed) ceiling. The same fixture is now
+    REFUSED by the existing ``check_expired_before_dispatch`` (strictly more restrictive; no new reason code, commitment or schema change).
+    The legacy behaviour is withdrawn only for profiles that set ``anchor_deadline_to_inputs=True``; profiles without the flag are unchanged
+    (see tests/test_freshness_purpose_anchor_successor.py). Original result retained: docs/evidence/d07/postchange-01-*.txt."""
     p, r, f = _purpose_flow(tmp_path, bound_binding=False)
     d = decide(f, p)
     assert d.result == "authorized", d.reasons
     _stall_once(f, clock, 2)
-    attempt, _ = execute(f, p, d)
-    assert attempt.status == "acknowledged"
+    with pytest.raises(PermissionError, match="check_expired_before_dispatch"):
+        execute(f, p, d)
+    assert f.destination.snapshot()["effects"] == {}
 
 
 def test_an_accepted_cached_purpose_snapshot_joins_the_dispatch_deadline_with_its_recorded_bound(tmp_path, clock):

@@ -1,0 +1,19 @@
+........................................................................ [ 28%]
+......................F
+=================================== FAILURES ===================================
+_______ test_c03_editing_either_tolerance_after_construction_is_refused ________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1725/test_c03_editing_either_tolera0')
+
+    def test_c03_editing_either_tolerance_after_construction_is_refused(tmp_path):
+        p, res, flow = flow_for(tmp_path, tol=mat(TOL, 2))
+        flow.clock_tolerance_seconds = 1  # the constructor tolerance
+>       with pytest.raises(RegistryGovernedPolicyRefused) as e:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE RegistryGovernedPolicyRefused
+
+tests/test_final3_observation.py:174: Failed
+=========================== short test summary info ============================
+FAILED tests/test_final3_observation.py::test_c03_editing_either_tolerance_after_construction_is_refused
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 94 passed, 1 deselected in 45.86s

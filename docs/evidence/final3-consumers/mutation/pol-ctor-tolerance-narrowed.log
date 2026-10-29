@@ -1,0 +1,19 @@
+........................................................................ [ 28%]
+....................F
+=================================== FAILURES ===================================
+_ test_c01_the_constructor_clock_tolerance_is_untouched_by_the_observation_tolerance_family _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1713/test_c01_the_constructor_clock0')
+
+    def test_c01_the_constructor_clock_tolerance_is_untouched_by_the_observation_tolerance_family(tmp_path):
+        p, res, cfg = base.prepared(tmp_path, t1=R_)
+        flow = build(tmp_path, res, None, fams(tol=Source(mat(TOL, 0))), clock_tolerance_seconds=7)
+>       assert flow.clock_tolerance_seconds == 7 and flow.observation_policy.clock_tolerance_seconds == 0
+E       assert (0 == 7)
+E        +  where 0 = <agent_control_plane.registry_governed_policy.GovernedPolicyWorkflow object at 0x7f6e1dec3ed0>.clock_tolerance_seconds
+
+tests/test_final3_observation.py:154: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_final3_observation.py::test_c01_the_constructor_clock_tolerance_is_untouched_by_the_observation_tolerance_family
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 92 passed, 1 deselected in 57.10s

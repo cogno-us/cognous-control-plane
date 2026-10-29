@@ -1,0 +1,6 @@
+KILLED anchor-skip-registry-record-check
+KILLED anchor-skip-widening-check
+KILLED obs-age-floor-zero
+KILLED schema-revision-check-dropped
+KILLED verified-skips-operational-check
+killed 5 survived 0 invalid 0 of 5

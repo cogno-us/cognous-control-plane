@@ -1,0 +1,64 @@
+............................................F
+=================================== FAILURES ===================================
+_ test_e01_a_bad_selection_is_refused_at_decision_execute_entry_and_the_pre_apply_gate[commit-revoked] _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1741/test_e01_a_bad_selection_is_re10')
+kind = 'revoked', boundary = 'commit'
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7ff1b0abd240>
+
+    @pytest.mark.parametrize("kind", ["revoked", "withdrawn", "expired", "source_fail", "replaced"])
+    @pytest.mark.parametrize("boundary", ["decision", "effect", "commit"])
+    def test_e01_a_bad_selection_is_refused_at_decision_execute_entry_and_the_pre_apply_gate(tmp_path, kind, boundary, monkeypatch):
+        p, res, cfg, src, flow, d = _auth(tmp_path)
+        bad = {"revoked": lambda: revoked(ANC), "withdrawn": lambda: withdrawn(ANC), "expired": None, "source_fail": None, "replaced": lambda: mat(ANC, "no_change", stmt_over=CHANGED)}[kind]
+        now = NOW.replace(year=NOW.year + 1) if kind == "expired" else NOW
+        if kind == "source_fail":
+            def put(n=None):
+                src.fail = True
+        elif bad is not None:
+            def put(n=None):
+                src.mat = bad()
+        else:
+            def put(n=None):
+                pass
+        before = file_state(tmp_path, flow)
+        if boundary == "decision":
+            put()
+            with pytest.raises(RegistryGovernedPolicyRefused) as e:
+                flow.decide(p, now=now)
+            assert e.value.boundary == "decision"
+        elif boundary == "effect":
+            put()
+            with pytest.raises(RegistryGovernedPolicyRefused) as e:
+                flow.execute(p, d, adapter_id=p.adapter_id, now=now)
+            assert e.value.boundary == "effect"
+        else:
+            if kind == "expired":  # the fixed test clock is shared by entry and gate: the Registry is shown a clock one year later exactly at the gate (2nd derivation after this point)
+                real, seen = f3.derive_anchor, []
+    
+                def late(**kw):
+                    seen.append(1)
+                    return real(**dict(kw, now=kw["now"].replace(year=kw["now"].year + 1) if len(seen) == 2 else kw["now"]))
+                monkeypatch.setattr(f3, "derive_anchor", late)
+            elif kind == "source_fail":
+                class Dies(Source):
+                    def __call__(self):
+                        self.calls += 1
+                        if self.calls >= 4:
+                            raise RuntimeError("down")
+                        return self.mat
+                src.__class__ = Dies
+            else:
+                src.after = (4, bad())
+            attempt, _ = flow.execute(p, d, adapter_id=p.adapter_id, now=NOW)
+>           assert attempt.status == "failed" and effects(flow) == {} and flow.governed_last_commit_refusal is not None
+E           AssertionError: assert ('acknowledged' == 'failed'
+E             
+E             - failed
+E             + acknowledged)
+
+tests/test_final3_anchor.py:285: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_final3_anchor.py::test_e01_a_bad_selection_is_refused_at_decision_execute_entry_and_the_pre_apply_gate[commit-revoked]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 44 passed, 1 deselected in 16.82s

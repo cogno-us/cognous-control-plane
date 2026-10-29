@@ -1,0 +1,28 @@
+........................................................................ [ 28%]
+........................................................................ [ 57%]
+...................................................F
+=================================== FAILURES ===================================
+_____ test_g04_a_registry_decision_of_the_wrong_shape_is_refused[deny_all] _____
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1701/test_g04_a_registry_decision_o2')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f30c5719860>
+what = 'deny_all'
+
+    @pytest.mark.parametrize("what", ["authorized", "wrong_kind", "deny_all", "not_applied", "not_a_decision"])
+    def test_g04_a_registry_decision_of_the_wrong_shape_is_refused(tmp_path, monkeypatch, what):
+        import registry_successor.v8_decision as v8d
+        d = _decision_stub({FIELDS[AGE]: 60})
+        d = {"authorized": type("X", (), {})(), "wrong_kind": d.__class__(**dict(d.__dict__, kind="overlay_not_applied", code="selection_revoked")),
+             "deny_all": d.__class__(**dict(d.__dict__, deny_all=True)), "not_applied": d.__class__(**dict(d.__dict__, kind="required_policy_unavailable")),
+             "not_a_decision": "applied"}[what]
+        monkeypatch.setattr(v8d, "verify_and_decide_v8", lambda *a, **k: d)
+        got, ref = f3.derive_observation(family=AGE, scope=SCOPES[AGE], institution_id=base.INSTITUTION, authority_domain=base.DOMAIN, host_value=300, material=mat(AGE, 60),
+                                         verifier=ev.Ed25519Verifier(), now=REG_NOW)
+>       assert got is None and ref.code in ("registry_not_applied", "registry_decision_invalid")
+E       AssertionError: assert (({'observation_max_age_seconds': 60}, 'sha256:5c4f58a3713719a5399534314927a843228f59da09b0bb362202239313a02bdc') is None)
+
+tests/test_final3_observation.py:460: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_final3_observation.py::test_g04_a_registry_decision_of_the_wrong_shape_is_refused[deny_all]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 195 passed, 1 deselected in 47.34s

@@ -24,7 +24,8 @@ import pytest
 PIN = "6c3e5e4037d34bd2b31371461bfc872c762026b9"  # Registry commit that contains r08-v5 (the Registry implementation PR head); the r08-v2 F5 composer in it is byte-identical to 6f600ab
 PIN_V6 = "42a666328b974a7581013358bcf8bc7b9eac7761"  # Registry commit that contains r08-v6 (the Registry revocation-families head). It also contains r08-v1..r08-v5 byte-identical, so the same builders run against it.
 PIN_V7 = "b73c59e6769acd5af7263397e81dfc6fa4561f38"  # Registry commit that contains r08-v7 (the unified-engine head); the final value set by the lead. It contains r08-v1..r08-v6 byte-identical.
-ACCEPTED_PINS = (PIN, PIN_V6, PIN_V7)
+PIN_V8 = "a40fe755e2384a99c37016fa9ad59396f1835900"  # Registry PR #77 head: contains r08-v1..r08-v7 byte-identical plus r08-v8 (anchor deadline, observation max age, observation clock tolerance). Pin chain: 6c3e5e4 (v5) -> 42a6663 (v6) -> b73c59e (v7) -> a40fe75 (v8).
+ACCEPTED_PINS = (PIN, PIN_V6, PIN_V7, PIN_V8)
 _REQUIRED = os.environ.get("OCS_REQUIRE_REGISTRY_PIN") == "1"
 
 
@@ -40,7 +41,7 @@ if not PIN_DIR or not (Path(PIN_DIR) / "registry_successor").is_dir():
 PIN_DIR = str(Path(PIN_DIR).resolve())
 _head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=PIN_DIR, capture_output=True, text=True).stdout.strip()
 if _head not in ACCEPTED_PINS:
-    _unavailable(f"Registry checkout is {_head!r}, expected the r08-v5 pin {PIN}, the r08-v6 pin {PIN_V6} or the r08-v7 pin {PIN_V7}")
+    _unavailable(f"Registry checkout is {_head!r}, expected the r08-v5 pin {PIN}, the r08-v6 pin {PIN_V6}, the r08-v7 pin {PIN_V7} or the r08-v8 pin {PIN_V8}")
 sys.path.insert(0, PIN_DIR)
 sys.path.insert(0, str(Path(PIN_DIR) / "tests"))
 try:
@@ -1434,7 +1435,9 @@ def test_n10_the_module_governs_one_field_only_and_excludes_every_other_paramete
 # (were 50cccf5f / 9f765492 at Control Plane 5f11e0f). The protected evaluators below are byte-identical to that baseline.
 PROTECTED = {
     "bounded.py": "c219f8825a8ddf9da1fe6771ae575af0a9069ac8a04eadd40f093a9adb13655b",
-    "runtime_authority.py": "a4b4ac36cca6e75d8fc3408b8738163acfb609a7265633aec2f799700ff9ea66",
+    # D-07 Option A (Architect-authorized 2026-10-29): the ONLY protected-file change; previous pin a4b4ac36cca6e75d8fc3408b8738163acfb609a7265633aec2f799700ff9ea66 (CP main b7eb11a / #94 061a986).
+    # D-07 head fb24ed0 pinned ad7b95e5d3bc3ddcba110a6758cf63e7f22b537766d3d072cbc7af17385bce01; re-pinned after a comment-only prose correction (code tokens identical).
+    "runtime_authority.py": "45a27db8695ff9d23516e1937f3bafa2391bbc1587ed0fb09f56ea8f3e01d23f",
     "freshness.py": "3f146ee11a3424d816c6f35ba07259833612a985901b4a96c0275395f05d51c0",
     "policy_binding.py": "defdfac5fd60cf5be707a76204a12513f2f289b0620ec56d063b56dac4081a35",
     "rule_revision.py": "a3833f49e96db52e0665b9816daee2654f74f7784faad5101252b4c8722415a5",

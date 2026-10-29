@@ -375,7 +375,8 @@ def test_snapshot_without_a_ref_records_none_and_a_family_slot_table_is_complete
     s = snapshot(refs={})
     assert s.family("class_irreversible").selection_id is None and s.family("class_irreversible").selection_epoch is None
     assert set(eff.FAMILY_TABLE) == set(pol.FAMILY_NAMES)
-    assert eff.FAMILY_TABLE["class_irreversible"] == (ir.FAMILY_IR, ir.CONTRACT_V7) and eff.SCHEMA_REVISIONS == {"class_irreversible": ir.FAMILY_SCHEMA_REVISION}
+    assert eff.FAMILY_TABLE["class_irreversible"] == (ir.FAMILY_IR, ir.CONTRACT_V7) and eff.SCHEMA_REVISIONS == {
+        "class_irreversible": ir.FAMILY_SCHEMA_REVISION, "anchor_deadline": 1, "observation_max_age": 1, "observation_clock_tolerance": 1}  # FINAL3 successor: + the three r08-v8 slots
 
 
 def test_selection_ref_is_strict():

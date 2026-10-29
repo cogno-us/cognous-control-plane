@@ -1,0 +1,24 @@
+................F
+=================================== FAILURES ===================================
+_________ test_c03_an_action_class_change_next_to_the_flag_is_refused __________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1719/test_c03_an_action_class_chang0')
+
+    def test_c03_an_action_class_change_next_to_the_flag_is_refused(tmp_path):
+        p, res, cfg = base.prepared(tmp_path, t1=R_, freshness=FreshnessProfile())
+        doc = f3.compose_anchor(cfg, {FIELDS[ANC]: "anchor"}).model_dump(mode="json")
+        doc["actions"][ACTION_ID]["irreversible"] = True
+        sc = {"status_max_age_seconds": 60, "approval_max_age_seconds": 60}
+        assert final_composition_defect(cfg, type(cfg).model_validate(doc), sc, None, anchor_declared=True) == "composed_profile_invalid"
+>       assert final_composition_defect(copy.deepcopy(cfg).model_copy(update={"freshness": None}), f3.compose_anchor(cfg, {FIELDS[ANC]: "anchor"}), sc, None,
+                                        anchor_declared=True) == "host_freshness_profile_missing"
+E       AssertionError: assert 'composed_profile_invalid' == 'host_freshne...ofile_missing'
+E         
+E         - host_freshness_profile_missing
+E         + composed_profile_invalid
+
+tests/test_final3_anchor.py:168: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_final3_anchor.py::test_c03_an_action_class_change_next_to_the_flag_is_refused
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 16 passed, 1 deselected in 12.48s

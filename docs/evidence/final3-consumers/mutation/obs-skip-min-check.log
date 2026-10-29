@@ -1,0 +1,27 @@
+........................................................................ [ 28%]
+........................................................................ [ 57%]
+...............................................F
+=================================== FAILURES ===================================
+_ test_g03_the_derivation_re_checks_a_forged_registry_decision[effective4-effective_policy_invalid] _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1679/test_g03_the_derivation_re_che4')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f49d7c92200>
+effective = {'observation_max_age_seconds': 200}
+code = 'effective_policy_invalid'
+
+    @pytest.mark.parametrize("effective,code", [({FIELDS[AGE]: 301}, "effective_policy_widens_host"), ({FIELDS[AGE]: 0}, "effective_policy_invalid"), ({FIELDS[AGE]: True}, "effective_policy_invalid"),
+                                                ({FIELDS[AGE]: 60, "x": 1}, "effective_policy_invalid"), ({FIELDS[AGE]: 200}, "effective_policy_invalid"), ({}, "effective_policy_invalid")])
+    def test_g03_the_derivation_re_checks_a_forged_registry_decision(tmp_path, monkeypatch, effective, code):
+        stub = _decision_stub(effective)
+        import registry_successor.v8_decision as v8d
+        monkeypatch.setattr(v8d, "verify_and_decide_v8", lambda *a, **k: stub)
+        got, ref = f3.derive_observation(family=AGE, scope=SCOPES[AGE], institution_id=base.INSTITUTION, authority_domain=base.DOMAIN, host_value=300, material=mat(AGE, 60),
+                                         verifier=ev.Ed25519Verifier(), now=REG_NOW)
+>       assert got is None and ref.code == code
+E       AssertionError: assert (({'observation_max_age_seconds': 200}, 'sha256:8990db409dec76d63b22ad3bd186ce7baa56dfe63cc70b6c1e8d386f1e158831') is None)
+
+tests/test_final3_observation.py:447: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_final3_observation.py::test_g03_the_derivation_re_checks_a_forged_registry_decision[effective4-effective_policy_invalid]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 191 passed, 1 deselected in 76.30s (0:01:16)

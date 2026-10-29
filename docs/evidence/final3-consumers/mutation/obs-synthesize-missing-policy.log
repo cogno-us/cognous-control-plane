@@ -1,0 +1,21 @@
+........................................................................ [ 28%]
+........................F
+=================================== FAILURES ===================================
+_ test_d01_a_declared_observation_family_with_no_host_policy_is_refused_at_construction_and_none_is_synthesized[f5-observation-max-age-policy-age] _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1681/test_d01_a_declared_observatio0')
+fam = 'f5-observation-max-age-policy', slot = 'age'
+
+    @pytest.mark.parametrize("fam,slot", [(AGE, "age"), (TOL, "tol")])
+    def test_d01_a_declared_observation_family_with_no_host_policy_is_refused_at_construction_and_none_is_synthesized(tmp_path, fam, slot):
+        p, res, cfg = base.prepared(tmp_path, t1=R_)
+        src = Source(mat(fam))
+>       with pytest.raises(RegistryGovernedPolicyRefused) as e:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE RegistryGovernedPolicyRefused
+
+tests/test_final3_observation.py:202: Failed
+=========================== short test summary info ============================
+FAILED tests/test_final3_observation.py::test_d01_a_declared_observation_family_with_no_host_policy_is_refused_at_construction_and_none_is_synthesized[f5-observation-max-age-policy-age]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 96 passed, 1 deselected in 59.51s

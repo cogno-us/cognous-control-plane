@@ -1,0 +1,44 @@
+.....................................................F
+=================================== FAILURES ===================================
+_ test_f02_without_the_family_the_host_False_flag_dispatches_the_documented_residual _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1729/test_f02_without_the_family_th0')
+
+    def test_f02_without_the_family_the_host_False_flag_dispatches_the_documented_residual(tmp_path):
+>       out, applies, n_effects, flow = _e2e(tmp_path / "without", declared=False, host_flag=False)
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_final3_anchor.py:355: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_final3_anchor.py:331: in _e2e
+    d = flow.decide(p, now=NOW)
+        ^^^^^^^^^^^^^^^^^^^^^^^
+src/agent_control_plane/registry_governed_lifecycle.py:323: in decide
+    self._gl_revalidate(proposal, "decision", self._evaluation_time(now))
+src/agent_control_plane/registry_governed_lifecycle.py:297: in _gl_revalidate
+    self._gl_reverify(boundary, now)
+src/agent_control_plane/registry_governed_lifecycle.py:307: in _gl_reverify
+    new_bound = self._gl_derive(materials, authority, now, boundary)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <agent_control_plane.registry_governed_policy.GovernedPolicyWorkflow object at 0x7fe70a47f250>
+materials = {'observation_max_age': SelectionMaterial(record_text='{"contract_version": "r08-v8", "evaluator": {"binding": "regist...', operation='refund-issue-obsage'),)),), revoked_key_ids=frozenset(), revoked_selections=frozenset(), min_epochs=()))}
+authority = ('urn:cognous:institution:synthetic-customer-service', 'customer-refunds')
+now = datetime.datetime(2026, 10, 5, 19, 0, tzinfo=datetime.timezone.utc)
+boundary = 'decision'
+
+    def _gl_derive(self, materials: Any, authority: Any, now: datetime, boundary: str) -> Any:
+        derived, refusal = derive_policy(families=self._gp_families, host=self._gp_host, host_scalars=self._gp_host_scalars, host_ages=self._gp_host_ages,
+                                         host_values=self._gp_host_values, materials=materials, verifier=self._gp_verifier, institution_id=authority[0],
+                                         authority_domain=authority[1], now=now, host_assurance=self._gp_host_assurance, host_terminal=self._gp_host_terminal,
+                                         host_irreversible=self._gp_host_irreversible)
+        if refusal is not None:
+>           raise RegistryGovernedPolicyRefused(refusal, boundary)
+E           agent_control_plane.registry_governed_policy.RegistryGovernedPolicyRefused: registry_governed_policy_refused:decision:observation_max_age:host_observation_policy_missing
+
+src/agent_control_plane/registry_governed_policy.py:520: RegistryGovernedPolicyRefused
+=========================== short test summary info ============================
+FAILED tests/test_final3_anchor.py::test_f02_without_the_family_the_host_False_flag_dispatches_the_documented_residual
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 53 passed, 1 deselected in 25.66s

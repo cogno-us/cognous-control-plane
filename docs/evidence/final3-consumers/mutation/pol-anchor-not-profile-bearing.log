@@ -1,0 +1,35 @@
+.......F
+=================================== FAILURES ===================================
+___________ test_b02_no_runtime_authority_profile_at_all_is_refused ____________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1708/test_b02_no_runtime_authority_0')
+
+    def test_b02_no_runtime_authority_profile_at_all_is_refused(tmp_path):
+        p, res, cfg = base.prepared(tmp_path, t1=R_)
+        with pytest.raises(RegistryGovernedPolicyRefused) as e:
+>           build(tmp_path, res, None, fams(anc=Source(mat(ANC))))
+
+tests/test_final3_anchor.py:105: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/final3_support.py:84: in build
+    return GovernedPolicyWorkflow(families=families, verifier=ev.Ed25519Verifier(), runtime_authority_profile=cfg, construction_time=REG_NOW, **k)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/agent_control_plane/registry_governed_policy.py:350: in __init__
+    defect = unrmod.host_class_defect(host)  # ORIGINAL host validity FIRST (nothing composed here may repair it): before any Registry call or source read
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+profile = None
+
+    def host_class_defect(profile: RuntimeAuthorityProfile) -> Optional[str]:
+        """The ORIGINAL host profile's validity under the existing evaluator invariant (bounded.py:2111): an irreversible class whose `on_unreadable` is not `refuse` is
+        `action_class_invalid` for every action of the class. Checked BEFORE any Registry call so a Registry narrowing can never repair, and so conceal, a host defect."""
+>       if any(cl.irreversible and cl.on_unreadable != "refuse" for cl in profile.actions.values()):
+                                                                          ^^^^^^^^^^^^^^^
+E       AttributeError: 'NoneType' object has no attribute 'actions'
+
+src/agent_control_plane/registry_f5_class_unreadable_governance.py:116: AttributeError
+=========================== short test summary info ============================
+FAILED tests/test_final3_anchor.py::test_b02_no_runtime_authority_profile_at_all_is_refused
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 7 passed, 1 deselected in 12.89s

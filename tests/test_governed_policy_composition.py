@@ -792,7 +792,11 @@ def test_z02_the_three_existing_workflows_keep_their_public_surface(tmp_path):
 
 PROTECTED = {  # byte pins of the protected evaluators (identical to Control Plane ae47a04) and of the consolidated governance modules
     "bounded.py": "c219f8825a8ddf9da1fe6771ae575af0a9069ac8a04eadd40f093a9adb13655b",
-    "runtime_authority.py": "a4b4ac36cca6e75d8fc3408b8738163acfb609a7265633aec2f799700ff9ea66",
+    # D-07 Option A (Architect-authorized 2026-10-29): the ONLY protected-file change. Previous pin (CP main b7eb11a, CP #94 061a986):
+    # a4b4ac36cca6e75d8fc3408b8738163acfb609a7265633aec2f799700ff9ea66. The other five pins below are unchanged
+    # (tests/test_freshness_purpose_anchor_successor.py::test_d07_only_runtime_authority_changed_among_the_protected_evaluators).
+    # Chain: b7eb11a a4b4ac36... -> D-07 head fb24ed0 ad7b95e5d3bc3ddcba110a6758cf63e7f22b537766d3d072cbc7af17385bce01 -> this pin (comment-only prose correction; code tokens identical).
+    "runtime_authority.py": "45a27db8695ff9d23516e1937f3bafa2391bbc1587ed0fb09f56ea8f3e01d23f",
     "freshness.py": "3f146ee11a3424d816c6f35ba07259833612a985901b4a96c0275395f05d51c0",
     "policy_binding.py": "defdfac5fd60cf5be707a76204a12513f2f289b0620ec56d063b56dac4081a35",
     "rule_revision.py": "a3833f49e96db52e0665b9816daee2654f74f7784faad5101252b4c8722415a5",
