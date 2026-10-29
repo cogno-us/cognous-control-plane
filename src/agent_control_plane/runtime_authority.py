@@ -401,16 +401,17 @@ def validate_extensions(profile: RuntimeAuthorityProfile, proposal, context: dic
                 if observed.state == "closed":
                     reasons.append("purpose_closed")
                 age = (now - _parse(observed.observed_at)).total_seconds()
-                if binding is not None:
-                    # R6: under a policy binding the purpose observation joins the dispatch deadline (``observed_at + its bound``) like every
-                    # input judged through ``_fresh``, so a status that satisfied its bound at evaluation cannot be dispatched past it. The
-                    # bound is the class bound, or the recorded bound of an accepted cached snapshot (<= the ceiling by construction).
-                    # Profiles without a binding keep today's behaviour (the purpose age is judged here and not anchored).
-                    from .bounded import _FRESH_DEADLINES
-                    collector = _FRESH_DEADLINES.get()
-                    if collector is not None and cl is not None:
-                        anchor_bound = int(extra["age_bound_seconds"]) if extra is not None else cl.max_status_age_seconds
-                        collector.append(_parse(observed.observed_at) + timedelta(seconds=anchor_bound))
+                # R6 / D-07: whenever the deadline collector exists (``anchor_deadline_to_inputs``: ``_FRESH_DEADLINES`` is set only then) the
+                # purpose observation joins the dispatch deadline (``observed_at + its bound``) like every input judged through ``_fresh``, so a
+                # status that satisfied its bound at evaluation cannot be dispatched past it. The bound is the class bound, or the recorded bound
+                # of an accepted cached snapshot (<= the ceiling by construction). This no longer depends on a policy binding being present
+                # (D-07 Option A, Architect-authorized 2026-10-29: the former binding-only guard left a 2x residual window); it only ever adds
+                # a ``min`` to the deadline, so it cannot widen any bound.
+                from .bounded import _FRESH_DEADLINES
+                collector = _FRESH_DEADLINES.get()
+                if collector is not None and cl is not None:
+                    anchor_bound = int(extra["age_bound_seconds"]) if extra is not None else cl.max_status_age_seconds
+                    collector.append(_parse(observed.observed_at) + timedelta(seconds=anchor_bound))
                 # An accepted cached snapshot was already held to its own bound (class bound, or an extension of it named by a configured signer: asserted, unauthenticated).
                 if extra is None and (not cl or age < 0 or age > cl.max_status_age_seconds):
                     reasons.append("purpose_unreadable")

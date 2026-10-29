@@ -36,7 +36,8 @@ FROZEN = json.loads(VECTORS.read_text(encoding="utf-8"))
 PROTECTED_BLOBS = {  # git blob ids at the base fff27ebf356007e1eb3bb24198efc7e3e3f0c5eb
     "src/agent_control_plane/bounded.py": "2cc8d998ff0a8fec3112a8b0634111fcf8fbef17",
     "src/agent_control_plane/policy_binding.py": "426d47797e92f19690a21b4e8b5dc1c35d1b579c",
-    "src/agent_control_plane/runtime_authority.py": "0b2c5e49c0cd3e0738e5c4c9e9d4fc8590563fa2",
+    # D-07 Option A (Architect-authorized 2026-10-29): the ONLY protected-file change; previous git blob 0b2c5e49c0cd3e0738e5c4c9e9d4fc8590563fa2.
+    "src/agent_control_plane/runtime_authority.py": "f9bca4031858c25d6d57b2d0033483876f7a0f1b",
 }
 CLASSES = {"LocalExecutionClaim": LocalExecutionClaim, "TenantLocalExecutionClaim": TenantLocalExecutionClaim}
 

@@ -1,19 +1,32 @@
-"""D-07 residual-window characterization: the purpose observation under anchor_deadline_to_inputs WITHOUT a policy binding.
+"""D-07 purpose-observation anchor: predecessor characterization (CP #94 head 061a986) and its documented SUCCESSOR forms.
 
-What this file pins (current behaviour of unchanged protected evaluators; it is NOT a guarantee and NOT a fix):
+SUPERSESSION RECORD (read this first; nothing here was silently rewritten)
+* Predecessor: Control Plane PR #94, head ``061a986563768f2f8f9f6c0861647a3c5b1935be`` (main ``b7eb11aaeed9c766ecaae7d22955093f7f7cd1aa`` plus
+  this test file). At that head all 10 tests of this file PASSED: three tests named ``*residual*`` pinned the OPEN residual window
+  (a purpose observation or cached-purpose snapshot at the 30 s ceiling was dispatched at age 59-60 s when ``anchor_deadline_to_inputs=True``
+  and no ``PolicyBinding`` was present), a fourth ``*residual*`` test pinned that only the class deadline closed it.
+  The original raw results are retained verbatim in ``docs/evidence/d07/baseline-01-purpose-residual-characterization-061a986.txt``.
+* Authorization: D-07 Option A, Architect directive "ARCHITECT AUTHORIZATION AND BUILDER DIRECTIVE" 2026-10-29, recorded in
+  ``family-migration/final-three/02-architect-authorization-and-contract-freeze-2026-10-29.md`` section 6 (docs repository): the guard
+  ``if binding is not None:`` before the purpose-observation deadline-anchoring block in ``runtime_authority.py`` is removed.
+* Effect: the same fixtures are now REFUSED by the existing ``check_expired_before_dispatch``. The three tests that failed on the corrected
+  source ("age_at_dispatch_is_twice", "end_of_the_unanchored_window", "cached_purpose_snapshot_age_at_dispatch_is_twice"; raw failing output in
+  ``docs/evidence/d07/postchange-01-predecessor-tests-on-corrected-source-UNMODIFIED-TESTS.txt``) are converted below to their successor form
+  (``test_successor_*``, same fixtures, inverted outcome). The fourth ``*residual*`` test still passed on the corrected source but its name and
+  claim ("closed only by the class deadline") became false, so it is renamed to a successor too. The contrast (PolicyBinding) and control
+  tests are unchanged byte for byte. The predecessor bodies stay in git history at 061a986. Successor coverage beyond these fixtures lives in
+  ``tests/test_freshness_purpose_anchor_successor.py``.
+* Developer evidence only: non-authorizing, builder-tested, NOT independently qualified.
 
+What the predecessor pinned (historical; superseded for the no-binding case by the successor tests below):
 * ``anchor_deadline_to_inputs=True`` anchors every input judged through ``bounded._fresh`` (identity, mandate, grant status, ...) to
-  ``observed_at + own bound``. The PURPOSE observation is judged once at evaluation (``runtime_authority.py`` purpose block) and joins
-  the deadline collector ONLY when the profile carries a ``policy_binding``. So with the flag True and no binding, a purpose
-  observation that is exactly at a Registry-narrowed class bound at evaluation can still be dispatched up to one more bound later:
-  its age at dispatch is about 2x the narrowed ceiling. The same holds for an accepted cached-purpose snapshot (bounded.py
-  ``_cached_purpose``; anchored only in the binding branch).
-* With a ``PolicyBinding`` the purpose observation (live or cached) is anchored and the same stall is refused.
-* The other ``_fresh`` inputs ARE anchored with the flag True and no binding (control).
+  ``observed_at + own bound``. The PURPOSE observation is judged once at evaluation (``runtime_authority.py`` purpose block); at 061a986 it joined
+  the deadline collector ONLY when the profile carried a ``policy_binding``. The same held for an accepted cached-purpose snapshot (bounded.py
+  ``_cached_purpose``).
+* With a ``PolicyBinding`` the purpose observation (live or cached) is anchored and the same stall is refused (contrast tests, unchanged).
+* The other ``_fresh`` inputs ARE anchored with the flag True and no binding (control tests, unchanged).
 
-Tests whose name contains ``residual`` characterize a gap: if a protected-evaluator change closes it, they are EXPECTED to fail and
-must be inverted by that change (their assertions then become the contrast tests below). Deterministic: the service clock is the
-repo's fake ``Clock`` (tests/test_freshness.py); nothing sleeps. Synthetic fixtures only.
+Deterministic: the service clock is the repo's fake ``Clock`` (tests/test_freshness.py); nothing sleeps. Synthetic fixtures only.
 """
 from datetime import timedelta
 
@@ -72,36 +85,41 @@ def _opened_deadline(f):
 
 
 # ------------------------------------------------------------------------------------------------ (a) live purpose observation
-def test_residual_purpose_observation_age_at_dispatch_is_twice_the_narrowed_ceiling_when_anchored_without_a_binding(tmp_path, clock):
+def test_successor_purpose_observation_at_the_ceiling_is_refused_after_a_29_second_stall_when_anchored_without_a_binding(tmp_path, clock):
+    """SUPERSEDES ``test_residual_purpose_observation_age_at_dispatch_is_twice_the_narrowed_ceiling_when_anchored_without_a_binding`` (061a986):
+    same fixture, the 29 s stall that was dispatched at purpose age 59 s is now refused (D-07 Option A)."""
     p, r, f = _purpose_flow(tmp_path, with_binding=False)
     d = f.decide(p, now=NOW)
     assert d.result == "authorized", d.reasons                                   # age 30 <= 30 at evaluation
     _stall_once(f, clock, CEILING - 1)                                           # dispatch stalled 29 s
-    attempt, _ = execute(f, p, d)
-    assert attempt.status == "acknowledged", "RESIDUAL: dispatched although the purpose observation is past the ceiling"
-    purpose_age_at_dispatch = (clock.now - (NOW - timedelta(seconds=CEILING))).total_seconds()
-    assert purpose_age_at_dispatch == 2 * CEILING - 1 == 59 and purpose_age_at_dispatch > CEILING
-    # The opened deadline is opened_at + the class bound: the purpose observation is not in the calculation.
-    assert _opened_deadline(f) == (NOW + timedelta(seconds=CEILING)).isoformat()
+    with pytest.raises(PermissionError, match="check_expired_before_dispatch"):
+        execute(f, p, d)
+    assert f.destination.snapshot()["effects"] == {}
+    # The opened deadline is tightened to purpose observed_at + the class bound (it was NOW + 30 at 061a986).
+    assert _opened_deadline(f) == NOW.isoformat()
 
 
-def test_residual_purpose_observation_is_dispatched_up_to_the_end_of_the_unanchored_window(tmp_path, clock):
-    """Boundary of the window: the deadline is NOW + 30, so a 30 s stall still dispatches (purpose age 60 = 2x) and 31 s refuses."""
+def test_successor_purpose_observation_is_refused_at_the_former_end_of_the_unanchored_window(tmp_path, clock):
+    """SUPERSEDES ``test_residual_purpose_observation_is_dispatched_up_to_the_end_of_the_unanchored_window`` (061a986): the 30 s stall that
+    dispatched at purpose age 60 s (2x) is refused."""
     p, r, f = _purpose_flow(tmp_path, with_binding=False)
     d = f.decide(p, now=NOW)
     _stall_once(f, clock, CEILING)
-    attempt, _ = execute(f, p, d)
-    assert attempt.status == "acknowledged"
-    assert (clock.now - (NOW - timedelta(seconds=CEILING))).total_seconds() == 2 * CEILING
+    with pytest.raises(PermissionError, match="check_expired_before_dispatch"):
+        execute(f, p, d)
+    assert f.destination.snapshot()["effects"] == {}
 
 
-def test_residual_window_is_closed_only_by_the_class_deadline_not_by_the_purpose_age(tmp_path, clock):
+def test_successor_a_stall_past_the_ceiling_is_refused_and_the_purpose_anchor_is_what_tightens_the_deadline(tmp_path, clock):
+    """SUPERSEDES ``test_residual_window_is_closed_only_by_the_class_deadline_not_by_the_purpose_age`` (061a986; it still passed on the corrected
+    source but its claim became false): the 31 s stall is refused and the recorded deadline is the purpose-anchored one."""
     p, r, f = _purpose_flow(tmp_path, with_binding=False)
     d = f.decide(p, now=NOW)
     _stall_once(f, clock, CEILING + 1)
     with pytest.raises(PermissionError, match="check_expired_before_dispatch"):
         execute(f, p, d)
     assert f.destination.snapshot()["effects"] == {}
+    assert _opened_deadline(f) == NOW.isoformat()
 
 
 # ------------------------------------------------------------------------------------------------ (b) cached-purpose snapshot
@@ -121,15 +139,17 @@ def _cached_flow(tmp_path, *, with_binding):
     return p, r, f
 
 
-def test_residual_cached_purpose_snapshot_age_at_dispatch_is_twice_the_narrowed_ceiling_when_anchored_without_a_binding(tmp_path, clock):
+def test_successor_cached_purpose_snapshot_at_the_ceiling_is_refused_after_a_29_second_stall_when_anchored_without_a_binding(tmp_path, clock):
+    """SUPERSEDES ``test_residual_cached_purpose_snapshot_age_at_dispatch_is_twice_the_narrowed_ceiling_when_anchored_without_a_binding`` (061a986):
+    same fixture, the cached snapshot that was dispatched at age 59 s is now refused."""
     p, r, f = _cached_flow(tmp_path, with_binding=False)
     d = f.decide(p, now=NOW)
     assert d.result == "authorized", d.reasons
     assert any(x.input_type == "purpose" and x.read_state == "cached_positive" for x in d.resolution_inputs)
     _stall_once(f, clock, CEILING - 1)
-    attempt, _ = execute(f, p, d)
-    assert attempt.status == "acknowledged", "RESIDUAL: dispatched although the cached purpose snapshot is past the ceiling"
-    assert (clock.now - (NOW - timedelta(seconds=CEILING))).total_seconds() == 2 * CEILING - 1
+    with pytest.raises(PermissionError, match="check_expired_before_dispatch"):
+        execute(f, p, d)
+    assert f.destination.snapshot()["effects"] == {}
 
 
 # ------------------------------------------------------------------------------------------------ (c) contrast: a PolicyBinding anchors both
