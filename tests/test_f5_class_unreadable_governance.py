@@ -1439,8 +1439,10 @@ PROTECTED = {
     "policy_binding.py": "defdfac5fd60cf5be707a76204a12513f2f289b0620ec56d063b56dac4081a35",
     "rule_revision.py": "a3833f49e96db52e0665b9816daee2654f74f7784faad5101252b4c8722415a5",
     "reversibility.py": "5edbadebb3aa777fba7f652c10c8da3c5e9ee1766b71866ed55dc25b319477d1",
-    "registry_f4_age_governance.py": "9d6d88213befe60023e6ac7f3528762be466f3c577ce172d56125c4cb30325b3",
-    "registry_f5_class_age_governance.py": "fd4fb025ecf37d6dd20031881a36b2eb953a726dc6ecf5137ee8c1567b486497",
+    # D-06 follow-up (OCS-REG-FINAL3 gap 1): the two dedicated consumers below gain `legacy_cutoff` and the shared binding hook (docs/effective-configuration-binding.md).
+    # Previous pins: registry_f4_age_governance.py 9d6d8821, registry_f5_class_age_governance.py fd4fb025. The protected evaluators above are unchanged.
+    "registry_f4_age_governance.py": "fdf3c17d14337b37590fe07c02212eaccce8c5dccf554b671f622e38485e0b3a",
+    "registry_f5_class_age_governance.py": "f381fbe731719c0b947433d2b16d583c3572a2a1b30456ba6a5379b8c34af577",
 }
 
 

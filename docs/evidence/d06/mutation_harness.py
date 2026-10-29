@@ -20,7 +20,8 @@ from pathlib import Path
 ECB = "src/agent_control_plane/effective_configuration_binding.py"
 LIFE = "src/agent_control_plane/registry_governed_lifecycle.py"
 POL = "src/agent_control_plane/registry_governed_policy.py"
-TESTS = ["tests/test_effective_configuration_binding_unit.py", "tests/test_effective_configuration_binding.py", "tests/test_effective_configuration_binding_legacy.py"]
+TESTS = ["tests/test_effective_configuration_binding_unit.py", "tests/test_effective_configuration_binding.py", "tests/test_effective_configuration_binding_legacy.py",
+         "tests/test_effective_configuration_binding_dedicated.py"]
 
 M = []
 
@@ -94,32 +95,58 @@ mut("redundant-guard-removed", "the defensive 'stamped equals persisted although
     equivalent="first assumed equivalent (unreachable); the run showed it is LOAD-BEARING: Python equality conflates 60.0 == 60 and True == 1, so a malformed persisted member can compare equal to the live one")
 mut("stamp-persisted-member-and-no-guard", "the persisted member is stamped AND the defensive guard is removed (a mismatch would be accepted)", LIFE, STAMP_OLD, STAMP_NEW)
 M[-1]["also"] = dict(file=LIFE, old=GUARD, new="")
-# --- policy / held state ---------------------------------------------------------------------------------------------------------------------------------------
-mut("held-guard-ignores-observation-policy", "the held-state guard does not cover the ObservationPolicy", POL,
+# --- shared lifecycle step / held state (follow-up: the logic moved from the composed workflow into GovernedLifecycle so the dedicated workflows reuse it) -----------------------
+mut("held-guard-ignores-observation-policy", "the held-state guard does not cover the ObservationPolicy", LIFE,
     "        return scalars, (None if obs is None else tuple((type(v), v) for v in (obs.max_age_seconds, obs.clock_tolerance_seconds)))",
     "        return scalars, None")
-mut("held-guard-ignores-other-scalars", "the held-state guard covers only the F4 scalars", POL,
+mut("held-guard-ignores-other-scalars", "the held-state guard covers only the F4 scalars", LIFE,
     "        scalars = tuple((type(v), v) for v in (self.status_max_age_seconds, self.approval_max_age_seconds, self.clock_tolerance_seconds, self.identity_max_age_seconds,\n                                               self.mandate_max_age_seconds))",
     "        scalars = tuple((type(v), v) for v in (self.status_max_age_seconds, self.approval_max_age_seconds))")
-mut("held-guard-disabled", "the new held-state comparison is removed", POL, "        if not unchanged:  # D-06", "        if False:  # D-06")
-mut("construction-skips-binding-validation", "the scalars are not validated at construction", POL, "            self._gl_configuration_members()\n        except ecb.BindingInvalid as exc:",
+mut("held-guard-disabled", "the new held-state comparison is removed", LIFE, '            return None if self._gl_config_view() == self._gl_held_config else "scalars_modified"', "            return None")
+mut("construction-skips-binding-validation", "the scalars are not validated at construction", LIFE, "            self._gl_configuration_members()\n        except ecb.BindingInvalid as exc:",
     "            pass\n        except ecb.BindingInvalid as exc:")
-mut("legacy-cutoff-not-validated", "the constructor accepts any legacy_cutoff", POL, "        if ecb.legacy_cutoff_defect(legacy_cutoff) is not None:", "        if False:")
-mut("legacy-cutoff-not-applied", "the constructor ignores legacy_cutoff", POL, "        self._gl_legacy_cutoff = legacy_cutoff\n", "")
-mut("members-omit-live-f4-scalars-when-undeclared", "the F4 scalars are bound only when the F4 family is declared", POL,
+mut("legacy-cutoff-not-validated", "the shared cutoff check accepts any legacy_cutoff", LIFE, "    if ecb.legacy_cutoff_defect(cutoff) is not None:", "    if False:")
+mut("legacy-cutoff-not-applied", "the shared bind step ignores legacy_cutoff", LIFE, "        self._gl_legacy_cutoff = legacy_cutoff\n", "        self._gl_legacy_cutoff = 0\n")
+mut("members-f4-scalars-constant", "the F4 scalars are not read live (constant 0)", LIFE,
     'f4_scalars={"status_max_age_seconds": self.status_max_age_seconds, "approval_max_age_seconds": self.approval_max_age_seconds},',
-    'f4_scalars={"status_max_age_seconds": self.status_max_age_seconds if b["f4_ages"] is not None else 0, "approval_max_age_seconds": self.approval_max_age_seconds if b["f4_ages"] is not None else 0},')
-mut("members-omit-constructor-tolerance", "the constructor tolerance is not read live (constant 5)", POL,
+    'f4_scalars={"status_max_age_seconds": 0, "approval_max_age_seconds": 0},')
+mut("members-omit-constructor-tolerance", "the constructor tolerance is not read live (constant 5)", LIFE,
     '"clock_tolerance_seconds": self.clock_tolerance_seconds, "identity_max_age_seconds"', '"clock_tolerance_seconds": 5, "identity_max_age_seconds"')
-mut("members-use-host-profile-for-effective", "the effective profile digest is replaced by the host digest", POL,
-    "effective_profile_digest=agemod.profile_digest(held) if held is not None else None,", "effective_profile_digest=agemod.profile_digest(self._gp_host) if self._gp_host is not None else None,")
-mut("members-scope-fixed-tenant", "the tenant in the scope member is a constant", POL,
-    "scope=ecb.scope_identity(scope.consumer_id, scope.tenant_id, scope.action_id, authority[0], authority[1]),\n                host_profile_digest",
-    'scope=ecb.scope_identity(scope.consumer_id, "tenant", scope.action_id, authority[0], authority[1]),\n                host_profile_digest')
-mut("members-families-empty", "the declared family set is not bound", POL, "families=ecb.family_rows(b, FAMILY_NAMES, FAMILY_TABLE, SCHEMA_REVISIONS))", "families=[])")
-mut("members-families-skip-schema-revisions", "the family schema revisions are not bound", POL, "ecb.family_rows(b, FAMILY_NAMES, FAMILY_TABLE, SCHEMA_REVISIONS)", "ecb.family_rows(b, FAMILY_NAMES, FAMILY_TABLE, {})")
-mut("members-observation-policy-null", "the ObservationPolicy is not bound (explicit null)", POL,
-    'observation_policy=None if obs is None else {"max_age_seconds": obs.max_age_seconds, "clock_tolerance_seconds": obs.clock_tolerance_seconds},', "observation_policy=None,")
+mut("members-use-host-profile-for-effective", "the composed effective profile digest is replaced by the host digest", POL,
+    "ed = agemod.profile_digest(held) if held is not None else None", "ed = hd")
+mut("members-scope-fixed-tenant", "the tenant in the scope member is a constant", LIFE, "ecb.scope_identity(scope.consumer_id, scope.tenant_id,", 'ecb.scope_identity(scope.consumer_id, "tenant",')
+mut("members-families-empty", "the declared family set is not bound", LIFE, "families=ecb.family_rows(bound, order or tuple(FAMILY_TABLE), FAMILY_TABLE, SCHEMA_REVISIONS))", "families=[])")
+mut("members-families-skip-schema-revisions", "the family schema revisions are not bound", LIFE, "FAMILY_TABLE, SCHEMA_REVISIONS))", "FAMILY_TABLE, {}))")
+mut("members-observation-policy-null", "the ObservationPolicy is not bound (explicit null)", LIFE,
+    'observation_policy=None if obs is None else {"max_age_seconds": obs.max_age_seconds, "clock_tolerance_seconds": obs.clock_tolerance_seconds})',
+    "observation_policy=None)")
+# --- the dedicated single-family hooks (follow-up) ---------------------------------------------------------------------------------------------------------------------------
+F4M, AGEM, UNRM = ("src/agent_control_plane/registry_f4_age_governance.py", "src/agent_control_plane/registry_f5_class_age_governance.py",
+                   "src/agent_control_plane/registry_f5_class_unreadable_governance.py")
+F4_HOOK = '        return self._gl_build_members(host_profile_digest=None, effective_profile_digest=None, bound={"f4_ages": self._gl_bound})'
+AGE_HOOK = "profile_digest(self._f5_host), effective_profile_digest=profile_digest(held), bound={\"class_age\": self._gl_bound})"
+UNR_HOOK = "        return self._gl_build_members(host_profile_digest=profile_digest(self._fu_host), effective_profile_digest=profile_digest(held),\n                                      bound={\"class_age\": age_part, \"class_unreadable\": (effective, digest)})"
+mut("dedicated-f4-hook-binds-nothing", "the dedicated F4 workflow mints/checks no binding", F4M, F4_HOOK, "        return None")
+mut("dedicated-age-hook-binds-nothing", "the dedicated class-age workflow mints/checks no binding", AGEM,
+    "        return self._gl_build_members(host_profile_digest=" + AGE_HOOK, "        return None  # (" + AGE_HOOK)
+mut("dedicated-unr-hook-binds-nothing", "the dedicated class-unreadable workflow mints/checks no binding", UNRM, UNR_HOOK, "        return None")
+mut("dedicated-f4-held-guard-missing", "the dedicated F4 held-state guard does not cover the other scalars / ObservationPolicy", F4M,
+    "        return self._gl_config_defect()  # D-06: the other scalars and the ObservationPolicy", "        return None")
+mut("dedicated-age-held-guard-missing", "the dedicated class-age held-state guard does not cover the scalars / ObservationPolicy", AGEM,
+    "        return self._gl_config_defect()  # D-06: the five scalars and the ObservationPolicy", "        return None")
+mut("dedicated-unr-held-guard-missing", "the dedicated class-unreadable held-state guard does not cover the scalars / ObservationPolicy", UNRM,
+    "        return self._gl_config_defect()  # D-06: the five scalars and the ObservationPolicy", "        return None")
+for _tag, _f in (("f4", F4M), ("age", AGEM), ("unr", UNRM)):
+    mut(f"dedicated-{_tag}-cutoff-not-validated", f"the dedicated {_tag} constructor does not validate legacy_cutoff", _f,
+        "        check_cutoff(legacy_cutoff, _refuse)", "        pass  # check_cutoff")
+    mut(f"dedicated-{_tag}-bind-step-skipped", f"the dedicated {_tag} constructor skips the shared bind step (no scalar validation, no held snapshot, no cutoff)", _f,
+        "        self._gl_bind_configuration(legacy_cutoff, _refuse)", "        self._gl_legacy_cutoff = legacy_cutoff; self._gl_held_config = self._gl_config_view()  # bind step reduced")
+mut("dedicated-age-host-digest-is-effective", "the dedicated class-age host digest is replaced by the effective digest", AGEM, "profile_digest(self._f5_host), effective_profile_digest",
+    "profile_digest(held), effective_profile_digest")
+mut("dedicated-unr-host-digest-is-effective", "the dedicated class-unreadable host digest is replaced by the effective digest", UNRM, "host_profile_digest=profile_digest(self._fu_host)",
+    "host_profile_digest=profile_digest(held)")
+mut("dedicated-unr-joint-age-slot-dropped", "the joint workflow does not bind the class-age family", UNRM, 'bound={"class_age": age_part, "class_unreadable": (effective, digest)}',
+    'bound={"class_unreadable": (effective, digest)}')
 
 
 def apply(root: Path, m: dict) -> bool:

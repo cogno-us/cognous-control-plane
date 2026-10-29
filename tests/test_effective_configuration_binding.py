@@ -558,6 +558,9 @@ def test_h04_the_same_configuration_gives_the_same_binding_digest_across_constru
     assert other.effective_configuration_binding == flow.effective_configuration_binding  # `evaluated_at` is not a member
 
 
+@pytest.mark.xfail(strict=True, reason="SUPERSEDED by the coordinator's follow-up authorization (OCS-REG-FINAL3, gap 1: 'no unbound configuration in newly governed decisions'). "
+                   "The dedicated single-family workflows now mint and check the same binding; see test_h05b below and tests/test_effective_configuration_binding_dedicated.py. "
+                   "The original assertion text is kept unchanged so the supersession is visible; strict xfail fails if it ever passes again.")
 def test_h05_the_dedicated_single_family_workflows_do_not_bind_and_are_unchanged(tmp_path):
     """Documented scope limit: the three dedicated family workflows (F4, class age, class unreadable) keep no configuration hook in this change (their modules are outside the
     authorized file set); the composed `GovernedPolicyWorkflow` is the governed lifecycle that binds. They mint nothing, so their records are byte-identical to before."""
@@ -568,6 +571,18 @@ def test_h05_the_dedicated_single_family_workflows_do_not_bind_and_are_unchanged
     d = wf.decide(p, now=NOW)
     assert d.result == "authorized" and d.binding.runtime_authority is None
     assert wf.configuration_binding_status(d) is None
+    assert_executes(wf, p, d)
+
+
+def test_h05b_successor_the_dedicated_f4_workflow_now_binds(tmp_path):
+    """Successor of test_h05 (documented scope change): the dedicated F4 workflow carries `runtime_authority == {"effective_configuration": ...}` and is classified, not None."""
+    p = T.base.tenant_proposal()
+    res = T.base.tenant_resolver_for(p)
+    from agent_control_plane import registry_f4_age_governance as f4gov
+    wf = f4gov.GovernedAgeWorkflow(scope=T.SCOPE_F, selection_source=T.fsrc(), verifier=S.ev.Ed25519Verifier(), construction_time=S.REG_NOW, **T.kwargs(tmp_path, res))
+    d = wf.decide(p, now=NOW)
+    assert d.result == "authorized" and set(d.binding.runtime_authority) == {ecb.KEY}
+    assert wf.configuration_binding_status(d) == ecb.BOUND
     assert_executes(wf, p, d)
 
 

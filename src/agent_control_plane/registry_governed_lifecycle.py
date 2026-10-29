@@ -123,6 +123,12 @@ def check_scope(scope: Any, refuse: Refuser) -> None:
         raise refuse("scope_invalid", "construction")
 
 
+def check_cutoff(cutoff: Any, refuse: Refuser) -> None:
+    """The explicit `legacy_cutoff`: an exact int in 0..SCALAR_MAX (default 0 = no legacy decision is accepted); there is no wildcard."""
+    if ecb.legacy_cutoff_defect(cutoff) is not None:
+        raise refuse("legacy_cutoff_invalid", "construction")
+
+
 def check_source(source: Any, refuse: Refuser) -> None:
     if not callable(source):
         raise refuse("selection_source_invalid", "construction")
@@ -188,6 +194,51 @@ class GovernedLifecycle(BoundedAuthorizationWorkflow):
         """Hook (D-06): the validated members of the live effective configuration (`effective_configuration_binding.build_members`), or None when this family workflow does not
         bind its configuration. It must read the LIVE held values and raise `ecb.BindingInvalid` for any value outside its structural domain."""
         return None
+
+    def _gl_common_members(self) -> dict:
+        """The members every governed workflow shares: scope, the five live scalars and the ObservationPolicy effective values (or an explicit null)."""
+        scope, authority, obs = self._gl_scope, self._gl_authority, self.observation_policy
+        return dict(scope=ecb.scope_identity(scope.consumer_id, scope.tenant_id, scope.action_id, authority[0], authority[1]),
+                    f4_scalars={"status_max_age_seconds": self.status_max_age_seconds, "approval_max_age_seconds": self.approval_max_age_seconds},
+                    other_scalars={"clock_tolerance_seconds": self.clock_tolerance_seconds, "identity_max_age_seconds": self.identity_max_age_seconds,
+                                   "mandate_max_age_seconds": self.mandate_max_age_seconds},
+                    observation_policy=None if obs is None else {"max_age_seconds": obs.max_age_seconds, "clock_tolerance_seconds": obs.clock_tolerance_seconds})
+
+    def _gl_build_members(self, *, host_profile_digest: Optional[str], effective_profile_digest: Optional[str], bound: Mapping[str, Any], order: Optional[tuple] = None) -> dict:
+        """The ONE implementation of the live members for every governed workflow. `bound` maps a family slot to its bound part `(effective, effective_policy_digest, ...)`; the
+        family rows come from the existing family table. Any unreadable or foreign value is never bound: `ecb.BindingInvalid`."""
+        from agent_control_plane.registry_effective_policy import FAMILY_TABLE, SCHEMA_REVISIONS  # late: that module imports this one
+        try:
+            return ecb.build_members(host_profile_digest=host_profile_digest, effective_profile_digest=effective_profile_digest, **self._gl_common_members(),
+                                     families=ecb.family_rows(bound, order or tuple(FAMILY_TABLE), FAMILY_TABLE, SCHEMA_REVISIONS))
+        except ecb.BindingInvalid:
+            raise
+        except Exception:
+            raise ecb.BindingInvalid("configuration_not_readable") from None
+
+    def _gl_config_view(self) -> tuple:
+        """Type-exact view of the host-held scalar configuration (the five scalars and the ObservationPolicy values, or None) for the held-state guard."""
+        obs = self.observation_policy
+        scalars = tuple((type(v), v) for v in (self.status_max_age_seconds, self.approval_max_age_seconds, self.clock_tolerance_seconds, self.identity_max_age_seconds,
+                                               self.mandate_max_age_seconds))
+        return scalars, (None if obs is None else tuple((type(v), v) for v in (obs.max_age_seconds, obs.clock_tolerance_seconds)))
+
+    def _gl_config_defect(self) -> Optional[str]:
+        """Held-state guard for the scalar configuration: `scalars_modified` when any of it differs from construction (D-06 new coverage), else None."""
+        try:
+            return None if self._gl_config_view() == self._gl_held_config else "scalars_modified"
+        except Exception:
+            return "scalars_modified"
+
+    def _gl_bind_configuration(self, legacy_cutoff: Any, refuse: Refuser) -> None:
+        """Last construction step of a governed workflow: the configuration must be bindable (every scalar and the ObservationPolicy inside the structural range), then the
+        explicit cutoff is kept and the host-held scalar configuration is snapshotted for the held-state guard."""
+        try:
+            self._gl_configuration_members()
+        except ecb.BindingInvalid as exc:
+            raise refuse("host_scalar_invalid" if str(exc) in ("f4_scalars", "other_scalars", "observation_policy") else "configuration_binding_invalid", "construction") from None
+        self._gl_legacy_cutoff = legacy_cutoff
+        self._gl_held_config = self._gl_config_view()
 
     # -- persisted effective-configuration binding (D-06 Option B, carriage C2) ----------------------------------------------------------------------------------
     def configuration_binding_status(self, decision: Any) -> Optional[str]:

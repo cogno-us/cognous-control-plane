@@ -45,7 +45,7 @@ from typing import Any, Callable, Mapping, Optional
 from agent_control_plane.bounded import BoundedAuthorizationWorkflow, _now
 from agent_control_plane.registry_governed_lifecycle import (  # noqa: F401  (re-exported: existing import paths are unchanged)
     CLASSIFICATION, SCALAR_MAX, GovernedLifecycle, GovernedScope, Refusal, RegistrySelectionRefused, SelectionMaterial, _GatedDestination, _declared_authority,
-    _scalar, _text, check_scope, check_source, construction_now, read_source, require_authority, take_destination,
+    _scalar, _text, check_cutoff, check_scope, check_source, construction_now, read_source, require_authority, take_destination,
 )
 
 AGES = ("status_max_age_seconds", "approval_max_age_seconds")
@@ -103,7 +103,8 @@ class GovernedAgeWorkflow(GovernedLifecycle):
     _gl_rejection_code = REJECTION_CODE
 
     def __init__(self, *, scope: GovernedScope, selection_source: Callable[[], Any], verifier: Any, status_max_age_seconds: int = 60,
-                 approval_max_age_seconds: int = 60, construction_time: Optional[datetime] = None, **workflow_kwargs: Any):
+                 approval_max_age_seconds: int = 60, construction_time: Optional[datetime] = None, legacy_cutoff: int = 0, **workflow_kwargs: Any):
+        check_cutoff(legacy_cutoff, _refuse)  # D-06: explicit finite int, default 0 = no legacy decision accepted
         check_scope(scope, _refuse)
         check_source(selection_source, _refuse)
         if workflow_kwargs.get("runtime_authority_profile") is not None:
@@ -124,6 +125,7 @@ class GovernedAgeWorkflow(GovernedLifecycle):
         self._f4_scope, self._f4_source, self._f4_verifier = scope, selection_source, verifier
         self._f4_host, self._f4_authority = host, authority
         self._gl_attach(scope=scope, authority=authority, bound=(dict(values), digest))
+        self._gl_bind_configuration(legacy_cutoff, _refuse)  # D-06: shared lifecycle step (validates the scalars, snapshots them for the held-state guard)
 
     _f4_commit_gate = GovernedLifecycle._gl_commit_gate
 
@@ -149,7 +151,11 @@ class GovernedAgeWorkflow(GovernedLifecycle):
         values, _ = self._gl_bound
         if (self.status_max_age_seconds, self.approval_max_age_seconds) != (values[AGES[0]], values[AGES[1]]):
             return "scalars_modified"
-        return None
+        return self._gl_config_defect()  # D-06: the other scalars and the ObservationPolicy
+
+    def _gl_configuration_members(self) -> dict:
+        """D-06: the live members through the shared builder; this workflow carries no profile and one family."""
+        return self._gl_build_members(host_profile_digest=None, effective_profile_digest=None, bound={"f4_ages": self._gl_bound})
 
     def _gl_read_sources(self, boundary: str) -> Any:
         return read_source(self._f4_source, _refuse, boundary)
