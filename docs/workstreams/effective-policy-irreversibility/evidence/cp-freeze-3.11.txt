@@ -1,0 +1,17 @@
+-e git+https://github.com/cogno-us/cognous-control-plane@e5426dd943106b422d1c5dfcee0ba22e64a47c11#egg=agent_control_plane&subdirectory=../../../../../tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/u_cp
+annotated-types==0.8.0
+cffi==2.1.1
+coverage==7.17.0
+cryptography==50.0.2
+iniconfig==2.3.1
+packaging==26.3
+pluggy==1.7.0
+pycparser==3.12
+pydantic==2.14.1
+pydantic_core==2.50.1
+Pygments==2.21.0
+pytest==9.2.0
+pytest-asyncio==1.4.1
+pytest-cov==7.1.0
+typing-inspection==0.4.4
+typing_extensions==4.16.0

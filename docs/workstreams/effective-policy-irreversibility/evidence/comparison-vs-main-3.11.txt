@@ -1,0 +1,11 @@
+== main baseline (ev_r/cp-full-main-3.11.log) vs branch b5ca0d7 ==
+1359 passed, 101 skipped in 122.46s (0:02:02)
+1406 passed, 103 skipped in 130.37s (0:02:10)
+-- failed/error lines (main | branch):
+0
+0
+-- SKIPPED summary diff (main < , branch >):
+4c4
+< SKIPPED [2] tests/test_f5_class_unreadable_governance.py:31: NOT RUN: OCS_REGISTRY_PIN_DIR is not set to a Registry checkout
+---
+> SKIPPED [4] tests/test_f5_class_unreadable_governance.py:34: NOT RUN: OCS_REGISTRY_PIN_DIR is not set to a Registry checkout

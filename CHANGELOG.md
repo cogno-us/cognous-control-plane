@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Added — Registry-governed `ActionClass.irreversible` (Registry `r08-v7`) and `EffectivePolicySnapshot` (BUILDER_TESTED; non-authorizing)
+- One more family in the composed `GovernedPolicyWorkflow` (new pure module `registry_irreversibility_governance.py`; no new workflow class): a strengthen-only per-class `irreversible|no_change` map that flips `ActionClass.irreversible` false to true for every action of the class, composed after revocation assurance and before terminal revocation. A Registry `no_change` never lowers a host `irreversible`; the family can never assert reversibility.
+- A flip is never a repair: a host class that declares `reversibility`, `reversible_until` or `reversal_cost`, reads protected data, has an unobservable counterparty or whose HOST `on_unreadable` is not `refuse` is refused `irreversible_flip_conflict:<cause>`; two actions of one class with different flags are `class_irreversible_ambiguous`.
+- The flag is in the profile that `approval_commitment` and the persisted `catalogue_digest` already hash: no preimage, persisted field, reason code or protected evaluator changed; pre-existing bound identities and configuration digests are byte-identical (golden literal).
+- New `registry_effective_policy.py`: an immutable `EffectivePolicySnapshot` (exposed as `workflow.effective_policy_snapshot`) and a pure `resolve_effective_policy(...)` over the existing derivation (refuses, never weakens). Anchor/observation parameters stay BLOCKED. See `docs/registry-effective-policy-and-irreversibility.md`.
+
 ### Added — Registry-governed `requires_revocation_assurance` and terminal-revocation enablement (Registry `r08-v6`; BUILDER_TESTED; non-authorizing)
 - Two more families in the composed `GovernedPolicyWorkflow` (new pure module `registry_revocation_governance.py`; no new workflow class). A Registry `required` can only add the existing `holder_inventory_missing` hold and a Registry `on` can only add the existing `grant_revocation_recorded` refusal; the effective value is the stricter of host and Registry and a host requirement or section can never be removed.
 - Both values live in the `RuntimeAuthorityProfile`, so `approval_commitment` and the persisted `catalogue_digest` already bind them (an approval for the host profile does not authorize the forced profile). No preimage, persisted-decision field, reason code or protected evaluator changed; the F4 scalar-binding decision (U-1) stays unresolved and is not repeated.

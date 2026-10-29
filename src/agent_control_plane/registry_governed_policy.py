@@ -11,7 +11,9 @@ expired, changed, out of scope) refuses the whole workflow. There is no partial 
 governed by Registry here (the host value stays in force). The scopes must share consumer, tenant and action (operation ids may differ).
 
 Deterministic composition. Order: (1) F4 scalars, (2) class status age over the host profile, (3) class unreadable policy over the age-effective profile, (4) per-class revocation assurance (a
-requirement that can only add a holder-inventory hold), (5) terminal-revocation enablement (an obligation that can only add a refusal). The result is ONE
+requirement that can only add a holder-inventory hold), (5) per-class irreversibility (Registry `r08-v7`, see `registry_irreversibility_governance`: a strengthen-only flip of
+`ActionClass.irreversible` that is never a repair and is refused for a host class that declares reversibility members or whose HOST `on_unreadable` is not `refuse`), (6) terminal-revocation
+enablement (an obligation that can only add a refusal). `workflow.effective_policy_snapshot` is the immutable description of the result (`registry_effective_policy`). The result is ONE
 effective `RuntimeAuthorityProfile` (profile-bearing fields) plus the two F4 constructor scalars (which are NOT part of the profile). Before use the ORIGINAL host profile is validated
 against the existing invariant (an irreversible class that is not `refuse` is invalid: no Registry value may repair it), and the FINAL composed configuration is validated: every
 value is at most the host value, only the governed fields differ from the host, and the result still satisfies the host invariants (`composed_*` refusals).
@@ -44,7 +46,9 @@ from typing import Any, Callable, Mapping, Optional
 from agent_control_plane import registry_f4_age_governance as f4mod
 from agent_control_plane import registry_f5_class_age_governance as agemod
 from agent_control_plane import registry_f5_class_unreadable_governance as unrmod
+from agent_control_plane import registry_irreversibility_governance as irmod
 from agent_control_plane import registry_revocation_governance as revmod
+from agent_control_plane.registry_effective_policy import EffectivePolicySnapshot, build_snapshot, selection_ref
 from agent_control_plane.bounded import _now, commitment
 from agent_control_plane.registry_governed_lifecycle import (
     GovernedLifecycle, GovernedScope, Refusal, RegistrySelectionRefused, _GatedDestination, _scalar, check_scope, check_source, construction_now, read_source, require_authority,
@@ -53,7 +57,7 @@ from agent_control_plane.registry_governed_lifecycle import (
 from agent_control_plane.runtime_authority import RuntimeAuthorityProfile
 
 REJECTION_CODE = "registry_governed_policy_selection_invalid"
-FAMILY_NAMES = ("f4_ages", "class_age", "class_unreadable", "class_revocation_assurance", "terminal_revocation")  # deterministic composition order
+FAMILY_NAMES = ("f4_ages", "class_age", "class_unreadable", "class_revocation_assurance", "class_irreversible", "terminal_revocation")  # deterministic composition order
 
 
 class RegistryGovernedPolicyRefused(RegistrySelectionRefused):
@@ -83,6 +87,7 @@ class GovernedFamilies:
     class_unreadable: Optional[GovernedFamily] = None
     class_revocation_assurance: Optional[GovernedFamily] = None  # Registry r08-v6; only ADDS a holder-inventory hold
     terminal_revocation: Optional[GovernedFamily] = None  # Registry r08-v6; only ADDS the terminal-revocation refusal
+    class_irreversible: Optional[GovernedFamily] = None  # Registry r08-v7; only flips ActionClass.irreversible false -> true (strengthen-only, never repaired)
 
 
 class GovernedActivationLedger:
@@ -121,7 +126,8 @@ def _prefixed(name: str, refusal: Refusal) -> Refusal:
 
 
 def final_composition_defect(host: Optional[RuntimeAuthorityProfile], final: Optional[RuntimeAuthorityProfile], host_scalars: Mapping[str, int],
-                             final_scalars: Optional[Mapping[str, int]], *, assurance_declared: bool = False, terminal_declared: bool = False) -> Optional[str]:
+                             final_scalars: Optional[Mapping[str, int]], *, assurance_declared: bool = False, terminal_declared: bool = False,
+                             irreversible_declared: bool = False) -> Optional[str]:
     """Validate the FINAL composed configuration against the ORIGINAL host: no value above the host value, only the governed fields differ, the host invariants still hold."""
     if final_scalars is not None and any(final_scalars[k] > host_scalars[k] for k in f4mod.AGES):
         return "composed_widens_host"
@@ -140,7 +146,14 @@ def final_composition_defect(host: Optional[RuntimeAuthorityProfile], final: Opt
             return "composed_widens_host"
         if assurance_declared and ch.get("requires_revocation_assurance", False) and not cf.get("requires_revocation_assurance", False):  # a host requirement may only be kept or added to
             return "composed_widens_host"
+        if irreversible_declared:
+            if ch.get("irreversible", True) and not cf.get("irreversible", True):  # a host irreversible class may only be kept or strengthened, never reversed
+                return "composed_widens_host"
+            if cf.get("irreversible", True) and not ch.get("irreversible", True) and ch["on_unreadable"] != "refuse":  # a flip may not rely on a composed narrowing to hide a host defect
+                return irmod.FLIP_CONFLICT + ":" + irmod.FLIP_CAUSES[3]
         ch.pop("max_status_age_seconds"), cf.pop("max_status_age_seconds"), ch.pop("on_unreadable"), cf.pop("on_unreadable")
+        if irreversible_declared:  # only a DECLARED family may differ in this field; otherwise any difference is a foreign change
+            ch.pop("irreversible", None), cf.pop("irreversible", None)
         if assurance_declared:  # only a DECLARED family may differ in this field; otherwise any difference is a foreign change
             ch.pop("requires_revocation_assurance", None), cf.pop("requires_revocation_assurance", None)
     fh, ff = dh.get("freshness"), df.get("freshness")
@@ -159,10 +172,10 @@ def final_composition_defect(host: Optional[RuntimeAuthorityProfile], final: Opt
 
 def derive_policy(*, families: GovernedFamilies, host: Optional[RuntimeAuthorityProfile], host_scalars: Mapping[str, int], host_ages: Optional[Mapping[str, int]],
                   host_values: Optional[Mapping[str, str]], materials: Mapping[str, Any], verifier: Any, institution_id: str, authority_domain: str, now: datetime,
-                  host_assurance: Optional[Mapping[str, str]] = None, host_terminal: Optional[str] = None):
+                  host_assurance: Optional[Mapping[str, str]] = None, host_terminal: Optional[str] = None, host_irreversible: Optional[Mapping[str, str]] = None):
     """Pure verification of EVERY declared family and composition of the one effective configuration. Returns `((profile or None, scalars or None, bound), None)` or `(None, Refusal)`.
     Builds no workflow and writes nothing."""
-    scalars = age_part = unreadable = assurance = terminal = None
+    scalars = age_part = unreadable = assurance = terminal = irreversible = None
     base = host
     if families.f4_ages is not None:
         values, digest, refusal = f4mod.verify_scope_selection(scope=families.f4_ages.scope, institution_id=institution_id, authority_domain=authority_domain,
@@ -199,6 +212,17 @@ def derive_policy(*, families: GovernedFamilies, host: Optional[RuntimeAuthority
         except Exception:
             return None, Refusal("effective_profile_invalid")
         assurance = (dict(effective), digest)
+    if families.class_irreversible is not None:
+        derived_i, refusal = irmod.derive_irreversible(scope=families.class_irreversible.scope, institution_id=institution_id, authority_domain=authority_domain, host=host,
+                                                       host_values=host_irreversible, material=materials["class_irreversible"], verifier=verifier, now=now)
+        if refusal is not None:
+            return None, _prefixed("class_irreversible", refusal)
+        effective, digest = derived_i
+        try:
+            base = irmod.compose_irreversible(base, effective)
+        except Exception:
+            return None, Refusal("effective_profile_invalid")
+        irreversible = (dict(effective), digest)
     if families.terminal_revocation is not None:
         derived_t, refusal = revmod.derive_terminal(scope=families.terminal_revocation.scope, institution_id=institution_id, authority_domain=authority_domain,
                                                     host_value=host_terminal, material=materials["terminal_revocation"], verifier=verifier, now=now)
@@ -211,12 +235,15 @@ def derive_policy(*, families: GovernedFamilies, host: Optional[RuntimeAuthority
             return None, Refusal("effective_profile_invalid")
         terminal = (effective, digest)
     defect = final_composition_defect(host, base, host_scalars, scalars[0] if scalars else None, assurance_declared=families.class_revocation_assurance is not None,
-                                      terminal_declared=families.terminal_revocation is not None)
+                                      terminal_declared=families.terminal_revocation is not None,
+                                      irreversible_declared=families.class_irreversible is not None)
     if defect is not None:
         return None, Refusal(defect)
-    pdigest = agemod.profile_digest(base) if (base is not None and (age_part or unreadable or assurance or terminal)) else None
+    pdigest = agemod.profile_digest(base) if (base is not None and (age_part or unreadable or assurance or irreversible or terminal)) else None
     bound = {"f4_ages": scalars, "class_age": age_part, "class_unreadable": unreadable, "class_revocation_assurance": assurance, "terminal_revocation": terminal,
              "effective_profile_digest": pdigest}
+    if irreversible is not None:  # present only when declared, so every pre-existing bound identity and configuration digest stays byte-identical
+        bound["class_irreversible"] = irreversible
     return (base, scalars, bound), None
 
 
@@ -245,7 +272,7 @@ class GovernedPolicyWorkflow(GovernedLifecycle):
             raise _refuse("family_scope_mismatch", "construction")
         scope = first
         profile_families = (families.class_age is not None or families.class_unreadable is not None or families.class_revocation_assurance is not None
-                            or families.terminal_revocation is not None)
+                            or families.terminal_revocation is not None or families.class_irreversible is not None)
         host = None
         if profile_families and runtime_authority_profile is None:
             raise _refuse("runtime_authority_profile_required", "construction")
@@ -268,14 +295,18 @@ class GovernedPolicyWorkflow(GovernedLifecycle):
             host_ages, code = agemod.host_class_ages(host)
             if host_ages is None:
                 raise _refuse(code, "construction")
-        host_assurance = host_terminal = None
-        if families.class_revocation_assurance is not None or families.terminal_revocation is not None:
+        host_assurance = host_terminal = host_irreversible = None
+        if families.class_revocation_assurance is not None or families.terminal_revocation is not None or families.class_irreversible is not None:
             defect = unrmod.host_class_defect(host)  # ORIGINAL host validity FIRST (nothing composed here may repair it): before any Registry call or source read
             if defect is not None:
                 raise _refuse(defect, "construction")
         if families.class_revocation_assurance is not None:
             host_assurance, code = revmod.host_class_assurance(host)
             if host_assurance is None:
+                raise _refuse(code, "construction")
+        if families.class_irreversible is not None:  # ambiguity (two actions of one class with different flags) is a host defect: refused before any source read
+            host_irreversible, code = irmod.host_class_irreversible(host)
+            if host_irreversible is None:
                 raise _refuse(code, "construction")
         if families.terminal_revocation is not None:
             host_terminal = revmod.host_terminal_value(host)
@@ -289,7 +320,7 @@ class GovernedPolicyWorkflow(GovernedLifecycle):
         materials = {name: read_source(fam.selection_source, _refuse, "construction") for name, fam in declared}
         derived, refusal = derive_policy(families=families, host=host, host_scalars=host_scalars, host_ages=host_ages, host_values=host_values, materials=materials,
                                          verifier=verifier, institution_id=authority[0], authority_domain=authority[1], now=now, host_assurance=host_assurance,
-                                         host_terminal=host_terminal)
+                                         host_terminal=host_terminal, host_irreversible=host_irreversible)
         if refusal is not None:
             raise RegistryGovernedPolicyRefused(refusal, "construction")
         profile, scalars, bound = derived
@@ -300,6 +331,8 @@ class GovernedPolicyWorkflow(GovernedLifecycle):
                                     "host": {"scalars": host_scalars if scalars is not None else None, "class_age": host_ages, "class_unreadable": host_values,
                                              "class_revocation_assurance": host_assurance, "terminal_revocation": host_terminal},
                                     "bound": bound})
+        if families.class_irreversible is not None:  # present only when declared: a configuration without this family keeps its existing identity digest
+            configuration = commitment({"base": configuration, "host_class_irreversible": host_irreversible})
         key = (scope.tenant_id, scope.action_id, authority[0], authority[1])
         destination = take_destination(workflow_kwargs, _refuse)
         extra = {}
@@ -312,7 +345,10 @@ class GovernedPolicyWorkflow(GovernedLifecycle):
         super().__init__(destination=_GatedDestination(destination, self._gl_commit_gate), **extra, **workflow_kwargs)
         self._gp_families, self._gp_verifier, self._gp_host, self._gp_host_scalars = families, verifier, host, host_scalars
         self._gp_host_values, self._gp_host_ages = host_values, host_ages
-        self._gp_host_assurance, self._gp_host_terminal = host_assurance, host_terminal
+        self._gp_host_assurance, self._gp_host_terminal, self._gp_host_irreversible = host_assurance, host_terminal, host_irreversible
+        self._gp_snapshot = build_snapshot(bound=bound, host_profile_digest=agemod.profile_digest(host) if host is not None else None,
+                                           refs={name: selection_ref(materials[name].selection_text) for name, _ in declared}, scope=scope,
+                                           operation_ids={n: f.scope.operation_id for n, f in declared}, evaluated_at=now, order=FAMILY_NAMES)
         self._gp_ledger, self._gp_key, self._gp_configuration = activation_ledger, key, configuration
         self._gl_attach(scope=scope, authority=authority, bound=bound)
         # The claim is the LAST step: a construction that failed anywhere above never leaves a stale claim. `claim` is atomic under the ledger lock.
@@ -328,6 +364,11 @@ class GovernedPolicyWorkflow(GovernedLifecycle):
         self._gl_last_commit_refusal = value
 
     @property
+    def effective_policy_snapshot(self) -> EffectivePolicySnapshot:
+        """The immutable description of the one effective policy derived and Registry-verified at construction (non-authorizing; see `registry_effective_policy`)."""
+        return self._gp_snapshot
+
+    @property
     def registry_governed_policy_identity(self) -> dict:
         """The one bound identity of this workflow: which families govern it, each family's Registry digest and effective values, the F4 scalars (explicit, NOT in
         `approval_commitment`) and the FINAL effective-profile digest (the persisted `catalogue_digest`)."""
@@ -338,7 +379,8 @@ class GovernedPolicyWorkflow(GovernedLifecycle):
                           "operation_ids": {n: f.scope.operation_id for n, f in _declared(self._gp_families)}},
                 "host": {"f4_ages": dict(self._gp_host_scalars) if b["f4_ages"] else None, "class_age": dict(self._gp_host_ages) if self._gp_host_ages else None,
                          "class_unreadable": dict(self._gp_host_values) if self._gp_host_values else None,
-                         "class_revocation_assurance": dict(self._gp_host_assurance) if self._gp_host_assurance else None, "terminal_revocation": self._gp_host_terminal},
+                         "class_revocation_assurance": dict(self._gp_host_assurance) if self._gp_host_assurance else None, "terminal_revocation": self._gp_host_terminal,
+                         "class_irreversible": dict(self._gp_host_irreversible) if self._gp_host_irreversible else None},
                 "f4_ages": None if b["f4_ages"] is None else {"effective": dict(b["f4_ages"][0]), "effective_policy_digest": b["f4_ages"][1]},
                 "class_age": None if b["class_age"] is None else {"effective": dict(b["class_age"][0]), "effective_policy_digest": b["class_age"][1],
                                                                    "effective_profile_digest": b["class_age"][2]},
@@ -348,6 +390,8 @@ class GovernedPolicyWorkflow(GovernedLifecycle):
                                                                                                    "effective_policy_digest": b["class_revocation_assurance"][1]},
                 "terminal_revocation": None if b["terminal_revocation"] is None else {"effective": b["terminal_revocation"][0],
                                                                                       "effective_policy_digest": b["terminal_revocation"][1]},
+                "class_irreversible": None if b.get("class_irreversible") is None else {"effective": dict(b["class_irreversible"][0]),
+                                                                                      "effective_policy_digest": b["class_irreversible"][1]},
                 "effective_profile_digest": b["effective_profile_digest"], "f4_scalars_in_approval_commitment": False}
 
     def _gl_error(self, refusal: Refusal, boundary: str) -> Exception:
@@ -373,7 +417,8 @@ class GovernedPolicyWorkflow(GovernedLifecycle):
     def _gl_derive(self, materials: Any, authority: Any, now: datetime, boundary: str) -> Any:
         derived, refusal = derive_policy(families=self._gp_families, host=self._gp_host, host_scalars=self._gp_host_scalars, host_ages=self._gp_host_ages,
                                          host_values=self._gp_host_values, materials=materials, verifier=self._gp_verifier, institution_id=authority[0],
-                                         authority_domain=authority[1], now=now, host_assurance=self._gp_host_assurance, host_terminal=self._gp_host_terminal)
+                                         authority_domain=authority[1], now=now, host_assurance=self._gp_host_assurance, host_terminal=self._gp_host_terminal,
+                                         host_irreversible=self._gp_host_irreversible)
         if refusal is not None:
             raise RegistryGovernedPolicyRefused(refusal, boundary)
         return derived[2]

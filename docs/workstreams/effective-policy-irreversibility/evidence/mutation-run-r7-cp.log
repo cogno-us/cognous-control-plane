@@ -1,0 +1,79 @@
+I01 stricter() inverted KILLED unit: FAILED tests/test_irreversibility_unit.py::test_stricter_is_the_two_point_order
+I02 host flag mapping inverted KILLED unit: FAILED tests/test_irreversibility_unit.py::test_host_values_map_the_flag_per_class_and_fail_closed
+I03 compose never sets the flag KILLED unit: FAILED tests/test_irreversibility_unit.py::test_compose_only_ever_sets_true_and_changes_nothing_else
+I04 compose clears a host true when effective says no_change KILLED unit: FAILED tests/test_irreversibility_unit.py::test_compose_only_ever_sets_true_and_changes_nothing_else
+I05 widening check removed KILLED unit: FAILED tests/test_irreversibility_unit.py::test_a_forged_or_failing_registry_result_is_refused[result0-effective_policy_widens_host]
+I06 stricter-of-host-and-registry check removed KILLED unit: FAILED tests/test_irreversibility_unit.py::test_a_forged_or_failing_registry_result_is_refused[result1-effective_policy_invalid]
+I07 unnamed-class-keeps-host check removed KILLED unit: FAILED tests/test_irreversibility_unit.py::test_an_effective_map_that_is_not_the_stricter_of_host_and_record_is_refused_per_class
+I08 scoped class need not be governed KILLED unit: FAILED tests/test_irreversibility_unit.py::test_the_record_must_name_the_scoped_class_and_only_host_classes
+I09 scoped action may be unknown KILLED unit: FAILED tests/test_irreversibility_unit.py::test_the_record_must_name_the_scoped_class_and_only_host_classes
+I10 registry class unknown to host accepted KILLED unit: FAILED tests/test_irreversibility_unit.py::test_the_record_must_name_the_scoped_class_and_only_host_classes
+I11 effective class-set check removed KILLED unit: FAILED tests/test_irreversibility_unit.py::test_a_forged_or_failing_registry_result_is_refused[result2-effective_policy_invalid]
+I12 effective value domain check removed KILLED unit: FAILED tests/test_irreversibility_unit.py::test_a_forged_or_failing_registry_result_is_refused[result4-effective_policy_invalid]
+I13 flip pre-check removed KILLED unit: FAILED tests/test_irreversibility_unit.py::test_the_flip_pre_check_runs_before_the_digest_and_reads_the_host_object
+I14 flip pre-check ignores whether the class flips KILLED unit: FAILED tests/test_irreversibility_unit.py::test_each_flip_condition_has_its_own_cause_and_only_a_flip_is_checked[update0-reversibility_decla
+I15 flip pre-check also fires without a requested flip KILLED unit: FAILED tests/test_irreversibility_unit.py::test_each_flip_condition_has_its_own_cause_and_only_a_flip_is_checked[update0-reversibility_decla
+I16 cause reversibility not checked KILLED unit: FAILED tests/test_irreversibility_unit.py::test_each_flip_condition_has_its_own_cause_and_only_a_flip_is_checked[update0-reversibility_decla
+I17 cause reversible_until not checked KILLED unit: FAILED tests/test_irreversibility_unit.py::test_each_flip_condition_has_its_own_cause_and_only_a_flip_is_checked[update1-reversible_until_de
+I18 cause reversal_cost not checked KILLED unit: FAILED tests/test_irreversibility_unit.py::test_each_flip_condition_has_its_own_cause_and_only_a_flip_is_checked[update2-reversal_cost_decla
+I19 cause on_unreadable not checked KILLED unit: FAILED tests/test_irreversibility_unit.py::test_each_flip_condition_has_its_own_cause_and_only_a_flip_is_checked[update3-on_unreadable_not_r
+I20 cause reads_protected_data not checked KILLED unit: FAILED tests/test_irreversibility_unit.py::test_each_flip_condition_has_its_own_cause_and_only_a_flip_is_checked[update4-reads_protected_dat
+I21 cause counterparty_observable not checked KILLED unit: FAILED tests/test_irreversibility_unit.py::test_each_flip_condition_has_its_own_cause_and_only_a_flip_is_checked[update5-counterparty_observ
+I22 cause on_unreadable inverted KILLED unit: FAILED tests/test_irreversibility_unit.py::test_each_flip_condition_has_its_own_cause_and_only_a_flip_is_checked[update0-reversibility_decla
+I23 first cause not reported (last instead) KILLED governance: FAILED tests/test_irreversibility_governance.py::test_b03_a_host_class_that_declares_reversibility_is_a_flip_conflict
+I24 conflict code unnamed KILLED unit: FAILED tests/test_irreversibility_unit.py::test_each_flip_condition_has_its_own_cause_and_only_a_flip_is_checked[update0-reversibility_decla
+I25 actions not visited in sorted order KILLED unit: FAILED tests/test_irreversibility_unit.py::test_the_first_conflicting_action_in_sorted_order_is_reported
+I26 verifier admission removed KILLED unit: FAILED tests/test_irreversibility_unit.py::test_a_failing_digest_and_a_missing_registry_and_a_foreign_verifier_and_wrong_material_are_refusa
+I27 operationally_authorized not checked KILLED unit: FAILED tests/test_irreversibility_unit.py::test_a_forged_or_failing_registry_result_is_refused[result14-registry_decision_invalid]
+I28 non-applied decision kinds accepted KILLED unit: FAILED tests/test_irreversibility_unit.py::test_a_forged_or_failing_registry_result_is_refused[result12-registry_decision_invalid]
+I29 deny_all not checked KILLED unit: FAILED tests/test_irreversibility_unit.py::test_a_forged_or_failing_registry_result_is_refused[result13-registry_decision_invalid]
+I30 digest computed for the wrong family KILLED unit: FAILED tests/test_irreversibility_unit.py::test_a_valid_result_is_accepted_and_the_registry_is_asked_with_the_host_values
+I31 digest computed for the wrong contract version KILLED unit: FAILED tests/test_irreversibility_unit.py::test_a_valid_result_is_accepted_and_the_registry_is_asked_with_the_host_values
+I32 caller values not passed to the Registry KILLED unit: FAILED tests/test_irreversibility_unit.py::test_a_valid_result_is_accepted_and_the_registry_is_asked_with_the_host_values
+I33 participation not required KILLED unit: FAILED tests/test_irreversibility_unit.py::test_a_valid_result_is_accepted_and_the_registry_is_asked_with_the_host_values
+I35 non-exact str values accepted KILLED unit: FAILED tests/test_irreversibility_unit.py::test_a_forged_or_failing_registry_result_is_refused[result6-effective_policy_invalid]
+I36 material type check removed KILLED unit: FAILED tests/test_irreversibility_unit.py::test_a_failing_digest_and_a_missing_registry_and_a_foreign_verifier_and_wrong_material_are_refusa
+I37 non-bool host flag accepted KILLED unit: FAILED tests/test_irreversibility_unit.py::test_host_values_map_the_flag_per_class_and_fail_closed
+I38 ambiguous class accepted KILLED unit: FAILED tests/test_irreversibility_unit.py::test_host_values_map_the_flag_per_class_and_fail_closed
+I39 record map must be non-empty check removed KILLED unit: FAILED tests/test_irreversibility_unit.py::test_the_record_must_name_the_scoped_class_and_only_host_classes
+I40 registry-unavailable not a refusal KILLED unit: FAILED tests/test_irreversibility_unit.py::test_a_failing_digest_and_a_missing_registry_and_a_foreign_verifier_and_wrong_material_are_refusa
+I41 digest failure not a refusal KILLED unit: FAILED tests/test_irreversibility_unit.py::test_a_failing_digest_and_a_missing_registry_and_a_foreign_verifier_and_wrong_material_are_refusa
+I42 call failure not a refusal KILLED unit: FAILED tests/test_irreversibility_unit.py::test_a_forged_or_failing_registry_result_is_refused[result19-registry_call_failed]
+E01 snapshot family table: wrong contract version KILLED unit: FAILED tests/test_irreversibility_unit.py::test_snapshot_order_content_and_immutability
+E02 snapshot schema revision dropped KILLED unit: FAILED tests/test_irreversibility_unit.py::test_snapshot_order_content_and_immutability
+E03 selection_ref accepts duplicate keys KILLED unit: FAILED tests/test_irreversibility_unit.py::test_selection_ref_is_strict - Ass...
+E04 selection_ref accepts floats KILLED unit: FAILED tests/test_irreversibility_unit.py::test_selection_ref_is_strict - Ass...
+E06 selection_ref accepts an empty selection id KILLED unit: FAILED tests/test_irreversibility_unit.py::test_selection_ref_is_strict - Ass...
+E07 effective pairs not sorted KILLED unit: FAILED tests/test_irreversibility_unit.py::test_snapshot_order_content_and_immutability
+E08 identity omits the epoch KILLED unit: FAILED tests/test_irreversibility_unit.py::test_snapshot_is_deterministic_and_the_identity_changes_with_every_component
+E09 identity omits the host profile digest KILLED unit: FAILED tests/test_irreversibility_unit.py::test_snapshot_is_deterministic_and_the_identity_changes_with_every_component
+E10 identity omits the effective policy digest KILLED unit: FAILED tests/test_irreversibility_unit.py::test_snapshot_is_deterministic_and_the_identity_changes_with_every_component
+E11 identity omits the evaluation time KILLED unit: FAILED tests/test_irreversibility_unit.py::test_snapshot_is_deterministic_and_the_identity_changes_with_every_component
+E12 resolve: missing mandatory material not refused KILLED unit: FAILED tests/test_irreversibility_unit.py::test_resolve_refuses_missing_material_and_an_empty_declaration_before_any_registry_call
+E13 resolve: empty declaration not refused KILLED unit: FAILED tests/test_irreversibility_unit.py::test_resolve_refuses_missing_material_and_an_empty_declaration_before_any_registry_call
+E14 resolve: a refusal is swallowed KILLED unit: FAILED tests/test_irreversibility_unit.py::test_resolve_returns_the_snapshot_of_the_existing_derivation_with_a_fake_registry
+E15 snapshot ignores the selection ref KILLED unit: FAILED tests/test_irreversibility_unit.py::test_snapshot_order_content_and_immutability
+E16 snapshot families not in composition order KILLED unit: FAILED tests/test_irreversibility_unit.py::test_snapshot_order_content_and_immutability
+E17 snapshot omits the scope operation ids KILLED unit: FAILED tests/test_irreversibility_unit.py::test_snapshot_order_content_and_immutability
+E18 snapshot effective profile digest dropped KILLED unit: FAILED tests/test_irreversibility_unit.py::test_snapshot_order_content_and_immutability
+P01 irreversibility not composed into the profile KILLED unit: FAILED tests/test_irreversibility_unit.py::test_resolve_returns_the_snapshot_of_the_existing_derivation_with_a_fake_registry
+P02 irreversibility missing from the composition order KILLED unit: FAILED tests/test_irreversibility_unit.py::test_snapshot_order_content_and_immutability
+P03 irreversibility ordered before assurance KILLED unit: FAILED tests/test_irreversibility_unit.py::test_snapshot_order_content_and_immutability
+P04 lowering a host true is not a widening KILLED unit: FAILED tests/test_irreversibility_unit.py::test_final_composition_irreversible_rules
+P05 flip over a host on_unreadable not refuse is not refused (final validator) KILLED unit: FAILED tests/test_irreversibility_unit.py::test_final_composition_irreversible_rules
+P06 irreversible compared away even when the family is not declared KILLED unit: FAILED tests/test_irreversibility_unit.py::test_final_composition_irreversible_rules
+P07 host ambiguity not read early KILLED governance: FAILED tests/test_irreversibility_governance.py::test_a01_a_valid_selection_flips_the_governed_class_and_changes_nothing_else
+P08 the family does not count as profile-bearing KILLED governance: FAILED tests/test_irreversibility_governance.py::test_c07_a_profile_is_required_and_policy_binding_is_refused
+P09 bound identity omits the irreversibility part KILLED unit: FAILED tests/test_irreversibility_unit.py::test_resolve_returns_the_snapshot_of_the_existing_derivation_with_a_fake_registry
+P10 profile digest not bound for irreversibility-only governance KILLED governance: FAILED tests/test_irreversibility_governance.py::test_n04_post_construction_edits_of_the_held_profile_are_refused_at_every_boundary
+P11 configuration identity omits the host irreversible values KILLED governance: FAILED tests/test_irreversibility_governance.py::test_l02_a_host_flag_difference_changes_the_configuration_identity_even_with_the_same_effec
+P12 refusal not prefixed with the family KILLED unit: FAILED tests/test_irreversibility_unit.py::test_resolve_returns_the_snapshot_of_the_existing_derivation_with_a_fake_registry
+P13 re-derivation ignores the host irreversible values KILLED governance: FAILED tests/test_irreversibility_governance.py::test_a05_with_approval_and_inventory_the_flipped_class_authorizes_and_executes
+P14 declared irreversible tolerated although not declared KILLED governance: FAILED tests/test_irreversibility_governance.py::test_f06_another_composer_that_flips_irreversible_without_the_family_being_declared_is_refu
+P15 original host validity not checked early for the new family KILLED governance: FAILED tests/test_irreversibility_governance.py::test_b09_an_invalid_original_host_is_refused_before_any_source_read_and_never_repaired
+P16 snapshot exposes no irreversibility refs KILLED governance: FAILED tests/test_irreversibility_governance.py::test_s01_the_snapshot_describes_the_effective_policy_and_is_immutable
+P17 snapshot host digest dropped KILLED governance: FAILED tests/test_irreversibility_governance.py::test_s01_the_snapshot_describes_the_effective_policy_and_is_immutable
+P18 identity omits the host irreversible values KILLED governance: FAILED tests/test_irreversibility_governance.py::test_a01_a_valid_selection_flips_the_governed_class_and_changes_nothing_else
+P19 derive: irreversibility derivation skipped KILLED unit: FAILED tests/test_irreversibility_unit.py::test_resolve_returns_the_snapshot_of_the_existing_derivation_with_a_fake_registry
+P20 host class defect not applied to the flipped final profile KILLED unit: FAILED tests/test_irreversibility_unit.py::test_final_composition_irreversible_rules
+TOTAL 78 KILLED 78 SURVIVED [] PATTERN []

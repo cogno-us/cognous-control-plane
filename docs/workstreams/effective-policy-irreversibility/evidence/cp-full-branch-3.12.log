@@ -1,0 +1,35 @@
+/tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/venv-cp3.12/lib/python3.12/site-packages/pytest_asyncio/plugin.py:300: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the "fixture" caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to "function" scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+........................................................................ [  4%]
+........................................................................ [  9%]
+........................................................................ [ 14%]
+........................................................................ [ 19%]
+........................................................................ [ 23%]
+........................................................................ [ 28%]
+........................................................................ [ 33%]
+............................................s........................... [ 38%]
+........................................................................ [ 43%]
+........................................................................ [ 47%]
+........................................................................ [ 52%]
+........................................................................ [ 57%]
+........................................................................ [ 62%]
+........................................................................ [ 67%]
+....................ssssssssssssssssssssss.sssssssssssssssssssssssssssss [ 71%]
+ssssssssssssssssssssssssssssssssssssss.................................. [ 76%]
+........................................................................ [ 81%]
+........................................................................ [ 86%]
+.................................................ssssss................. [ 91%]
+........................................................................ [ 95%]
+..............................................................           [100%]
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_claim_journal_stage.py:19: could not import 'cognous_verify.engine': No module named 'cognous_verify'
+SKIPPED [1] tests/test_f4_age_governance.py:27: NOT RUN: OCS_REGISTRY_PIN_DIR is not set to a Registry checkout
+SKIPPED [1] tests/test_f5_class_age_governance.py:28: NOT RUN: OCS_REGISTRY_PIN_DIR is not set to a Registry checkout
+SKIPPED [4] tests/test_f5_class_unreadable_governance.py:34: NOT RUN: OCS_REGISTRY_PIN_DIR is not set to a Registry checkout
+SKIPPED [1] tests/test_microsoft_agt.py:199: could not import 'agent_control_specification': No module named 'agent_control_specification'
+SKIPPED [22] tests/test_scan6_manifest_validator_gate.py:94: could not import 'agent_action_manifest': No module named 'agent_action_manifest'
+SKIPPED [67] tests/test_scan6_manifest_validator_parity.py:188: could not import 'agent_action_manifest': No module named 'agent_action_manifest'
+SKIPPED [6] tests/test_v02_claim_policy_binding.py:61: NOT RUN: OCS_REGISTRY_PIN_DIR is not set to a Registry checkout containing the binding vectors
+1406 passed, 103 skipped in 126.79s (0:02:06)
