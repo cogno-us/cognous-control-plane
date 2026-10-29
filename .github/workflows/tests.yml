@@ -180,7 +180,7 @@ jobs:
           suite = suite if suite.tag == "testsuite" else suite[0]
           n, skipped, failed = int(suite.get("tests")), int(suite.get("skipped")), int(suite.get("failures")) + int(suite.get("errors"))
           print(f"revocation families + composed + on_unreadable tests under the r08-v6 pin: {n} run, {skipped} skipped, {failed} failed")
-          assert skipped == 0 and failed == 0 and n >= 386, "Registry-governed revocation-families tests were skipped or did not run"
+          assert skipped == 0 and failed == 0 and n >= 388, "Registry-governed revocation-families tests were skipped or did not run"
           PY
           } 2>&1 | tee revocation-families-out.txt || {
             echo "::error title=Revocation families tests failed::$(tail -n 40 revocation-families-out.txt | sed ':a;N;$!ba;s/\n/%0A/g')"

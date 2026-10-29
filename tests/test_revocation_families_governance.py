@@ -989,3 +989,14 @@ def test_u04_the_composers_only_ever_add_and_the_defensive_checks_hold_when_reac
     section = flagged.terminal_revocation.model_construct(version="terminal-revocation/9.9")
     foreign = flagged.model_copy(update={"terminal_revocation": section})
     assert pol.final_composition_defect(flagged, foreign, {"status_max_age_seconds": 60, "approval_max_age_seconds": 60}, None, terminal_declared=True) == "composed_profile_invalid"
+
+
+@pytest.mark.parametrize("sneak", ["flag", "section"])
+def test_f09_another_composer_that_adds_a_revocation_field_without_the_family_being_declared_is_refused(tmp_path, monkeypatch, sneak):
+    """Defence in depth: the new fields may differ only when their family is declared. A (buggy) composer of ANOTHER family that gains a flag or the section is a foreign change."""
+    real = base.gov.compose_unreadable
+    monkeypatch.setattr(pol.unrmod, "compose_unreadable", lambda b, e: rev.compose_assurance(real(b, e), {CLASS_T1: RQ, CLASS_T2: NR}) if sneak == "flag" else rev.compose_terminal(real(b, e), "on"))
+    p, res, cfg = base.prepared(tmp_path)
+    with pytest.raises(RegistryGovernedPolicyRefused) as e:
+        build(tmp_path, res, cfg, fams(u=comp.usrc()))
+    refused(e, "composed_profile_invalid", "construction")
