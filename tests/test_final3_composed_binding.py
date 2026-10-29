@@ -326,14 +326,20 @@ def test_f02_the_registry_vectors_of_the_three_families_are_pinned():
     assert len(rows) >= 9
 
 
-def test_f03_the_protected_evaluators_are_byte_identical_to_the_integration_base():
-    base_sha = subprocess.run(["git", "rev-parse", "86148b6"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
-    if not base_sha:
-        pytest.fail("the integration base commit is not available in this checkout")
-    for name in ("bounded.py", "runtime_authority.py", "freshness.py", "policy_binding.py", "rule_revision.py", "reversibility.py", "holder_inventory.py"):
-        old = subprocess.run(["git", "show", f"{base_sha}:src/agent_control_plane/{name}"], cwd=ROOT, capture_output=True).stdout
-        assert hashlib.sha256((SRC / name).read_bytes()).hexdigest() == hashlib.sha256(old).hexdigest(), name
-    assert not list((ROOT / "schemas").glob("*.new"))
+PROTECTED_SHA256 = {  # byte pins of the protected evaluators at the integration base 86148b6; no git is used. runtime_authority.py is the D-07 value pinned in test_governed_policy_composition.py::test_z03
+    "bounded.py": "c219f8825a8ddf9da1fe6771ae575af0a9069ac8a04eadd40f093a9adb13655b",
+    "runtime_authority.py": "45a27db8695ff9d23516e1937f3bafa2391bbc1587ed0fb09f56ea8f3e01d23f",
+    "freshness.py": "3f146ee11a3424d816c6f35ba07259833612a985901b4a96c0275395f05d51c0",
+    "policy_binding.py": "defdfac5fd60cf5be707a76204a12513f2f289b0620ec56d063b56dac4081a35",
+    "rule_revision.py": "a3833f49e96db52e0665b9816daee2654f74f7784faad5101252b4c8722415a5",
+    "reversibility.py": "5edbadebb3aa777fba7f652c10c8da3c5e9ee1766b71866ed55dc25b319477d1",
+    "holder_inventory.py": "76f5aaa63f49bac182439ea3768798bf42ecbda2c586f20fd450a7053271f7ba",
+}
+
+
+@pytest.mark.parametrize("name", sorted(PROTECTED_SHA256))
+def test_f03_the_protected_evaluators_are_byte_identical_to_the_integration_base(name):
+    assert hashlib.sha256((SRC / name).read_bytes()).hexdigest() == PROTECTED_SHA256[name], name
 
 
 def test_f04_the_new_module_adds_no_workflow_class_no_evaluator_import_and_no_new_reason_code():

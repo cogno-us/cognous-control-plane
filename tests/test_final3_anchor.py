@@ -314,7 +314,7 @@ def test_e04_a_declared_family_is_mandatory_no_partial_activation(tmp_path):
 
 
 # ------------------------------------------------------------------------------------------------------------------------------ END TO END with D-07
-def _e2e(tmp_path, *, declared, host_flag, stall=29, age=30, ceiling=30):
+def _e2e(tmp_path, *, declared, host_flag, stall=29, age=30, ceiling=30, cached=False, ext=0, value=None):
     """Purpose-observation residual fixture of tests/test_freshness_purpose_anchor_successor.py (class ceiling 30 s, purpose observation 30 s old at NOW, stall 29 s
     between the effect check and dispatch, NO policy binding) through the COMPOSED workflow. `declared` selects the anchor family; otherwise a no-op observation family keeps
     the host flag as it is."""
@@ -322,14 +322,28 @@ def _e2e(tmp_path, *, declared, host_flag, stall=29, age=30, ceiling=30):
     previous = bounded._now
     bounded._now = clock
     try:
-        p, res, cfg = base.prepared(tmp_path, purpose=True, t1=R_, t1_irrev=True, age1=ceiling, freshness=FreshnessProfile(anchor_deadline_to_inputs=host_flag))
-        res.purpose.observed_at = (NOW - timedelta(seconds=age)).isoformat()
-        families = fams(anc=Source(mat(ANC))) if declared else fams(age=Source(mat(AGE, 300)))
+        fr = FreshnessProfile(anchor_deadline_to_inputs=host_flag, max_age_extension_seconds=ext)
+        if cached:  # the purpose observation is read from the CACHE (read_state cached_positive) during a status outage
+            from agent_control_plane.reversibility import ReversibilityProfile
+            from tests.test_reversibility import cls, outage
+            p = base.tenant_proposal()
+            p, res, cfg = base.prepared(tmp_path, purpose=True, t1=R_, freshness=fr, reversibility=ReversibilityProfile(),
+                                        extra_actions={p.action_id: cls("reversible_until", max_status_age_seconds=ceiling, class_id=CLASS_T1)})
+            res.cached = res.purpose.model_copy(update={"observed_at": (NOW - timedelta(seconds=age)).isoformat()})
+            res.cached_purpose_status = lambda ref: res.cached.model_dump()
+            outage(res)
+        else:
+            p, res, cfg = base.prepared(tmp_path, purpose=True, t1=R_, t1_irrev=True, age1=ceiling, freshness=fr)
+            res.purpose.observed_at = (NOW - timedelta(seconds=age)).isoformat()
+        families = fams(anc=Source(mat(ANC, value))) if declared else fams(age=Source(mat(AGE, 300)))
         flow = build(tmp_path, res, cfg, families)
         assert flow.runtime_authority_profile.policy_binding is None
         bind_approval(res, flow.runtime_authority_profile)
         d = flow.decide(p, now=NOW)
         assert d.result == "authorized", d.reasons
+        if cached:
+            states = [(i.input_type, i.read_state) for dd in flow.records.load().decisions for i in dd.resolution_inputs]
+            assert ("purpose", "cached_positive") in states, states  # the fixture really exercised the cached path
         calls = []
         inner = object.__getattribute__(flow.destination, "_inner")  # count the destination's own apply (behind the commit gate), not the gated wrapper
         real_apply = inner.apply
@@ -348,7 +362,7 @@ def _e2e(tmp_path, *, declared, host_flag, stall=29, age=30, ceiling=30):
 def test_f01_the_anchor_family_delivers_the_guarantee_the_30s_29s_purpose_residual_is_refused(tmp_path):
     out, applies, n_effects, flow = _e2e(tmp_path / "with", declared=True, host_flag=False)
     assert flow.runtime_authority_profile.freshness.anchor_deadline_to_inputs is True
-    assert (out, applies, n_effects) == ("refused", 0, 0)
+    assert (out, applies, n_effects) == ("refused", 0, 0), "the purpose observation must join the dispatch deadline: this build lacks the D-07 anchoring in runtime_authority.py (CP #95)"
 
 
 def test_f02_without_the_family_the_host_False_flag_dispatches_the_documented_residual(tmp_path):
@@ -359,14 +373,50 @@ def test_f02_without_the_family_the_host_False_flag_dispatches_the_documented_re
 
 def test_f03_control_a_host_flag_already_true_is_refused_exactly_like_the_family_result(tmp_path):
     out, applies, n_effects, flow = _e2e(tmp_path / "host", declared=False, host_flag=True)
+    assert (out, applies, n_effects) == ("refused", 0, 0), "a host flag of True must anchor the purpose observation: this build lacks the D-07 correction (CP #95) in runtime_authority.py"
+
+
+def test_f05_the_d07_anchoring_is_present_in_this_build(tmp_path):
+    """Fails loudly, with a pointer to D-07, if runtime_authority.py lacks the purpose-observation anchoring: the anchor family would then deliver nothing."""
+    for cached in (False, True):
+        out, applies, n_effects, _ = _e2e(tmp_path / f"d07{cached}", declared=True, host_flag=False, cached=cached)
+        assert (out, applies, n_effects) == ("refused", 0, 0), (
+            f"D-07 (Control Plane PR #95, purpose observation joins the dispatch deadline when anchor_deadline_to_inputs is True) is NOT effective in this build (cached={cached}); "
+            "the Registry-governed anchor family cannot deliver its guarantee without it")
+
+
+def test_f06_cached_purpose_with_the_family_the_29s_stall_is_refused(tmp_path):
+    assert _e2e(tmp_path, declared=True, host_flag=False, cached=True)[:3] == ("refused", 0, 0)
+
+
+def test_f07_cached_purpose_without_the_family_the_residual_dispatches(tmp_path):
+    assert _e2e(tmp_path, declared=False, host_flag=False, cached=True)[:3] == ("dispatched", 1, 1)
+
+
+def test_f08_cached_purpose_host_flag_already_true_is_refused(tmp_path):
+    assert _e2e(tmp_path, declared=False, host_flag=True, cached=True)[:3] == ("refused", 0, 0)
+
+
+@pytest.mark.parametrize("cached", [False, True])
+@pytest.mark.parametrize("value", ["anchor", "no_change"])
+def test_f09_a_host_true_is_never_lowered_by_either_registry_value(tmp_path, cached, value):
+    out, applies, n_effects, flow = _e2e(tmp_path, declared=True, host_flag=True, cached=cached, value=value)
+    assert flow.runtime_authority_profile.freshness.anchor_deadline_to_inputs is True and (out, applies, n_effects) == ("refused", 0, 0)
+
+
+@pytest.mark.parametrize("ext", [0, 20, 100])
+def test_f10_the_max_age_extension_is_preserved_with_the_anchor_applied(tmp_path, ext):
+    out, applies, n_effects, flow = _e2e(tmp_path, declared=True, host_flag=False, ext=ext)
+    fr = flow.runtime_authority_profile.freshness
+    assert fr.anchor_deadline_to_inputs is True and fr.max_age_extension_seconds == ext
     assert (out, applies, n_effects) == ("refused", 0, 0)
 
 
-@pytest.mark.parametrize("stall,expect", [(0, "dispatched"), (28, "dispatched"), (29, "refused"), (31, "refused")])
+@pytest.mark.parametrize("stall,expect", [(0, "dispatched"), (28, "refused"), (29, "refused"), (31, "refused")])
 def test_f04_with_the_family_the_window_is_the_anchored_remaining_window_age_20_s(tmp_path, stall, expect):
-    # age 20 s, ceiling 30 s: remaining anchored window 10 s. A stall of 0 s is inside it; 29 s and beyond is not. (28 s is also beyond 10 s: only 0 dispatches.)
+    # age 20 s, ceiling 30 s: the remaining anchored window is 10 s. A stall of 0 s is inside it; any stall of 28 s or more is beyond it and is refused.
     out = _e2e(tmp_path, declared=True, host_flag=False, age=20, stall=stall)[0]
-    assert out == ("dispatched" if stall == 0 else "refused")
+    assert out == expect
 
 
 # ------------------------------------------------------------------------------------------------------------------------------ forged Registry decisions (the consumer re-checks the verdict)
