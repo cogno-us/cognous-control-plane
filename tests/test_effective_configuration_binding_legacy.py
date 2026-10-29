@@ -109,10 +109,9 @@ def test_a06_an_invalid_cutoff_refuses_the_construction_so_no_legacy_fallback_ex
         composed_over_fixture(tmp_path, legacy_cutoff=cutoff)
 
 
-def test_a07_a_cutoff_one_past_the_decisions_in_the_store_is_not_legacy(tmp_path):
-    p, res, cfg, srcs, flow, d = composed_over_fixture(tmp_path, legacy_cutoff=2)  # the store holds ONE decision
-    assert flow.configuration_binding_status(d) == ecb.UNBOUND_AFTER_CUTOFF
-    assert_binding_refusal(flow, p, d, status=ecb.UNBOUND_AFTER_CUTOFF)
+def test_a07_a_cutoff_one_past_the_decisions_in_the_store_refuses_the_construction(tmp_path):
+    with pytest.raises(PermissionError):  # the store holds ONE decision; a larger cutoff could later cover post-activation appends
+        composed_over_fixture(tmp_path, legacy_cutoff=2)
 
 
 def test_a08_a_changed_configuration_does_not_rescue_a_legacy_record_below_the_cutoff_but_is_not_checked_by_the_binding(tmp_path):

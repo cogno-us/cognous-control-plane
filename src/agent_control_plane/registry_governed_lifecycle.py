@@ -190,10 +190,11 @@ class GovernedLifecycle(BoundedAuthorizationWorkflow):
         """Registry-verify every governing selection and return the comparable bound identity (raise `_gl_error(...)` on any refusal)."""
         raise NotImplementedError
 
-    def _gl_configuration_members(self) -> Optional[dict]:
-        """Hook (D-06): the validated members of the live effective configuration (`effective_configuration_binding.build_members`), or None when this family workflow does not
-        bind its configuration. It must read the LIVE held values and raise `ecb.BindingInvalid` for any value outside its structural domain."""
-        return None
+    def _gl_configuration_members(self) -> dict:
+        """Hook (D-06): the validated members of the live effective configuration (`effective_configuration_binding.build_members`). It must read the LIVE held values and
+        raise `ecb.BindingInvalid` for any value outside its structural domain. There is NO "do not bind" answer: a governed subclass that forgets the hook fails closed
+        (construction is refused `configuration_binding_invalid`, a decision or execute is refused), it never silently mints and checks nothing."""
+        raise ecb.BindingInvalid("hook_not_implemented")
 
     def _gl_common_members(self) -> dict:
         """The members every governed workflow shares: scope, the five live scalars and the ObservationPolicy effective values (or an explicit null)."""
@@ -237,6 +238,13 @@ class GovernedLifecycle(BoundedAuthorizationWorkflow):
             self._gl_configuration_members()
         except ecb.BindingInvalid as exc:
             raise refuse("host_scalar_invalid" if str(exc) in ("f4_scalars", "other_scalars", "observation_policy") else "configuration_binding_invalid", "construction") from None
+        if legacy_cutoff > 0:  # fail closed: the decision list only grows, so a cutoff above today's count could later cover post-activation appends (a quiet wildcard)
+            try:
+                count = len(self.records.load().decisions)
+            except Exception:
+                raise refuse("legacy_cutoff_invalid", "construction") from None
+            if legacy_cutoff > count:
+                raise refuse("legacy_cutoff_invalid", "construction")
         self._gl_legacy_cutoff = legacy_cutoff
         self._gl_held_config = self._gl_config_view()
 
@@ -245,9 +253,7 @@ class GovernedLifecycle(BoundedAuthorizationWorkflow):
         """READ-ONLY classification of one persisted authorized decision against the live configuration: `bound`, `legacy`, `unbound-after-cutoff`, `invalid`,
         `version-unsupported` or `mismatch` (None when this workflow does not bind). Writes nothing, raises nothing for a bad record, grants nothing; `execute` and the
         claim path use exactly this classification."""
-        members = self._gl_configuration_members()
-        if members is None:
-            return None
+        members = self._gl_configuration_members()  # raises `ecb.BindingInvalid` when the LIVE configuration cannot be bound (this read-only call then raises, it does not classify)
         binding = getattr(decision, "binding", None)
         ids = [d.decision_id for d in self.records.load().decisions]
         did = getattr(decision, "decision_id", None)
@@ -263,8 +269,6 @@ class GovernedLifecycle(BoundedAuthorizationWorkflow):
         target = decision if decision is not None else _EXEC_DECISION.get()
         try:
             members = self._gl_configuration_members()
-            if members is None:
-                return reasons, binding
             live = ecb.mint(members)
             if stage == "decision" and target is None:  # MINT: every authorized decision of this lifecycle carries the member
                 return reasons, self._gl_with_member(binding, live)

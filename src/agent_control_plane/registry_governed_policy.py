@@ -408,7 +408,7 @@ class GovernedPolicyWorkflow(GovernedLifecycle):
         """The live `effective-configuration-binding/0.1` member this workflow would mint now (a copy; non-authorizing; raises `BindingInvalid` if it cannot be bound)."""
         return ecb.mint(self._gl_configuration_members())
 
-    def _gl_configuration_members(self) -> Optional[dict]:
+    def _gl_configuration_members(self) -> dict:
         """The LIVE members of the effective configuration (D-06), through the one shared builder. Families come from the existing bound identity and family table."""
         held = self.runtime_authority_profile
         if held is not None and type(held) is not RuntimeAuthorityProfile:
