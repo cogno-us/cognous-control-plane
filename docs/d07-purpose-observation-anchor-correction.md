@@ -18,7 +18,7 @@ Before (CP main b7eb11a and #94 061a986, lines 404-413, file sha256 `a4b4ac36...
                 if binding is not None:
                     # R6: under a policy binding the purpose observation joins the dispatch deadline (``observed_at + its bound``) like every
                     # input judged through ``_fresh``, so a status that satisfied its bound at evaluation cannot be dispatched past it. The
-                    # bound is the class bound, or the recorded bound of an accepted cached snapshot (<= the ceiling by construction).
+                    # bound is the class bound, or the recorded bound of an accepted cached snapshot (which may include a signed outage extension; see section 6).
                     # Profiles without a binding keep today's behaviour (the purpose age is judged here and not anchored).
                     from .bounded import _FRESH_DEADLINES
                     collector = _FRESH_DEADLINES.get()
@@ -27,13 +27,14 @@ Before (CP main b7eb11a and #94 061a986, lines 404-413, file sha256 `a4b4ac36...
                         collector.append(_parse(observed.observed_at) + timedelta(seconds=anchor_bound))
 ```
 
-After (lines 404-414, file sha256 `ad7b95e5...5ace01`, git blob `f9bca403...`):
+After (lines 404-415, file sha256 `45a27db8...1d23f`, git blob `03b4efdf...`; chain b7eb11a `a4b4ac36...` -> fb24ed0 `ad7b95e5...5ace01` / blob `f9bca403...` -> this; the later step is a comment-only prose correction, code tokens and AST identical):
 
 ```python
                 # R6 / D-07: whenever the deadline collector exists (``anchor_deadline_to_inputs``: ``_FRESH_DEADLINES`` is set only then) the
                 # purpose observation joins the dispatch deadline (``observed_at + its bound``) like every input judged through ``_fresh``, so a
                 # status that satisfied its bound at evaluation cannot be dispatched past it. The bound is the class bound, or the recorded bound
-                # of an accepted cached snapshot (<= the ceiling by construction). This no longer depends on a policy binding being present
+                # of the accepted cached snapshot, which may include a signed outage extension (extension authority on the cached path is
+                # asserted and unauthenticated, unchanged). This no longer depends on a policy binding being present
                 # (D-07 Option A, Architect-authorized 2026-10-29: the former binding-only guard left a 2x residual window); it only ever adds
                 # a ``min`` to the deadline, so it cannot widen any bound.
                 from .bounded import _FRESH_DEADLINES
@@ -53,7 +54,7 @@ Effect of the correction: the deadline becomes `min(opened_deadline, observed_at
 
 ## 3. Properties
 
-* Strictly more restrictive: a pure `min` is added to the deadline. A grid of 124 cases (below) shows `new_deadline <= old_deadline` everywhere and no case dispatched by the new code that the predecessor refused.
+* Strictly more restrictive (including one case worth naming: a purpose observation exactly at the ceiling age is still AUTHORIZED at decision but is ALWAYS refused at dispatch, at stall 0 and 1 alike, consistent with the PolicyBinding path; the predecessor dispatched it): a pure `min` is added to the deadline. A grid of 124 cases (below) shows `new_deadline <= old_deadline` everywhere and no case dispatched by the new code that the predecessor refused.
 * Flag False and no freshness profile: no collector, no new anchoring; outcomes and the normalized persisted run document are byte-identical to the recorded predecessor.
 * PolicyBinding path: byte-identical outcomes to the predecessor (the same `append` ran before).
 * Unchanged: `approval_commitment`, `catalogue_digest`, the profile dump (five profile variants), the persisted decision/attempt/refusal schema key paths, the reason vocabulary (no new string literal in the module; the only refusal code observed is `check_expired_before_dispatch`).
@@ -73,7 +74,7 @@ Predecessor tests superseded (originals stay in git history at 061a986):
 
 The file `test_freshness_purpose_residual.py` carries a module SUPERSESSION RECORD (PR #94 head 061a986, original results file, authorization). Contrast (PolicyBinding) and control tests are unchanged. The raw failing output of the unmodified tests on the corrected source: `docs/evidence/d07/postchange-01-predecessor-tests-on-corrected-source-UNMODIFIED-TESTS.txt`.
 
-Byte pins updated (only the `runtime_authority.py` entry, each with a comment citing the authorization): `test_governed_policy_composition.py::test_z03` (`ad7b95e5...`), and, found by the first full run, three more sites that pin the same file: `test_f5_class_age_governance.py::test_s01`, `test_f5_class_unreadable_governance.py::test_s01`, and `test_v02_legacy_claim_vector.py::test_l05` (git blob `0b2c5e49...` -> `f9bca403...`). `tests/test_freshness_purpose_anchor_successor.py::test_d07_only_runtime_authority_changed_among_the_protected_evaluators` proves the other six protected files (`bounded`, `freshness`, `policy_binding`, `rule_revision`, `reversibility`, `holder_inventory`) are unchanged by hash; `...::test_d07_the_deadline_registration_is_no_longer_guarded_by_the_policy_binding` is a static AST pin.
+Byte pins updated (only the `runtime_authority.py` entry, each with a comment citing the authorization): `test_governed_policy_composition.py::test_z03` (`45a27db8...`; fb24ed0 was `ad7b95e5...`), and, found by the first full run, three more sites that pin the same file: `test_f5_class_age_governance.py::test_s01`, `test_f5_class_unreadable_governance.py::test_s01`, and `test_v02_legacy_claim_vector.py::test_l05` (git blob `0b2c5e49...` -> `f9bca403...`). `tests/test_freshness_purpose_anchor_successor.py::test_d07_only_runtime_authority_changed_among_the_protected_evaluators` proves the other six protected files (`bounded`, `freshness`, `policy_binding`, `rule_revision`, `reversibility`, `holder_inventory`) are unchanged by hash; `...::test_d07_the_deadline_registration_is_no_longer_guarded_by_the_policy_binding` is a static AST pin.
 
 New file `tests/test_freshness_purpose_anchor_successor.py` (184 tests; helper `tests/freshness_d07_grid.py`; predecessor outcomes in `tests/fixtures/d07_predecessor_outcomes_061a986.json`, recorded by `docs/evidence/d07/record_predecessor_outcomes.py` against the UNCHANGED predecessor source, which the recorder verifies by hash):
 
@@ -104,7 +105,7 @@ Mutation evidence (developer evidence, not qualification): `docs/evidence/d07/mu
 
 ## 6. Residual limits (unchanged by this change)
 
-* Outage-extension authority for the cached-purpose path is asserted and unauthenticated (comment at `runtime_authority.py:~416`: a configured signer's extension, not authenticated). The correction anchors the snapshot at its recorded (possibly extended) bound, which is <= the Registry-narrowed ceiling by composition; it does not authenticate who asked for the extension.
+* Outage-extension authority for the cached-purpose path is asserted and unauthenticated (comment at `runtime_authority.py:~416`: a configured signer's extension, not authenticated). The correction anchors the snapshot at the recorded bound of the accepted snapshot, which may include a signed outage extension and so can exceed the class ceiling (the extension test records 90 s against a 30 s ceiling); the anchor is only ever a `min` added to the deadline, and the change does not authenticate who asked for the extension.
 * No anti-rollback: the decision store is an unsigned local JSON store; nothing here adds a durable ratchet (EXT-S4 not implemented).
 * Not covered by this change: the pre-existing extreme-tolerance `OverflowError` (separate defect record 04), the constructor clock tolerance (NOT AUTHORIZED), Registry-side consumers of the anchor family (separate PR 6), `policy_generation`/`activation_ref` semantics (Option B was not taken).
 * Behaviour change for existing hosts: hosts that set `anchor_deadline_to_inputs=True` without a `PolicyBinding` and whose grants carry a `purpose_ref` can now see earlier refusals (`check_expired_before_dispatch`), including for a purpose observation exactly at its ceiling. This is the intended, more restrictive behaviour; hosts without the flag are unaffected.
@@ -112,7 +113,7 @@ Mutation evidence (developer evidence, not qualification): `docs/evidence/d07/mu
 
 ## 7. Draft CI Scope Declaration (risk tier T3)
 
-* Subject / exact head: Control Plane branch `d07-purpose-anchor-correction`, stacked on CP #94 `061a986563768f2f8f9f6c0861647a3c5b1935be` (CP main `b7eb11aaeed9c766ecaae7d22955093f7f7cd1aa` plus one test-only commit). Code and test head: commit `2a96cfb` (source + tests); the commit above it adds evidence and this document only (no source or test change). Protected-file change set: `runtime_authority.py` only, sha256 `ad7b95e5d3bc3ddcba110a6758cf63e7f22b537766d3d072cbc7af17385bce01`.
+* Subject / exact head: Control Plane branch `d07-purpose-anchor-correction`, stacked on CP #94 `061a986563768f2f8f9f6c0861647a3c5b1935be` (CP main `b7eb11aaeed9c766ecaae7d22955093f7f7cd1aa` plus one test-only commit). Code and test head: commit `ad794e1` (comment-only prose correction on top of `2a96cfb`, which carried source + tests; `fb24ed0` added evidence and this document); the final commit above it adds evidence and this document only (no source or test change). Protected-file change set: `runtime_authority.py` only, sha256 `45a27db8695ff9d23516e1937f3bafa2391bbc1587ed0fb09f56ea8f3e01d23f` (previous D-07 head fb24ed0: `ad7b95e5...`).
 * Dependencies: CP #94 (unchanged); Registry pin directories as listed in section 5. No dependency on the D-06 PR.
 * Tests executed: full Control Plane suite in two pin groups (section 5), the D-07 successor and residual suites, 16-mutant harness, byte-pin proofs for six unchanged protected files. Registry checkouts: `b73c59e6769acd5af7263397e81dfc6fa4561f38` and `6f600ab1150f00ef3d96834159b1807e866a78b6`.
 * Evidence reused: none, except the recorded predecessor outcomes, which were generated for this change by running the unchanged predecessor source (hash-verified by the recorder) and are exact-source evidence for 061a986 only.
