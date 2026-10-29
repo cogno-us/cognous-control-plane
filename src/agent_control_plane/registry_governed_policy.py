@@ -23,7 +23,8 @@ needs an explicit Architect decision and F3 requalification. Until then a decisi
 under the executing workflow's own (Registry-verified) scalars.
 
 Applicability (deployment). `activation_ledger` (optional, host-owned, in-process, `GovernedActivationLedger`) lets a host refuse a second DIFFERENTLY configured governed workflow for
-the same (tenant, action, institution, authority domain). It is a LOCAL check: it cannot see another process, a plain `BoundedAuthorizationWorkflow`, or a workflow built without the
+the same (tenant, action, institution, authority domain); the configuration identity covers the declared families and scopes and the bound identity (host values, Registry
+effective-policy digests and effective values, F4 scalars, final profile digest), and the claim is made only after construction succeeded. It is a LOCAL check: it cannot see another process, a plain `BoundedAuthorizationWorkflow`, or a workflow built without the
 ledger, so it is NOT deployment-wide exclusivity. The supported activation boundary that could enforce exclusivity does not exist in the Control Plane (see
 docs/governed-workflow-consolidation.md for the missing contract and a minimal proposal).
 
@@ -239,12 +240,14 @@ class GovernedPolicyWorkflow(GovernedLifecycle):
         if refusal is not None:
             raise RegistryGovernedPolicyRefused(refusal, "construction")
         profile, scalars, bound = derived
+        # Configuration identity = the declared families and scopes PLUS the existing bound identity material: the host values, each family's Registry effective-policy digest and
+        # effective values, the F4 scalars and the FINAL effective-profile digest. Two differently governed configurations therefore cannot claim the same identity.
         configuration = commitment({"families": [n for n, _ in declared], "scopes": {n: f.scope.operation_id for n, f in declared}, "consumer_id": scope.consumer_id,
-                                    "tenant_id": scope.tenant_id, "action_id": scope.action_id, "institution_id": authority[0], "authority_domain": authority[1]})
+                                    "tenant_id": scope.tenant_id, "action_id": scope.action_id, "institution_id": authority[0], "authority_domain": authority[1],
+                                    "host": {"scalars": host_scalars if scalars is not None else None, "class_age": host_ages, "class_unreadable": host_values},
+                                    "bound": bound})
         key = (scope.tenant_id, scope.action_id, authority[0], authority[1])
         destination = take_destination(workflow_kwargs, _refuse)
-        if activation_ledger is not None and not activation_ledger.claim(key, configuration):
-            raise _refuse("conflicting_governed_configuration", "construction")
         extra = {}
         if profile is not None:
             extra["runtime_authority_profile"] = profile
@@ -257,6 +260,9 @@ class GovernedPolicyWorkflow(GovernedLifecycle):
         self._gp_host_values, self._gp_host_ages = host_values, host_ages
         self._gp_ledger, self._gp_key, self._gp_configuration = activation_ledger, key, configuration
         self._gl_attach(scope=scope, authority=authority, bound=bound)
+        # The claim is the LAST step: a construction that failed anywhere above never leaves a stale claim. `claim` is atomic under the ledger lock.
+        if activation_ledger is not None and not activation_ledger.claim(key, configuration):
+            raise _refuse("conflicting_governed_configuration", "construction")
 
     @property
     def governed_last_commit_refusal(self) -> Optional[Refusal]:

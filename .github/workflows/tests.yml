@@ -147,7 +147,7 @@ jobs:
           suite = suite if suite.tag == "testsuite" else suite[0]
           n, skipped, failed = int(suite.get("tests")), int(suite.get("skipped")), int(suite.get("failures")) + int(suite.get("errors"))
           print(f"governed policy tests: {n} run, {skipped} skipped, {failed} failed")
-          assert skipped == 0 and failed == 0 and n >= 89, "composed governed-policy tests were skipped or did not run"
+          assert skipped == 0 and failed == 0 and n >= 99, "composed governed-policy tests were skipped or did not run"
           PY
           } 2>&1 | tee governed-policy-out.txt || {
             echo "::error title=Composed governed policy tests failed::$(tail -n 40 governed-policy-out.txt | sed ':a;N;$!ba;s/\n/%0A/g')"

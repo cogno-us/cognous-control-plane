@@ -646,6 +646,109 @@ def test_l02_supersede_retires_the_old_workflow_at_every_boundary(tmp_path):
     assert not ledger.supersede(key, "stale", "x")
 
 
+def _claims_digest(flow):
+    return flow.registry_governed_policy_identity["configuration_digest"]
+
+
+@pytest.mark.parametrize("other", ["registry_age_value", "registry_unreadable_value", "registry_f4_value", "host_age", "host_scalar"])
+def test_l04_two_differently_governed_configurations_never_share_an_identity(tmp_path, other):
+    """Same declared families, same scope, same operation ids: only the effective policy values (Registry or host) differ. The identities must differ and a shared ledger must refuse."""
+    ledger = GovernedActivationLedger()
+    p, res, cfg = prepared(tmp_path)
+    first = build(tmp_path, res, cfg, families(fsrc(), asrc(), usrc()), pol={"activation_ledger": ledger})
+    kw, fams, pol_kw = {}, {"f": fsrc(), "a": asrc(), "u": usrc()}, {"activation_ledger": ledger}
+    p2, res2, cfg2 = prepared(tmp_path / "second", **({"age1": 50} if other == "host_age" else {}))
+    if other == "registry_age_value":
+        fams["a"] = Source(amat({CLASS_T1: 10}))
+    elif other == "registry_unreadable_value":
+        fams["u"] = Source(mat(umap(t1=B_)))
+    elif other == "registry_f4_value":
+        fams["f"] = Source(fmat(20, 20))
+    elif other == "host_scalar":
+        pol_kw["status_max_age_seconds"] = 90
+    with pytest.raises(RegistryGovernedPolicyRefused) as e:
+        build(tmp_path / "second", res2, cfg2, families(fams["f"], fams["a"], fams["u"]), pol=pol_kw)
+    refused(e, "conflicting_governed_configuration", "construction")
+    assert ledger.holder(first._gp_key) == _claims_digest(first)  # the first claim is untouched
+
+
+def test_l05_the_identity_is_deterministic_for_the_same_governance(tmp_path):
+    a = ready(tmp_path / "a")[4]
+    b = ready(tmp_path / "b")[4]
+    assert _claims_digest(a) == _claims_digest(b)
+
+
+def test_l06_a_failed_construction_leaves_no_claim(tmp_path):
+    ledger = GovernedActivationLedger()
+    p, res, cfg = prepared(tmp_path)
+    with pytest.raises(TypeError):  # fails inside the base constructor, AFTER derivation and identity computation
+        GovernedPolicyWorkflow(families=families(fsrc(), asrc(), usrc()), verifier=ev.Ed25519Verifier(), runtime_authority_profile=cfg, construction_time=REG_NOW,
+                               activation_ledger=ledger, bogus_workflow_argument=1, **kwargs(tmp_path / "a", res))
+    assert ledger._claims == {}
+    with pytest.raises(ValueError, match="explicit test clock"):  # a second base-constructor failure: synthetic profile without allow_test_time
+        GovernedPolicyWorkflow(families=families(fsrc(), asrc(), usrc()), verifier=ev.Ed25519Verifier(), runtime_authority_profile=cfg, activation_ledger=ledger,
+                               **{**kwargs(tmp_path / "b", res), "allow_test_time": False})
+    assert ledger._claims == {}
+    ok = build(tmp_path / "ok", res, cfg, families(None, asrc(), usrc()), pol={"activation_ledger": ledger})  # another configuration can still claim afterwards
+    assert ledger.holder(ok._gp_key) == _claims_digest(ok)
+
+
+def test_l07_a_refused_claim_leaves_the_first_claim_and_a_failed_registry_check_never_claims(tmp_path):
+    ledger = GovernedActivationLedger()
+    p, res, cfg = prepared(tmp_path)
+    bad = usrc()
+    bad.fail = True
+    with pytest.raises(RegistryGovernedPolicyRefused):
+        build(tmp_path, res, cfg, families(fsrc(), asrc(), bad), pol={"activation_ledger": ledger})
+    assert ledger._claims == {}
+
+
+def test_l08_concurrent_claims_have_exactly_one_winner_and_the_claim_is_atomic():
+    import threading
+
+    class SlowGet(dict):
+        """A claim table whose plain `get` yields to the other thread: a check-then-set implementation would let both threads win."""
+        gate = threading.Barrier(2, timeout=1)
+
+        def get(self, *a, **k):
+            value = super().get(*a, **k)
+            try:
+                self.gate.wait()
+            except threading.BrokenBarrierError:
+                pass
+            return value
+
+    ledger = GovernedActivationLedger()
+    ledger._claims = SlowGet()
+    key, results = ("t", "a", "i", "d"), []
+    start = threading.Barrier(2)
+
+    def go(cid):
+        start.wait()
+        results.append(ledger.claim(key, cid))
+    threads = [threading.Thread(target=go, args=(c,)) for c in ("sha256:" + "a" * 64, "sha256:" + "b" * 64)]
+    [th.start() for th in threads]
+    [th.join() for th in threads]
+    assert sorted(results) == [False, True] and ledger.holder(key) in ("sha256:" + "a" * 64, "sha256:" + "b" * 64)
+
+
+def test_l09_many_concurrent_claims_agree_on_one_holder_and_only_its_identity_succeeds():
+    import threading
+    ledger, key, out = GovernedActivationLedger(), ("t", "a", "i", "d"), []
+    ids = ["sha256:" + c * 64 for c in "abcd"]
+    barrier = threading.Barrier(16)
+
+    def go(cid):
+        barrier.wait()
+        out.append((cid, ledger.claim(key, cid)))
+    threads = [threading.Thread(target=go, args=(ids[i % 4],)) for i in range(16)]
+    [th.start() for th in threads]
+    [th.join() for th in threads]
+    held = ledger.holder(key)
+    assert held in ids and len(out) == 16
+    assert all(ok == (cid == held) for cid, ok in out)  # every thread with the winning identity succeeded, every other one was refused
+
+
 def test_l03_the_ledger_is_local_and_documented_as_not_exclusive(tmp_path):
     """A workflow built WITHOUT the ledger, or the plain workflow, is invisible to it: no deployment-wide exclusivity is claimed."""
     ledger = GovernedActivationLedger()
