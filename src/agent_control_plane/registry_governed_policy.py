@@ -23,8 +23,10 @@ persisted decision binding's `catalogue_digest`, so the FINAL effective profile 
 `approval_commitment` nor in the persisted decision binding, and this module does not invent a preimage for them: they are bound explicitly in this workflow's own bound identity
 (compared at every boundary; exposed by `registry_governed_policy_identity`), and the workflow refuses if they are edited after construction. UNRESOLVED DESIGN DECISION (reported,
 not decided here): whether the F4 scalars (or this identity) should enter the approval preimage / persisted decision binding. That is an authority-semantic change to a commitment and
-needs an explicit Architect decision and F3 requalification. Until then a decision persisted under one scalar pair carries no scalar binding; freshness is re-resolved at execute
-under the executing workflow's own (Registry-verified) scalars.
+needs an explicit Architect decision and F3 requalification. RESOLVED by D-06 Option B (Architect-authorized 2026-10-29; BUILDER_TESTED, F3-A independent qualification PENDING): every authorized
+decision of THIS workflow now carries the persisted member `binding.runtime_authority["effective_configuration"]` (`effective_configuration_binding`, docs/effective-configuration-binding.md)
+which binds the F4 scalars, the other constructor scalars, the ObservationPolicy, both profile digests, the scope and the declared family set. `execute` and the pin-export claim refuse
+`authorization_binding_changed` when it is absent (outside the explicit `legacy_cutoff`), invalid, of an unknown version or unequal to the live configuration. `approval_commitment` is unchanged.
 
 Applicability (deployment). `activation_ledger` (optional, host-owned, in-process, `GovernedActivationLedger`) lets a host refuse a second DIFFERENTLY configured governed workflow for
 the same (tenant, action, institution, authority domain); the configuration identity covers the declared families and scopes and the bound identity (host values, Registry
@@ -43,12 +45,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Mapping, Optional
 
+from agent_control_plane import effective_configuration_binding as ecb
 from agent_control_plane import registry_f4_age_governance as f4mod
 from agent_control_plane import registry_f5_class_age_governance as agemod
 from agent_control_plane import registry_f5_class_unreadable_governance as unrmod
 from agent_control_plane import registry_irreversibility_governance as irmod
 from agent_control_plane import registry_revocation_governance as revmod
-from agent_control_plane.registry_effective_policy import EffectivePolicySnapshot, build_snapshot, selection_ref
+from agent_control_plane.registry_effective_policy import FAMILY_TABLE, SCHEMA_REVISIONS, EffectivePolicySnapshot, build_snapshot, selection_ref
 from agent_control_plane.bounded import _now, commitment
 from agent_control_plane.registry_governed_lifecycle import (
     GovernedLifecycle, GovernedScope, Refusal, RegistrySelectionRefused, _GatedDestination, _scalar, check_scope, check_source, construction_now, read_source, require_authority,
@@ -256,7 +259,9 @@ class GovernedPolicyWorkflow(GovernedLifecycle):
     _gl_rejection_code = REJECTION_CODE
 
     def __init__(self, *, families: GovernedFamilies, verifier: Any, runtime_authority_profile: Any = None, status_max_age_seconds: int = 60, approval_max_age_seconds: int = 60,
-                 construction_time: Optional[datetime] = None, activation_ledger: Optional[GovernedActivationLedger] = None, **workflow_kwargs: Any):
+                 construction_time: Optional[datetime] = None, activation_ledger: Optional[GovernedActivationLedger] = None, legacy_cutoff: int = 0, **workflow_kwargs: Any):
+        if ecb.legacy_cutoff_defect(legacy_cutoff) is not None:  # explicit finite int (exact int, not bool, 0..SCALAR_MAX); no wildcard, no default that accepts legacy decisions
+            raise _refuse("legacy_cutoff_invalid", "construction")
         if type(families) is not GovernedFamilies:
             raise _refuse("families_invalid", "construction")
         declared = _declared(families)
@@ -326,8 +331,8 @@ class GovernedPolicyWorkflow(GovernedLifecycle):
         profile, scalars, bound = derived
         # Configuration identity = the declared families and scopes PLUS the existing bound identity material: the host values, each family's Registry effective-policy digest and
         # effective values, the F4 scalars and the FINAL effective-profile digest. Two differently governed configurations therefore cannot claim the same identity.
-        configuration = commitment({"families": [n for n, _ in declared], "scopes": {n: f.scope.operation_id for n, f in declared}, "consumer_id": scope.consumer_id,
-                                    "tenant_id": scope.tenant_id, "action_id": scope.action_id, "institution_id": authority[0], "authority_domain": authority[1],
+        configuration = commitment({"families": [n for n, _ in declared], "scopes": {n: f.scope.operation_id for n, f in declared},
+                                    **ecb.scope_identity(scope.consumer_id, scope.tenant_id, scope.action_id, authority[0], authority[1]),  # the scope shape shared with the D-06 binding
                                     "host": {"scalars": host_scalars if scalars is not None else None, "class_age": host_ages, "class_unreadable": host_values,
                                              "class_revocation_assurance": host_assurance, "terminal_revocation": host_terminal},
                                     "bound": bound})
@@ -351,6 +356,14 @@ class GovernedPolicyWorkflow(GovernedLifecycle):
                                            operation_ids={n: f.scope.operation_id for n, f in declared}, evaluated_at=now, order=FAMILY_NAMES)
         self._gp_ledger, self._gp_key, self._gp_configuration = activation_ledger, key, configuration
         self._gl_attach(scope=scope, authority=authority, bound=bound)
+        self._gl_legacy_cutoff = legacy_cutoff
+        # D-06: the configuration must be bindable (every scalar and the ObservationPolicy inside the structural range) BEFORE the workflow exists for use; then the
+        # host-held scalar configuration is snapshotted so a post-construction attribute edit is refused (`_gl_held_defect`).
+        try:
+            self._gl_configuration_members()
+        except ecb.BindingInvalid as exc:
+            raise _refuse("host_scalar_invalid" if str(exc) in ("f4_scalars", "other_scalars", "observation_policy") else "configuration_binding_invalid", "construction") from None
+        self._gp_held_config = self._gp_config_view()
         # The claim is the LAST step: a construction that failed anywhere above never leaves a stale claim. `claim` is atomic under the ledger lock.
         if activation_ledger is not None and not activation_ledger.claim(key, configuration):
             raise _refuse("conflicting_governed_configuration", "construction")
@@ -397,12 +410,51 @@ class GovernedPolicyWorkflow(GovernedLifecycle):
     def _gl_error(self, refusal: Refusal, boundary: str) -> Exception:
         return RegistryGovernedPolicyRefused(refusal, boundary)
 
+    def _gp_config_view(self) -> tuple:
+        """Type-exact view of the host-held scalar configuration (all five scalars and the ObservationPolicy values, or None) for the held-state guard."""
+        obs = self.observation_policy
+        scalars = tuple((type(v), v) for v in (self.status_max_age_seconds, self.approval_max_age_seconds, self.clock_tolerance_seconds, self.identity_max_age_seconds,
+                                               self.mandate_max_age_seconds))
+        return scalars, (None if obs is None else tuple((type(v), v) for v in (obs.max_age_seconds, obs.clock_tolerance_seconds)))
+
+    @property
+    def effective_configuration_binding(self) -> dict:
+        """The live `effective-configuration-binding/0.1` member this workflow would mint now (a copy; non-authorizing; raises `BindingInvalid` if it cannot be bound)."""
+        return ecb.mint(self._gl_configuration_members())
+
+    def _gl_configuration_members(self) -> Optional[dict]:
+        """The LIVE members of the effective configuration (D-06). Families come from the existing bound identity and the existing family table, not from a list kept here."""
+        try:
+            b, scope, authority, held = self._gl_bound, self._gl_scope, self._gl_authority, self.runtime_authority_profile
+            if held is not None and type(held) is not RuntimeAuthorityProfile:
+                raise ecb.BindingInvalid("effective_profile")
+            obs = self.observation_policy
+            return ecb.build_members(
+                scope=ecb.scope_identity(scope.consumer_id, scope.tenant_id, scope.action_id, authority[0], authority[1]),
+                host_profile_digest=agemod.profile_digest(self._gp_host) if self._gp_host is not None else None,
+                effective_profile_digest=agemod.profile_digest(held) if held is not None else None,
+                f4_scalars={"status_max_age_seconds": self.status_max_age_seconds, "approval_max_age_seconds": self.approval_max_age_seconds},
+                other_scalars={"clock_tolerance_seconds": self.clock_tolerance_seconds, "identity_max_age_seconds": self.identity_max_age_seconds,
+                               "mandate_max_age_seconds": self.mandate_max_age_seconds},
+                observation_policy=None if obs is None else {"max_age_seconds": obs.max_age_seconds, "clock_tolerance_seconds": obs.clock_tolerance_seconds},
+                families=ecb.family_rows(b, FAMILY_NAMES, FAMILY_TABLE, SCHEMA_REVISIONS))
+        except ecb.BindingInvalid:
+            raise
+        except Exception:  # an unreadable or foreign held value is never bound: fail closed
+            raise ecb.BindingInvalid("configuration_unreadable") from None
+
     def _gl_held_defect(self) -> Optional[str]:
         b = self._gl_bound
         if b["f4_ages"] is not None:
             values = b["f4_ages"][0]
             if (self.status_max_age_seconds, self.approval_max_age_seconds) != (values[f4mod.AGES[0]], values[f4mod.AGES[1]]):
                 return "scalars_modified"
+        try:
+            unchanged = self._gp_config_view() == self._gp_held_config
+        except Exception:
+            unchanged = False
+        if not unchanged:  # D-06 new coverage: the F4 scalars when the F4 family is NOT declared, the other three scalars and the ObservationPolicy
+            return "scalars_modified"
         if b["effective_profile_digest"] is not None:
             held = self.runtime_authority_profile
             if type(held) is not RuntimeAuthorityProfile or agemod.profile_digest(held) != b["effective_profile_digest"]:

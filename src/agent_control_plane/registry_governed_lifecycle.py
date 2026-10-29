@@ -26,11 +26,14 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Mapping, Optional
 
+from agent_control_plane import effective_configuration_binding as ecb
 from agent_control_plane.bounded import BoundedAuthorizationWorkflow, DefinitiveDestinationRejection, TenantRuntimeProposal
 
 CLASSIFICATION = "BUILDER_TESTED; not independently qualified; non-authorizing"
 SCALAR_MAX = 2147483647
 _EXEC_NOW: contextvars.ContextVar = contextvars.ContextVar("registry_governed_execute_now", default=None)
+_EXEC_DECISION: contextvars.ContextVar = contextvars.ContextVar("registry_governed_execute_decision", default=None)
+BINDING_CHANGED = "authorization_binding_changed"  # the REGISTERED durable reason (runtime-authority-reasons/0.3); this module introduces no reason code
 
 
 @dataclass(frozen=True)
@@ -159,6 +162,8 @@ class GovernedLifecycle(BoundedAuthorizationWorkflow):
     supplies the four hooks; `decide`, `execute` and the commit gate are inherited unchanged."""
 
     _gl_rejection_code: str = "registry_governed_selection_invalid"
+    _gl_legacy_cutoff: int = 0  # explicit host-supplied finite int; 0 = no legacy decision is accepted (set by a family that binds its configuration)
+    _gl_last_binding_status: Optional[str] = None  # evidence of the latest classification (not durable, not authority)
 
     def _gl_attach(self, *, scope: GovernedScope, authority: Any, bound: Any) -> None:
         self._gl_scope, self._gl_authority, self._gl_bound = scope, authority, bound
@@ -178,6 +183,57 @@ class GovernedLifecycle(BoundedAuthorizationWorkflow):
     def _gl_derive(self, materials: Any, authority: Any, now: datetime, boundary: str) -> Any:  # pragma: no cover - abstract
         """Registry-verify every governing selection and return the comparable bound identity (raise `_gl_error(...)` on any refusal)."""
         raise NotImplementedError
+
+    def _gl_configuration_members(self) -> Optional[dict]:
+        """Hook (D-06): the validated members of the live effective configuration (`effective_configuration_binding.build_members`), or None when this family workflow does not
+        bind its configuration. It must read the LIVE held values and raise `ecb.BindingInvalid` for any value outside its structural domain."""
+        return None
+
+    # -- persisted effective-configuration binding (D-06 Option B, carriage C2) ----------------------------------------------------------------------------------
+    def configuration_binding_status(self, decision: Any) -> Optional[str]:
+        """READ-ONLY classification of one persisted authorized decision against the live configuration: `bound`, `legacy`, `unbound-after-cutoff`, `invalid`,
+        `version-unsupported` or `mismatch` (None when this workflow does not bind). Writes nothing, raises nothing for a bad record, grants nothing; `execute` and the
+        claim path use exactly this classification."""
+        members = self._gl_configuration_members()
+        if members is None:
+            return None
+        binding = getattr(decision, "binding", None)
+        ids = [d.decision_id for d in self.records.load().decisions]
+        did = getattr(decision, "decision_id", None)
+        index = ids.index(did) if ids.count(did) == 1 else None
+        return ecb.classify(getattr(binding, "runtime_authority", None), ecb.mint(members), index=index, cutoff=self._gl_legacy_cutoff, decision_count=len(ids))
+
+    def _resolve(self, proposal, now, *, inputs=None, stage="decision", decision=None, check_ref=None):
+        """The base resolution, then (only for an authorized result) the configuration binding. A hold or any refusal the base produced is returned unchanged: the binding can
+        add a refusal through the existing `current != persisted.binding` comparison, never remove one and never turn a hold into an authorization."""
+        reasons, binding = super()._resolve(proposal, now, inputs=inputs, stage=stage, decision=decision, check_ref=check_ref)
+        if reasons or binding is None:
+            return reasons, binding
+        try:
+            members = self._gl_configuration_members()
+            if members is None:
+                return reasons, binding
+            live = ecb.mint(members)
+        except ecb.BindingInvalid:
+            raise self._gl_refuse("configuration_binding_invalid", "decision" if stage == "decision" else "effect") from None
+        target = decision if decision is not None else _EXEC_DECISION.get()
+        if stage == "decision" and target is None:  # MINT: every authorized decision of this lifecycle carries the member
+            return reasons, self._gl_with_member(binding, live)
+        status = self.configuration_binding_status(target) if target is not None else ecb.UNBOUND_AFTER_CUTOFF
+        self._gl_last_binding_status = status
+        if status == ecb.LEGACY:  # previous semantics: ONLY the new key is left out of the live side; nothing else is ignored
+            return reasons, binding
+        stamped = self._gl_with_member(binding, live)
+        persisted_ra = getattr(getattr(target, "binding", None), "runtime_authority", None)
+        if status not in ecb.ACCEPTED and stamped.runtime_authority == persisted_ra:  # unreachable by construction; fail closed if it ever happens
+            return sorted(set(reasons) | {BINDING_CHANGED}), stamped
+        return reasons, stamped
+
+    @staticmethod
+    def _gl_with_member(binding: Any, live: dict) -> Any:
+        extension = dict(binding.runtime_authority or {})
+        extension[ecb.KEY] = live
+        return binding.model_copy(update={"runtime_authority": extension})
 
     # -- shared lifecycle ---------------------------------------------------------------------------------------------------------------------------------------
     def _gl_refuse(self, code: str, boundary: str) -> Exception:
@@ -219,8 +275,9 @@ class GovernedLifecycle(BoundedAuthorizationWorkflow):
     def execute(self, proposal, decision, *, adapter_id, now=None, lose_ack=False, partial=False):
         entry_time = self._evaluation_time(now)
         self._gl_revalidate(proposal, "effect", entry_time)
-        token = _EXEC_NOW.set(now)
+        token, dtoken = _EXEC_NOW.set(now), _EXEC_DECISION.set(decision)
         try:
             return super().execute(proposal, decision, adapter_id=adapter_id, now=now, lose_ack=lose_ack, partial=partial)
         finally:
+            _EXEC_DECISION.reset(dtoken)
             _EXEC_NOW.reset(token)

@@ -465,6 +465,12 @@ def test_i03_restart_with_the_same_families_resumes_a_persisted_decision(tmp_pat
     assert attempt.status == "acknowledged" and observed.state == "applied"
 
 
+# SUPERSEDED BY AUTHORIZED BEHAVIOUR CHANGE (D-06 Option B, Architect authorization 2026-10-29; docs/effective-configuration-binding.md). The body below is the ORIGINAL
+# characterization and is kept verbatim: it documented that a decision persisted under one scalar pair was executable by a workflow whose scalars differ. Since the persisted
+# effective-configuration binding that outcome is REFUSED, so this original assertion sequence now raises `PermissionError` ("authorization-critical inputs changed before effect").
+# `xfail(strict=True)` keeps the original executable and proves the old behaviour is gone (an unexpected pass would FAIL the suite). Original passing result at b7eb11a:
+# docs/evidence/d06/baseline-b7eb11a-v7pin.log. Documented successor: tests/test_effective_configuration_binding.py::test_c03_the_documented_i04_scenario_now_refuses.
+@pytest.mark.xfail(strict=True, raises=PermissionError, reason="superseded by the D-06 persisted effective-configuration binding; successor test_c03 in test_effective_configuration_binding.py")
 def test_i04_the_f4_scalars_are_NOT_in_the_persisted_decision_binding_documented_unresolved_decision(tmp_path):
     """Characterization of the reported design decision: dropping ONLY the F4 family leaves the profile (hence `catalogue_digest` and the approval commitment) identical, so a
     decision persisted under narrowed scalars is executable by a workflow whose scalars are the host's. Freshness is re-resolved at execute under the executing workflow's own
