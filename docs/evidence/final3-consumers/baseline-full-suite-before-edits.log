@@ -1,0 +1,581 @@
+### group A: everything except the pin-6f600ab files (OCS_REGISTRY_PIN_DIR=pin_v7)
+........................................................................ [  2%]
+........................................................................ [  5%]
+........................................................................ [  8%]
+........................................................................ [ 11%]
+........................................................................ [ 13%]
+........................................................................ [ 16%]
+............................x........................................... [ 19%]
+........................................................................ [ 22%]
+........................................................................ [ 24%]
+........................................................................ [ 27%]
+........................................................................ [ 30%]
+........................................................................ [ 33%]
+........................................................................ [ 35%]
+........................................................................ [ 38%]
+........................................................................ [ 41%]
+........................................................................ [ 44%]
+......................................x................................. [ 46%]
+........................................................................ [ 49%]
+........................................................................ [ 52%]
+........................................................................ [ 55%]
+................................................................FFFFFFFF [ 57%]
+FFFFFF.................................................................. [ 60%]
+........................................................................ [ 63%]
+........................................................................ [ 66%]
+........................................................................ [ 68%]
+........................................................................ [ 71%]
+........................................................................ [ 74%]
+........................................................................ [ 77%]
+........................................................................ [ 80%]
+........................FFFFFFFFFFFFFFFF.......ssssssssssssssssssssss.ss [ 82%]
+sssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss....... [ 85%]
+........................................................................ [ 88%]
+........................................................................ [ 91%]
+........................................................................ [ 93%]
+....FFFFFF.............................................................. [ 96%]
+......................................................FFFFF............. [ 99%]
+.................                                                        [100%]
+=================================== FAILURES ===================================
+___ test_allow_is_only_additional_restriction_and_requires_cognous_authority ___
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+_________________ test_agt_allow_cannot_override_cognous_deny __________________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+__________ test_transform_gets_fresh_authorization_for_new_commitment __________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+_____ test_nonclean_or_unsupported_agt_results_never_authorize[agt0-deny] ______
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+_____ test_nonclean_or_unsupported_agt_results_never_authorize[agt1-hold] ______
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+_____ test_nonclean_or_unsupported_agt_results_never_authorize[agt2-hold] ______
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+_____ test_nonclean_or_unsupported_agt_results_never_authorize[agt3-hold] ______
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+_____ test_nonclean_or_unsupported_agt_results_never_authorize[agt4-hold] ______
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+_____ test_nonclean_or_unsupported_agt_results_never_authorize[agt5-hold] ______
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+_____________ test_missing_tenant_and_backend_failure_fail_closed ______________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+_______________ test_real_sdk_types_are_supported_when_installed _______________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+_____ test_tenant_mismatch_between_argument_and_proposal_holds_before_agt ______
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+_____________ test_matching_tenant_proposal_is_evaluated_normally ______________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+____________ test_tool_bindings_hold_on_mismatch_and_pass_on_match _____________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+_____________ test_a_transform_without_a_binding_is_not_authorized _____________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+________________ test_a_transform_with_a_binding_is_authorized _________________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+________________ test_an_allow_is_unchanged_by_the_binding_rule ________________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+__ test_an_inexact_decision_string_is_unsupported_and_never_authorizes[ALLOW] __
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+__ test_an_inexact_decision_string_is_unsupported_and_never_authorizes[Allow] __
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+_ test_an_inexact_decision_string_is_unsupported_and_never_authorizes[ allow] __
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+_ test_an_inexact_decision_string_is_unsupported_and_never_authorizes[allow ] __
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+_ test_an_inexact_decision_string_is_unsupported_and_never_authorizes[TRANSFORM] _
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+__ test_an_inexact_decision_string_is_unsupported_and_never_authorizes[Deny] ___
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+___ test_a_padded_tenant_is_passed_exactly_and_never_trimmed[ tenant-alpha] ____
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+___ test_a_padded_tenant_is_passed_exactly_and_never_trimmed[tenant-alpha ] ____
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+__ test_a_padded_tenant_is_passed_exactly_and_never_trimmed[\ttenant-alpha\n] __
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+________ test_a_padded_tenant_does_not_match_a_tenant_bearing_proposal _________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+____________________ test_a_blank_tenant_is_still_missing[] ____________________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+__________________ test_a_blank_tenant_is_still_missing[   ] ___________________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+__________________ test_a_blank_tenant_is_still_missing[None] __________________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+________________ test_a01_registry_pin_and_inventory_are_exact _________________
+
+    def test_a01_registry_pin_and_inventory_are_exact():
+>       v, pin = vectors()
+                 ^^^^^^^^^
+
+tests/test_v02_claim_policy_binding.py:157: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def vectors():
+        pin = os.environ.get("OCS_REGISTRY_PIN_DIR")
+        if not pin or not (Path(pin) / VECTOR_REL).is_file():
+            pytest.skip("NOT RUN: OCS_REGISTRY_PIN_DIR is not set to a Registry checkout containing the binding vectors")
+        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=pin, capture_output=True, text=True, check=True).stdout.strip()
+>       assert head == PIN, f"Registry checkout is {head}, expected the pin {PIN}"
+E       AssertionError: Registry checkout is b73c59e6769acd5af7263397e81dfc6fa4561f38, expected the pin 943ab1831e39fadac1eb2a414ae322ccfa09bc6a
+E       assert 'b73c59e6769a...dfc6fa4561f38' == '943ab1831e39...322ccfa09bc6a'
+E         
+E         - 943ab1831e39fadac1eb2a414ae322ccfa09bc6a
+E         + b73c59e6769acd5af7263397e81dfc6fa4561f38
+
+tests/test_v02_claim_policy_binding.py:63: AssertionError
+____ test_a02_valid_vectors_validate_and_are_byte_identical_to_the_registry ____
+
+    def test_a02_valid_vectors_validate_and_are_byte_identical_to_the_registry():
+>       v, _ = vectors()
+               ^^^^^^^^^
+
+tests/test_v02_claim_policy_binding.py:164: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def vectors():
+        pin = os.environ.get("OCS_REGISTRY_PIN_DIR")
+        if not pin or not (Path(pin) / VECTOR_REL).is_file():
+            pytest.skip("NOT RUN: OCS_REGISTRY_PIN_DIR is not set to a Registry checkout containing the binding vectors")
+        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=pin, capture_output=True, text=True, check=True).stdout.strip()
+>       assert head == PIN, f"Registry checkout is {head}, expected the pin {PIN}"
+E       AssertionError: Registry checkout is b73c59e6769acd5af7263397e81dfc6fa4561f38, expected the pin 943ab1831e39fadac1eb2a414ae322ccfa09bc6a
+E       assert 'b73c59e6769a...dfc6fa4561f38' == '943ab1831e39...322ccfa09bc6a'
+E         
+E         - 943ab1831e39fadac1eb2a414ae322ccfa09bc6a
+E         + b73c59e6769acd5af7263397e81dfc6fa4561f38
+
+tests/test_v02_claim_policy_binding.py:63: AssertionError
+______________ test_a03_equivalence_and_difference_relations_hold ______________
+
+    def test_a03_equivalence_and_difference_relations_hold():
+>       v, _ = vectors()
+               ^^^^^^^^^
+
+tests/test_v02_claim_policy_binding.py:176: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def vectors():
+        pin = os.environ.get("OCS_REGISTRY_PIN_DIR")
+        if not pin or not (Path(pin) / VECTOR_REL).is_file():
+            pytest.skip("NOT RUN: OCS_REGISTRY_PIN_DIR is not set to a Registry checkout containing the binding vectors")
+        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=pin, capture_output=True, text=True, check=True).stdout.strip()
+>       assert head == PIN, f"Registry checkout is {head}, expected the pin {PIN}"
+E       AssertionError: Registry checkout is b73c59e6769acd5af7263397e81dfc6fa4561f38, expected the pin 943ab1831e39fadac1eb2a414ae322ccfa09bc6a
+E       assert 'b73c59e6769a...dfc6fa4561f38' == '943ab1831e39...322ccfa09bc6a'
+E         
+E         - 943ab1831e39fadac1eb2a414ae322ccfa09bc6a
+E         + b73c59e6769acd5af7263397e81dfc6fa4561f38
+
+tests/test_v02_claim_policy_binding.py:63: AssertionError
+___________________ test_a04_every_invalid_vector_is_refused ___________________
+
+    def test_a04_every_invalid_vector_is_refused():
+>       v, _ = vectors()
+               ^^^^^^^^^
+
+tests/test_v02_claim_policy_binding.py:187: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def vectors():
+        pin = os.environ.get("OCS_REGISTRY_PIN_DIR")
+        if not pin or not (Path(pin) / VECTOR_REL).is_file():
+            pytest.skip("NOT RUN: OCS_REGISTRY_PIN_DIR is not set to a Registry checkout containing the binding vectors")
+        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=pin, capture_output=True, text=True, check=True).stdout.strip()
+>       assert head == PIN, f"Registry checkout is {head}, expected the pin {PIN}"
+E       AssertionError: Registry checkout is b73c59e6769acd5af7263397e81dfc6fa4561f38, expected the pin 943ab1831e39fadac1eb2a414ae322ccfa09bc6a
+E       assert 'b73c59e6769a...dfc6fa4561f38' == '943ab1831e39...322ccfa09bc6a'
+E         
+E         - 943ab1831e39fadac1eb2a414ae322ccfa09bc6a
+E         + b73c59e6769acd5af7263397e81dfc6fa4561f38
+
+tests/test_v02_claim_policy_binding.py:63: AssertionError
+______________________ test_a05_integer_boundary_vectors _______________________
+
+    def test_a05_integer_boundary_vectors():
+>       v, _ = vectors()
+               ^^^^^^^^^
+
+tests/test_v02_claim_policy_binding.py:197: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def vectors():
+        pin = os.environ.get("OCS_REGISTRY_PIN_DIR")
+        if not pin or not (Path(pin) / VECTOR_REL).is_file():
+            pytest.skip("NOT RUN: OCS_REGISTRY_PIN_DIR is not set to a Registry checkout containing the binding vectors")
+        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=pin, capture_output=True, text=True, check=True).stdout.strip()
+>       assert head == PIN, f"Registry checkout is {head}, expected the pin {PIN}"
+E       AssertionError: Registry checkout is b73c59e6769acd5af7263397e81dfc6fa4561f38, expected the pin 943ab1831e39fadac1eb2a414ae322ccfa09bc6a
+E       assert 'b73c59e6769a...dfc6fa4561f38' == '943ab1831e39...322ccfa09bc6a'
+E         
+E         - 943ab1831e39fadac1eb2a414ae322ccfa09bc6a
+E         + b73c59e6769acd5af7263397e81dfc6fa4561f38
+
+tests/test_v02_claim_policy_binding.py:63: AssertionError
+____ test_a06_identifier_matrix_every_bad_value_in_every_identifier_member _____
+
+    def test_a06_identifier_matrix_every_bad_value_in_every_identifier_member():
+>       v, _ = vectors()
+               ^^^^^^^^^
+
+tests/test_v02_claim_policy_binding.py:208: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def vectors():
+        pin = os.environ.get("OCS_REGISTRY_PIN_DIR")
+        if not pin or not (Path(pin) / VECTOR_REL).is_file():
+            pytest.skip("NOT RUN: OCS_REGISTRY_PIN_DIR is not set to a Registry checkout containing the binding vectors")
+        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=pin, capture_output=True, text=True, check=True).stdout.strip()
+>       assert head == PIN, f"Registry checkout is {head}, expected the pin {PIN}"
+E       AssertionError: Registry checkout is b73c59e6769acd5af7263397e81dfc6fa4561f38, expected the pin 943ab1831e39fadac1eb2a414ae322ccfa09bc6a
+E       assert 'b73c59e6769a...dfc6fa4561f38' == '943ab1831e39...322ccfa09bc6a'
+E         
+E         - 943ab1831e39fadac1eb2a414ae322ccfa09bc6a
+E         + b73c59e6769acd5af7263397e81dfc6fa4561f38
+
+tests/test_v02_claim_policy_binding.py:63: AssertionError
+____________ test_a_binding_for_the_pre_transform_proposal_is_held _____________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+____ test_a_foreign_commitment_in_the_binding_is_held[proposal_commitment] _____
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+_____ test_a_foreign_commitment_in_the_binding_is_held[payload_commitment] _____
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+_____________ test_a_binding_without_a_payload_commitment_is_held ______________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+__________ test_a_binding_for_the_transformed_proposal_is_authorized ___________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+=============================== warnings summary ===============================
+tests/test_microsoft_agt.py:76
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_int/tests/test_microsoft_agt.py:76: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_microsoft_agt.py:96
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_int/tests/test_microsoft_agt.py:96: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_microsoft_agt.py:112
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_int/tests/test_microsoft_agt.py:112: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_microsoft_agt.py:144
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_int/tests/test_microsoft_agt.py:144: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_microsoft_agt.py:168
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_int/tests/test_microsoft_agt.py:168: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_microsoft_agt.py:197
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_int/tests/test_microsoft_agt.py:197: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_microsoft_agt.py:231
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_int/tests/test_microsoft_agt.py:231: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_microsoft_agt.py:249
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_int/tests/test_microsoft_agt.py:249: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_microsoft_agt.py:265
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_int/tests/test_microsoft_agt.py:265: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_scan6_agt_exact.py:47
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_int/tests/test_scan6_agt_exact.py:47: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_scan6_agt_exact.py:56
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_int/tests/test_scan6_agt_exact.py:56: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_scan6_agt_exact.py:63
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_int/tests/test_scan6_agt_exact.py:63: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_scan6_agt_exact.py:70
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_int/tests/test_scan6_agt_exact.py:70: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_scan6_agt_exact.py:81
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_int/tests/test_scan6_agt_exact.py:81: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_scan6_agt_exact.py:92
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_int/tests/test_scan6_agt_exact.py:92: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_scan6_agt_exact.py:103
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_int/tests/test_scan6_agt_exact.py:103: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_wave7_agt_binding_equality.py:22
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_int/tests/test_wave7_agt_binding_equality.py:22: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_wave7_agt_binding_equality.py:31
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_int/tests/test_wave7_agt_binding_equality.py:31: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_wave7_agt_binding_equality.py:43
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_int/tests/test_wave7_agt_binding_equality.py:43: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_wave7_agt_binding_equality.py:54
+  /tmp/claude-0/-home-claude/139dd095-4028-5533-a993-4a7fc4b564f0/scratchpad/m12/f_int/tests/test_wave7_agt_binding_equality.py:54: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_microsoft_agt.py::test_allow_is_only_additional_restriction_and_requires_cognous_authority
+FAILED tests/test_microsoft_agt.py::test_agt_allow_cannot_override_cognous_deny
+FAILED tests/test_microsoft_agt.py::test_transform_gets_fresh_authorization_for_new_commitment
+FAILED tests/test_microsoft_agt.py::test_nonclean_or_unsupported_agt_results_never_authorize[agt0-deny]
+FAILED tests/test_microsoft_agt.py::test_nonclean_or_unsupported_agt_results_never_authorize[agt1-hold]
+FAILED tests/test_microsoft_agt.py::test_nonclean_or_unsupported_agt_results_never_authorize[agt2-hold]
+FAILED tests/test_microsoft_agt.py::test_nonclean_or_unsupported_agt_results_never_authorize[agt3-hold]
+FAILED tests/test_microsoft_agt.py::test_nonclean_or_unsupported_agt_results_never_authorize[agt4-hold]
+FAILED tests/test_microsoft_agt.py::test_nonclean_or_unsupported_agt_results_never_authorize[agt5-hold]
+FAILED tests/test_microsoft_agt.py::test_missing_tenant_and_backend_failure_fail_closed
+FAILED tests/test_microsoft_agt.py::test_real_sdk_types_are_supported_when_installed
+FAILED tests/test_microsoft_agt.py::test_tenant_mismatch_between_argument_and_proposal_holds_before_agt
+FAILED tests/test_microsoft_agt.py::test_matching_tenant_proposal_is_evaluated_normally
+FAILED tests/test_microsoft_agt.py::test_tool_bindings_hold_on_mismatch_and_pass_on_match
+FAILED tests/test_scan6_agt_exact.py::test_a_transform_without_a_binding_is_not_authorized
+FAILED tests/test_scan6_agt_exact.py::test_a_transform_with_a_binding_is_authorized
+FAILED tests/test_scan6_agt_exact.py::test_an_allow_is_unchanged_by_the_binding_rule
+FAILED tests/test_scan6_agt_exact.py::test_an_inexact_decision_string_is_unsupported_and_never_authorizes[ALLOW]
+FAILED tests/test_scan6_agt_exact.py::test_an_inexact_decision_string_is_unsupported_and_never_authorizes[Allow]
+FAILED tests/test_scan6_agt_exact.py::test_an_inexact_decision_string_is_unsupported_and_never_authorizes[ allow]
+FAILED tests/test_scan6_agt_exact.py::test_an_inexact_decision_string_is_unsupported_and_never_authorizes[allow ]
+FAILED tests/test_scan6_agt_exact.py::test_an_inexact_decision_string_is_unsupported_and_never_authorizes[TRANSFORM]
+FAILED tests/test_scan6_agt_exact.py::test_an_inexact_decision_string_is_unsupported_and_never_authorizes[Deny]
+FAILED tests/test_scan6_agt_exact.py::test_a_padded_tenant_is_passed_exactly_and_never_trimmed[ tenant-alpha]
+FAILED tests/test_scan6_agt_exact.py::test_a_padded_tenant_is_passed_exactly_and_never_trimmed[tenant-alpha ]
+FAILED tests/test_scan6_agt_exact.py::test_a_padded_tenant_is_passed_exactly_and_never_trimmed[\ttenant-alpha\n]
+FAILED tests/test_scan6_agt_exact.py::test_a_padded_tenant_does_not_match_a_tenant_bearing_proposal
+FAILED tests/test_scan6_agt_exact.py::test_a_blank_tenant_is_still_missing[]
+FAILED tests/test_scan6_agt_exact.py::test_a_blank_tenant_is_still_missing[   ]
+FAILED tests/test_scan6_agt_exact.py::test_a_blank_tenant_is_still_missing[None]
+FAILED tests/test_v02_claim_policy_binding.py::test_a01_registry_pin_and_inventory_are_exact
+FAILED tests/test_v02_claim_policy_binding.py::test_a02_valid_vectors_validate_and_are_byte_identical_to_the_registry
+FAILED tests/test_v02_claim_policy_binding.py::test_a03_equivalence_and_difference_relations_hold
+FAILED tests/test_v02_claim_policy_binding.py::test_a04_every_invalid_vector_is_refused
+FAILED tests/test_v02_claim_policy_binding.py::test_a05_integer_boundary_vectors
+FAILED tests/test_v02_claim_policy_binding.py::test_a06_identifier_matrix_every_bad_value_in_every_identifier_member
+FAILED tests/test_wave7_agt_binding_equality.py::test_a_binding_for_the_pre_transform_proposal_is_held
+FAILED tests/test_wave7_agt_binding_equality.py::test_a_foreign_commitment_in_the_binding_is_held[proposal_commitment]
+FAILED tests/test_wave7_agt_binding_equality.py::test_a_foreign_commitment_in_the_binding_is_held[payload_commitment]
+FAILED tests/test_wave7_agt_binding_equality.py::test_a_binding_without_a_payload_commitment_is_held
+FAILED tests/test_wave7_agt_binding_equality.py::test_a_binding_for_the_transformed_proposal_is_authorized
+41 failed, 2477 passed, 90 skipped, 2 xfailed, 20 warnings in 383.89s (0:06:23)
+### group B: f4/f5 class age governance (OCS_REGISTRY_PIN_DIR=regpin @6f600ab)
+........................................................................ [ 39%]
+........................................................................ [ 78%]
+........................................                                 [100%]
+184 passed in 17.64s

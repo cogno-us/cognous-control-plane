@@ -28,10 +28,13 @@ FAMILY_TABLE = {
     "class_unreadable": ("f5-action-class-unreadable-policy", "r08-v5"),
     "class_revocation_assurance": ("f5-action-class-revocation-assurance-policy", "r08-v6"),
     "class_irreversible": ("f5-action-class-irreversibility-policy", "r08-v7"),
+    "anchor_deadline": ("f5-anchor-deadline-to-inputs-policy", "r08-v8"),
+    "observation_max_age": ("f5-observation-max-age-policy", "r08-v8"),
+    "observation_clock_tolerance": ("f5-observation-clock-tolerance-policy", "r08-v8"),
     "terminal_revocation": ("f5-terminal-revocation-enablement-policy", "r08-v6"),
 }
-# Only the r08-v7 family has a family schema revision recorded by this adapter; older families are identified by contract version alone.
-SCHEMA_REVISIONS = {"class_irreversible": 1}
+# Only the r08-v7 and r08-v8 families have a family schema revision recorded by this adapter; older families are identified by contract version alone.
+SCHEMA_REVISIONS = {"class_irreversible": 1, "anchor_deadline": 1, "observation_max_age": 1, "observation_clock_tolerance": 1}
 
 
 def _strict_pairs(pairs):
@@ -123,7 +126,8 @@ def build_snapshot(*, bound: Mapping[str, Any], host_profile_digest: Optional[st
 def resolve_effective_policy(*, families: Any, host: Any, host_scalars: Mapping[str, int], materials: Mapping[str, Any], verifier: Any, institution_id: str,
                              authority_domain: str, now: datetime, host_ages: Optional[Mapping[str, int]] = None, host_values: Optional[Mapping[str, str]] = None,
                              host_assurance: Optional[Mapping[str, str]] = None, host_irreversible: Optional[Mapping[str, str]] = None,
-                             host_terminal: Optional[str] = None) -> EffectivePolicySnapshot:
+                             host_terminal: Optional[str] = None,
+                             host_observation: Optional[Mapping[str, int]] = None) -> EffectivePolicySnapshot:
     """Run the EXISTING `derive_policy` over every declared family and return the snapshot of the one effective policy, or raise `RegistryGovernedPolicyRefused` (boundary
     `resolution`) with the same refusal `derive_policy` returned. Pure: builds no workflow, writes nothing and never returns a partial or weaker policy."""
     from agent_control_plane import registry_governed_policy as pol  # late import: that module builds snapshots with this one
@@ -135,7 +139,8 @@ def resolve_effective_policy(*, families: Any, host: Any, host_scalars: Mapping[
         raise pol.RegistryGovernedPolicyRefused(Refusal("selection_missing"), "resolution")
     derived, refusal = pol.derive_policy(families=families, host=host, host_scalars=host_scalars, host_ages=host_ages, host_values=host_values, materials=materials,
                                          verifier=verifier, institution_id=institution_id, authority_domain=authority_domain, now=now, host_assurance=host_assurance,
-                                         host_terminal=host_terminal, host_irreversible=host_irreversible)
+                                         host_terminal=host_terminal, host_irreversible=host_irreversible,
+                                         host_observation=host_observation)
     if refusal is not None:
         raise pol.RegistryGovernedPolicyRefused(refusal, "resolution")
     _, _, bound = derived

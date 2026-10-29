@@ -24,7 +24,8 @@ import pytest
 PIN = "6c3e5e4037d34bd2b31371461bfc872c762026b9"  # Registry commit that contains r08-v5 (the Registry implementation PR head); the r08-v2 F5 composer in it is byte-identical to 6f600ab
 PIN_V6 = "42a666328b974a7581013358bcf8bc7b9eac7761"  # Registry commit that contains r08-v6 (the Registry revocation-families head). It also contains r08-v1..r08-v5 byte-identical, so the same builders run against it.
 PIN_V7 = "b73c59e6769acd5af7263397e81dfc6fa4561f38"  # Registry commit that contains r08-v7 (the unified-engine head); the final value set by the lead. It contains r08-v1..r08-v6 byte-identical.
-ACCEPTED_PINS = (PIN, PIN_V6, PIN_V7)
+PIN_V8 = "a40fe755e2384a99c37016fa9ad59396f1835900"  # Registry PR #77 head: contains r08-v1..r08-v7 byte-identical plus r08-v8 (anchor deadline, observation max age, observation clock tolerance). Pin chain: 6c3e5e4 (v5) -> 42a6663 (v6) -> b73c59e (v7) -> a40fe75 (v8).
+ACCEPTED_PINS = (PIN, PIN_V6, PIN_V7, PIN_V8)
 _REQUIRED = os.environ.get("OCS_REQUIRE_REGISTRY_PIN") == "1"
 
 
@@ -40,7 +41,7 @@ if not PIN_DIR or not (Path(PIN_DIR) / "registry_successor").is_dir():
 PIN_DIR = str(Path(PIN_DIR).resolve())
 _head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=PIN_DIR, capture_output=True, text=True).stdout.strip()
 if _head not in ACCEPTED_PINS:
-    _unavailable(f"Registry checkout is {_head!r}, expected the r08-v5 pin {PIN}, the r08-v6 pin {PIN_V6} or the r08-v7 pin {PIN_V7}")
+    _unavailable(f"Registry checkout is {_head!r}, expected the r08-v5 pin {PIN}, the r08-v6 pin {PIN_V6}, the r08-v7 pin {PIN_V7} or the r08-v8 pin {PIN_V8}")
 sys.path.insert(0, PIN_DIR)
 sys.path.insert(0, str(Path(PIN_DIR) / "tests"))
 try:
