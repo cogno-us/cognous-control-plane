@@ -130,7 +130,8 @@ def resolve_effective_policy(*, families: Any, host: Any, host_scalars: Mapping[
     declared = pol._declared(families)
     if not declared:
         raise pol.RegistryGovernedPolicyRefused(Refusal("no_family_declared"), "resolution")
-    if any(name not in materials or materials[name] is None for name, _ in declared):  # a declared family is mandatory: no fallback to a smaller set
+    materials = {name: materials.get(name) for name, _ in declared}  # ONE read of each material: the verified object is the one named in the snapshot
+    if any(m is None for m in materials.values()):  # a declared family is mandatory: no fallback to a smaller set
         raise pol.RegistryGovernedPolicyRefused(Refusal("selection_missing"), "resolution")
     derived, refusal = pol.derive_policy(families=families, host=host, host_scalars=host_scalars, host_ages=host_ages, host_values=host_values, materials=materials,
                                          verifier=verifier, institution_id=institution_id, authority_domain=authority_domain, now=now, host_assurance=host_assurance,
@@ -139,6 +140,6 @@ def resolve_effective_policy(*, families: Any, host: Any, host_scalars: Mapping[
         raise pol.RegistryGovernedPolicyRefused(refusal, "resolution")
     _, _, bound = derived
     first = declared[0][1].scope
-    refs = {name: selection_ref(getattr(materials.get(name), "selection_text", None)) for name, _ in declared}
+    refs = {name: selection_ref(getattr(materials[name], "selection_text", None)) for name, _ in declared}
     return build_snapshot(bound=bound, host_profile_digest=pol.agemod.profile_digest(host) if host is not None else None, refs=refs, scope=first,
                           operation_ids={n: f.scope.operation_id for n, f in declared}, evaluated_at=now, order=pol.FAMILY_NAMES)

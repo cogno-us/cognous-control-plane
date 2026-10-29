@@ -998,3 +998,25 @@ def test_u04_the_composer_only_ever_sets_true_and_the_defensive_checks_hold_when
                                                           type("I", (), {"effective_policy_digest": staticmethod(lambda *a, **k: (_ for _ in ()).throw(ValueError("x")))}),
                                                           ev.Ed25519Verifier))
     assert _direct(cfg)[1].code == "effective_policy_digest_unavailable"
+
+
+def test_s06_the_snapshot_names_the_verified_selection_even_if_the_materials_mapping_changes_on_a_later_read(tmp_path):
+    """Review finding L-1: each material is read ONCE, so a mapping that returns another object on a second read cannot change the selection named in the snapshot."""
+    p, res, cfg, srcs, flow = ready(tmp_path, ir_={CLASS_T1: IRR})
+    verified = srcs["ir"]()
+    evil = Source(imat({CLASS_T1: IRR}, stmt_over={"selection_id": "sel-evil-1", "epoch": 99}))()
+
+    class Flaky(dict):
+        reads = 0
+
+        def get(self, key, default=None):
+            Flaky.reads += 1
+            return verified if Flaky.reads == 1 else evil
+
+        def __getitem__(self, key):
+            Flaky.reads += 1
+            return verified if Flaky.reads == 1 else evil
+
+    snap = _resolve(cfg, {}, fams(srcs["ir"]), materials=Flaky(class_irreversible=verified))
+    f = snap.family("class_irreversible")
+    assert (f.selection_id, f.selection_epoch) == ("sel-test-1", 1)
