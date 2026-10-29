@@ -86,6 +86,14 @@ mut("binding-invalid-falls-back-to-unbound", "an unbindable live configuration s
     "            return reasons, binding")
 mut("execute-does-not-carry-the-decision", "the execute entry does not carry the decision (no-profile path treated as a fresh mint)", LIFE,
     "token, dtoken = _EXEC_NOW.set(now), _EXEC_DECISION.set(decision)", "token, dtoken = _EXEC_NOW.set(now), _EXEC_DECISION.set(None)")
+# --- added after the first run, to explain the `stamp-persisted-member` survivor (run separately into mutation-extra/) ----------------------------------------------------
+GUARD = "        if status not in ecb.ACCEPTED and stamped.runtime_authority == persisted_ra:  # unreachable by construction; fail closed if it ever happens\n            return sorted(set(reasons) | {BINDING_CHANGED}), stamped\n"
+STAMP_OLD = "        stamped = self._gl_with_member(binding, live)\n        persisted_ra"
+STAMP_NEW = "        stamped = self._gl_with_member(binding, (getattr(getattr(target, 'binding', None), 'runtime_authority', None) or {}).get(ecb.KEY, live))\n        persisted_ra"
+mut("redundant-guard-removed", "the defensive 'stamped equals persisted although not accepted' guard is removed (alone)", LIFE, GUARD, "",
+    equivalent="first assumed equivalent (unreachable); the run showed it is LOAD-BEARING: Python equality conflates 60.0 == 60 and True == 1, so a malformed persisted member can compare equal to the live one")
+mut("stamp-persisted-member-and-no-guard", "the persisted member is stamped AND the defensive guard is removed (a mismatch would be accepted)", LIFE, STAMP_OLD, STAMP_NEW)
+M[-1]["also"] = dict(file=LIFE, old=GUARD, new="")
 # --- policy / held state ---------------------------------------------------------------------------------------------------------------------------------------
 mut("held-guard-ignores-observation-policy", "the held-state guard does not cover the ObservationPolicy", POL,
     "        return scalars, (None if obs is None else tuple((type(v), v) for v in (obs.max_age_seconds, obs.clock_tolerance_seconds)))",

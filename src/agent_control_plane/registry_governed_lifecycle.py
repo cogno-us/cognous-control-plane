@@ -225,7 +225,7 @@ class GovernedLifecycle(BoundedAuthorizationWorkflow):
             return reasons, binding
         stamped = self._gl_with_member(binding, live)
         persisted_ra = getattr(getattr(target, "binding", None), "runtime_authority", None)
-        if status not in ecb.ACCEPTED and stamped.runtime_authority == persisted_ra:  # unreachable by construction; fail closed if it ever happens
+        if status not in ecb.ACCEPTED and stamped.runtime_authority == persisted_ra:  # LOAD-BEARING: Python equality conflates 60.0 == 60 and True == 1, so a malformed member can compare EQUAL to the live one; the classification still refuses
             return sorted(set(reasons) | {BINDING_CHANGED}), stamped
         return reasons, stamped
 
