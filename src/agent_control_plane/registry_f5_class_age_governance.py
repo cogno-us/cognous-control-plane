@@ -54,8 +54,9 @@ from agent_control_plane.bounded import _now, commitment
 from agent_control_plane.registry_f4_age_governance import CONTRACT
 from agent_control_plane.registry_governed_lifecycle import (
     GovernedLifecycle, GovernedScope, Refusal, RegistrySelectionRefused, SelectionMaterial, SCALAR_MAX, _GatedDestination, _declared_authority, _scalar, _text,
-    check_scope, check_source, construction_now, read_source, require_authority, take_destination,
+    check_cutoff, check_scope, check_source, construction_now, read_source, require_authority, take_destination,
 )
+from agent_control_plane import effective_configuration_binding as ecb
 from agent_control_plane.runtime_authority import RuntimeAuthorityProfile
 
 FAMILY = "f5-action-class-age-bounds"
@@ -192,7 +193,8 @@ class GovernedClassAgeWorkflow(GovernedLifecycle):
     _gl_rejection_code = REJECTION_CODE
 
     def __init__(self, *, scope: GovernedScope, selection_source: Callable[[], Any], verifier: Any, runtime_authority_profile: Any,
-                 construction_time: Optional[datetime] = None, **workflow_kwargs: Any):
+                 construction_time: Optional[datetime] = None, legacy_cutoff: int = 0, **workflow_kwargs: Any):
+        check_cutoff(legacy_cutoff, _refuse)  # D-06: explicit finite int, default 0 = no legacy decision accepted
         check_scope(scope, _refuse)
         check_source(selection_source, _refuse)
         if runtime_authority_profile is None:
@@ -221,6 +223,7 @@ class GovernedClassAgeWorkflow(GovernedLifecycle):
         self._f5_scope, self._f5_source, self._f5_verifier = scope, selection_source, verifier
         self._f5_host, self._f5_host_ages, self._f5_authority = host, host_ages, authority
         self._gl_attach(scope=scope, authority=authority, bound=(dict(effective), digest, pdigest))
+        self._gl_bind_configuration(legacy_cutoff, _refuse)  # D-06: shared lifecycle step (validates the scalars, snapshots them for the held-state guard)
 
     _f5_commit_gate = GovernedLifecycle._gl_commit_gate
 
@@ -247,7 +250,14 @@ class GovernedClassAgeWorkflow(GovernedLifecycle):
         held = self.runtime_authority_profile
         if type(held) is not RuntimeAuthorityProfile or profile_digest(held) != self._gl_bound[2]:
             return "profile_modified"
-        return None
+        return self._gl_config_defect()  # D-06: the five scalars and the ObservationPolicy
+
+    def _gl_configuration_members(self) -> dict:
+        """D-06: the live members through the shared builder (host profile digest, held profile digest, the one class-age family)."""
+        held = self.runtime_authority_profile
+        if type(held) is not RuntimeAuthorityProfile:
+            raise ecb.BindingInvalid("effective_profile")
+        return self._gl_build_members(host_profile_digest=profile_digest(self._f5_host), effective_profile_digest=profile_digest(held), bound={"class_age": self._gl_bound})
 
     def _gl_read_sources(self, boundary: str) -> Any:
         return read_source(self._f5_source, _refuse, boundary)

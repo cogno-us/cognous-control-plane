@@ -1,0 +1,55 @@
+{
+  "dedicated_age": {
+    "decision_id": "3fe56ab9-8bce-401c-85ea-8582706b5856",
+    "effect_id": "sha256:f42a2866e8359b1adca34c53c91f5f56b375203b6957fd7408f70d211629452a",
+    "index": 0,
+    "runtime_authority": {
+      "approval_commitment": "sha256:9c00171532b09f4215712b01e09c7993824f15c093e899fda039e4d7007faa0d",
+      "catalogue_digest": "sha256:eb31a866fdc0f944e5b04605e594d0dc289f4bf22e0854fb810fa01f1789d81b",
+      "effective_grant_derivation_version": null,
+      "expected_effective_grant_digest": null,
+      "profile": "runtime-authority/0.1",
+      "required_inputs_digest": "sha256:1c4ef694ed72bdf927f6ad39982e981634c16ad2f303b8a718b078de2aaaffaf"
+    },
+    "sha256": "9bce25b201d4898e4eb9f9d29551adf5d3576fed7016a559c72cc676e94f9991"
+  },
+  "dedicated_f4": {
+    "decision_id": "6c3194a7-1115-4d50-8e17-03214ab09c7b",
+    "effect_id": "sha256:f42a2866e8359b1adca34c53c91f5f56b375203b6957fd7408f70d211629452a",
+    "index": 0,
+    "runtime_authority": null,
+    "sha256": "34b9a98caf83b22c42b7389e5d7355fcc58280f060fb62d7669f31ff785321f2"
+  },
+  "dedicated_unr": {
+    "decision_id": "82f5dc1f-0400-40d7-af13-77c0bd35bc28",
+    "effect_id": "sha256:f42a2866e8359b1adca34c53c91f5f56b375203b6957fd7408f70d211629452a",
+    "index": 0,
+    "runtime_authority": {
+      "approval_commitment": "sha256:f6bf3eef607ae88741d08a0aca0529e91f8bf68591e08e4cf0d52095e85cf7a8",
+      "catalogue_digest": "sha256:9ce7667af75b222f7c5cf87a8ef7102889e5d992fe5fa9e51f40cca3b8808917",
+      "effective_grant_derivation_version": null,
+      "expected_effective_grant_digest": null,
+      "profile": "runtime-authority/0.1",
+      "required_inputs_digest": "sha256:1c4ef694ed72bdf927f6ad39982e981634c16ad2f303b8a718b078de2aaaffaf"
+    },
+    "sha256": "0af5e28de62f98bfabf3d214781de48081d978aab8e5b12ed95bfd147c22b479"
+  },
+  "dedicated_unr_age": {
+    "decision_id": "6de20cd9-b496-413a-a53e-9217cfba0f67",
+    "effect_id": "sha256:f42a2866e8359b1adca34c53c91f5f56b375203b6957fd7408f70d211629452a",
+    "index": 0,
+    "runtime_authority": {
+      "approval_commitment": "sha256:4f22ec1abd6185c042af8c554349d6b571adc8ca44a87e60a8d78b9badd1b996",
+      "catalogue_digest": "sha256:3b57ea1a0d68ff33704b43526e701cff796c5045218b7cf0b75d7ab67ddc8771",
+      "effective_grant_derivation_version": null,
+      "expected_effective_grant_digest": null,
+      "profile": "runtime-authority/0.1",
+      "required_inputs_digest": "sha256:1c4ef694ed72bdf927f6ad39982e981634c16ad2f303b8a718b078de2aaaffaf"
+    },
+    "sha256": "86d55a1e4605afd540fa1f876fdcbad0fd5ca020fd6ef541ff401484f153053e"
+  },
+  "generator": {
+    "checkout_commit": "b7eb11aaeed9c766ecaae7d22955093f7f7cd1aa",
+    "script": "docs/evidence/d06/gen_legacy_fixture.py dedicated"
+  }
+}

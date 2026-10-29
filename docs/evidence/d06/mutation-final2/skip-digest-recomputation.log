@@ -1,0 +1,23 @@
+# skip-digest-recomputation: a persisted digest is not recomputed from its members
+# file: src/agent_control_plane/effective_configuration_binding.py
+# verdict: KILLED (exit 1)
+
+.............F
+=================================== FAILURES ===================================
+__ test_a_digest_that_is_not_the_recomputation_of_its_own_members_is_invalid ___
+
+    def test_a_digest_that_is_not_the_recomputation_of_its_own_members_is_invalid():
+        m = members()
+        for digest in (H("9"), "sha256:" + "0" * 64, independent_digest(members(f4_scalars={"status_max_age_seconds": 1, "approval_max_age_seconds": 1})), "sha256:" + "A" * 64, "x", 7, None):
+>           assert ecb.classify(persisted(record(m, digest=digest)), LIVE, **CLS) == ecb.INVALID, digest
+E           AssertionError: sha256:9999999999999999999999999999999999999999999999999999999999999999
+E           assert 'mismatch' == 'invalid'
+E             
+E             - invalid
+E             + mismatch
+
+tests/test_effective_configuration_binding_unit.py:178: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding_unit.py::test_a_digest_that_is_not_the_recomputation_of_its_own_members_is_invalid
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 13 passed in 1.71s

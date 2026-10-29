@@ -1,0 +1,25 @@
+# construction-skips-binding-validation: the scalars are not validated at construction
+# file: src/agent_control_plane/registry_governed_policy.py
+# verdict: KILLED (exit 1)
+
+........................................................................ [ 37%]
+...................................F
+=================================== FAILURES ===================================
+_ test_e01_a_scalar_that_cannot_be_bound_refuses_the_construction[True-status_max_age_seconds] _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1457/test_e01_a_scalar_that_cannot_0')
+name = 'status_max_age_seconds', bad = True
+
+    @pytest.mark.parametrize("name", ["status_max_age_seconds", "approval_max_age_seconds", "clock_tolerance_seconds", "identity_max_age_seconds", "mandate_max_age_seconds"])
+    @pytest.mark.parametrize("bad", [True, 60.0, "60", -1, 2 ** 31, None])
+    def test_e01_a_scalar_that_cannot_be_bound_refuses_the_construction(tmp_path, name, bad):
+        p, res, cfg, srcs, flow = S.ready(tmp_path)
+>       with pytest.raises(RegistryGovernedPolicyRefused) as e:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE RegistryGovernedPolicyRefused
+
+tests/test_effective_configuration_binding.py:378: Failed
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding.py::test_e01_a_scalar_that_cannot_be_bound_refuses_the_construction[True-status_max_age_seconds]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 107 passed in 36.85s

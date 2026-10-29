@@ -26,11 +26,14 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Mapping, Optional
 
+from agent_control_plane import effective_configuration_binding as ecb
 from agent_control_plane.bounded import BoundedAuthorizationWorkflow, DefinitiveDestinationRejection, TenantRuntimeProposal
 
 CLASSIFICATION = "BUILDER_TESTED; not independently qualified; non-authorizing"
 SCALAR_MAX = 2147483647
 _EXEC_NOW: contextvars.ContextVar = contextvars.ContextVar("registry_governed_execute_now", default=None)
+_EXEC_DECISION: contextvars.ContextVar = contextvars.ContextVar("registry_governed_execute_decision", default=None)
+BINDING_CHANGED = "authorization_binding_changed"  # the REGISTERED durable reason (runtime-authority-reasons/0.3); this module introduces no reason code
 
 
 @dataclass(frozen=True)
@@ -120,6 +123,12 @@ def check_scope(scope: Any, refuse: Refuser) -> None:
         raise refuse("scope_invalid", "construction")
 
 
+def check_cutoff(cutoff: Any, refuse: Refuser) -> None:
+    """The explicit `legacy_cutoff`: an exact int in 0..SCALAR_MAX (default 0 = no legacy decision is accepted); there is no wildcard."""
+    if ecb.legacy_cutoff_defect(cutoff) is not None:
+        raise refuse("legacy_cutoff_invalid", "construction")
+
+
 def check_source(source: Any, refuse: Refuser) -> None:
     if not callable(source):
         raise refuse("selection_source_invalid", "construction")
@@ -159,6 +168,8 @@ class GovernedLifecycle(BoundedAuthorizationWorkflow):
     supplies the four hooks; `decide`, `execute` and the commit gate are inherited unchanged."""
 
     _gl_rejection_code: str = "registry_governed_selection_invalid"
+    _gl_legacy_cutoff: int = 0  # explicit host-supplied finite int; 0 = no legacy decision is accepted (set by a family that binds its configuration)
+    _gl_last_binding_status: Optional[str] = None  # evidence of the latest classification (not durable, not authority)
 
     def _gl_attach(self, *, scope: GovernedScope, authority: Any, bound: Any) -> None:
         self._gl_scope, self._gl_authority, self._gl_bound = scope, authority, bound
@@ -178,6 +189,106 @@ class GovernedLifecycle(BoundedAuthorizationWorkflow):
     def _gl_derive(self, materials: Any, authority: Any, now: datetime, boundary: str) -> Any:  # pragma: no cover - abstract
         """Registry-verify every governing selection and return the comparable bound identity (raise `_gl_error(...)` on any refusal)."""
         raise NotImplementedError
+
+    def _gl_configuration_members(self) -> dict:
+        """Hook (D-06): the validated members of the live effective configuration (`effective_configuration_binding.build_members`). It must read the LIVE held values and
+        raise `ecb.BindingInvalid` for any value outside its structural domain. There is NO "do not bind" answer: a governed subclass that forgets the hook fails closed
+        (construction is refused `configuration_binding_invalid`, a decision or execute is refused), it never silently mints and checks nothing."""
+        raise ecb.BindingInvalid("hook_not_implemented")
+
+    def _gl_common_members(self) -> dict:
+        """The members every governed workflow shares: scope, the five live scalars and the ObservationPolicy effective values (or an explicit null)."""
+        scope, authority, obs = self._gl_scope, self._gl_authority, self.observation_policy
+        return dict(scope=ecb.scope_identity(scope.consumer_id, scope.tenant_id, scope.action_id, authority[0], authority[1]),
+                    f4_scalars={"status_max_age_seconds": self.status_max_age_seconds, "approval_max_age_seconds": self.approval_max_age_seconds},
+                    other_scalars={"clock_tolerance_seconds": self.clock_tolerance_seconds, "identity_max_age_seconds": self.identity_max_age_seconds,
+                                   "mandate_max_age_seconds": self.mandate_max_age_seconds},
+                    observation_policy=None if obs is None else {"max_age_seconds": obs.max_age_seconds, "clock_tolerance_seconds": obs.clock_tolerance_seconds})
+
+    def _gl_build_members(self, *, host_profile_digest: Optional[str], effective_profile_digest: Optional[str], bound: Mapping[str, Any], order: Optional[tuple] = None) -> dict:
+        """The ONE implementation of the live members for every governed workflow. `bound` maps a family slot to its bound part `(effective, effective_policy_digest, ...)`; the
+        family rows come from the existing family table. Any unreadable or foreign value is never bound: `ecb.BindingInvalid`."""
+        from agent_control_plane.registry_effective_policy import FAMILY_TABLE, SCHEMA_REVISIONS  # late: that module imports this one
+        try:
+            return ecb.build_members(host_profile_digest=host_profile_digest, effective_profile_digest=effective_profile_digest, **self._gl_common_members(),
+                                     families=ecb.family_rows(bound, order or tuple(FAMILY_TABLE), FAMILY_TABLE, SCHEMA_REVISIONS))
+        except ecb.BindingInvalid:
+            raise
+        except Exception:
+            raise ecb.BindingInvalid("configuration_not_readable") from None
+
+    def _gl_config_view(self) -> tuple:
+        """Type-exact view of the host-held scalar configuration (the five scalars and the ObservationPolicy values, or None) for the held-state guard."""
+        obs = self.observation_policy
+        scalars = tuple((type(v), v) for v in (self.status_max_age_seconds, self.approval_max_age_seconds, self.clock_tolerance_seconds, self.identity_max_age_seconds,
+                                               self.mandate_max_age_seconds))
+        return scalars, (None if obs is None else tuple((type(v), v) for v in (obs.max_age_seconds, obs.clock_tolerance_seconds)))
+
+    def _gl_config_defect(self) -> Optional[str]:
+        """Held-state guard for the scalar configuration: `scalars_modified` when any of it differs from construction (D-06 new coverage), else None."""
+        try:
+            return None if self._gl_config_view() == self._gl_held_config else "scalars_modified"
+        except Exception:
+            return "scalars_modified"
+
+    def _gl_bind_configuration(self, legacy_cutoff: Any, refuse: Refuser) -> None:
+        """Last construction step of a governed workflow: the configuration must be bindable (every scalar and the ObservationPolicy inside the structural range), then the
+        explicit cutoff is kept and the host-held scalar configuration is snapshotted for the held-state guard."""
+        try:
+            self._gl_configuration_members()
+        except ecb.BindingInvalid as exc:
+            raise refuse("host_scalar_invalid" if str(exc) in ("f4_scalars", "other_scalars", "observation_policy") else "configuration_binding_invalid", "construction") from None
+        if legacy_cutoff > 0:  # fail closed: the decision list only grows, so a cutoff above today's count could later cover post-activation appends (a quiet wildcard)
+            try:
+                count = len(self.records.load().decisions)
+            except Exception:
+                raise refuse("legacy_cutoff_invalid", "construction") from None
+            if legacy_cutoff > count:
+                raise refuse("legacy_cutoff_invalid", "construction")
+        self._gl_legacy_cutoff = legacy_cutoff
+        self._gl_held_config = self._gl_config_view()
+
+    # -- persisted effective-configuration binding (D-06 Option B, carriage C2) ----------------------------------------------------------------------------------
+    def configuration_binding_status(self, decision: Any) -> Optional[str]:
+        """READ-ONLY classification of one persisted authorized decision against the live configuration: `bound`, `legacy`, `unbound-after-cutoff`, `invalid`,
+        `version-unsupported` or `mismatch` (None when this workflow does not bind). Writes nothing, raises nothing for a bad record, grants nothing; `execute` and the
+        claim path use exactly this classification."""
+        members = self._gl_configuration_members()  # raises `ecb.BindingInvalid` when the LIVE configuration cannot be bound (this read-only call then raises, it does not classify)
+        binding = getattr(decision, "binding", None)
+        ids = [d.decision_id for d in self.records.load().decisions]
+        did = getattr(decision, "decision_id", None)
+        index = ids.index(did) if ids.count(did) == 1 else None
+        return ecb.classify(getattr(binding, "runtime_authority", None), ecb.mint(members), index=index, cutoff=self._gl_legacy_cutoff, decision_count=len(ids))
+
+    def _resolve(self, proposal, now, *, inputs=None, stage="decision", decision=None, check_ref=None):
+        """The base resolution, then (only for an authorized result) the configuration binding. A hold or any refusal the base produced is returned unchanged: the binding can
+        add a refusal through the existing `current != persisted.binding` comparison, never remove one and never turn a hold into an authorization."""
+        reasons, binding = super()._resolve(proposal, now, inputs=inputs, stage=stage, decision=decision, check_ref=check_ref)
+        if reasons or binding is None:
+            return reasons, binding
+        target = decision if decision is not None else _EXEC_DECISION.get()
+        try:
+            members = self._gl_configuration_members()
+            live = ecb.mint(members)
+            if stage == "decision" and target is None:  # MINT: every authorized decision of this lifecycle carries the member
+                return reasons, self._gl_with_member(binding, live)
+            status = self.configuration_binding_status(target) if target is not None else ecb.UNBOUND_AFTER_CUTOFF
+        except ecb.BindingInvalid:  # never a fallback to the unbound path: the whole call refuses before any state write
+            raise self._gl_refuse("configuration_binding_invalid", "decision" if stage == "decision" else "effect") from None
+        self._gl_last_binding_status = status
+        if status == ecb.LEGACY:  # previous semantics: ONLY the new key is left out of the live side; nothing else is ignored
+            return reasons, binding
+        stamped = self._gl_with_member(binding, live)
+        persisted_ra = getattr(getattr(target, "binding", None), "runtime_authority", None)
+        if status not in ecb.ACCEPTED and stamped.runtime_authority == persisted_ra:  # LOAD-BEARING: Python equality conflates 60.0 == 60 and True == 1, so a malformed member can compare EQUAL to the live one; the classification still refuses
+            return sorted(set(reasons) | {BINDING_CHANGED}), stamped
+        return reasons, stamped
+
+    @staticmethod
+    def _gl_with_member(binding: Any, live: dict) -> Any:
+        extension = dict(binding.runtime_authority or {})
+        extension[ecb.KEY] = live
+        return binding.model_copy(update={"runtime_authority": extension})
 
     # -- shared lifecycle ---------------------------------------------------------------------------------------------------------------------------------------
     def _gl_refuse(self, code: str, boundary: str) -> Exception:
@@ -219,8 +330,9 @@ class GovernedLifecycle(BoundedAuthorizationWorkflow):
     def execute(self, proposal, decision, *, adapter_id, now=None, lose_ack=False, partial=False):
         entry_time = self._evaluation_time(now)
         self._gl_revalidate(proposal, "effect", entry_time)
-        token = _EXEC_NOW.set(now)
+        token, dtoken = _EXEC_NOW.set(now), _EXEC_DECISION.set(decision)
         try:
             return super().execute(proposal, decision, adapter_id=adapter_id, now=now, lose_ack=lose_ack, partial=partial)
         finally:
+            _EXEC_DECISION.reset(dtoken)
             _EXEC_NOW.reset(token)

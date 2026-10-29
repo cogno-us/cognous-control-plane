@@ -1,0 +1,30 @@
+# legacy-cutoff-not-applied: the constructor ignores legacy_cutoff
+# file: src/agent_control_plane/registry_governed_policy.py
+# verdict: KILLED (exit 1)
+
+........................................................................ [ 37%]
+.......................F
+=================================== FAILURES ===================================
+_ test_d04_a_stripped_member_at_or_after_the_cutoff_refuses_but_below_it_is_indistinguishable_from_legacy _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1459/test_d04_a_stripped_member_at_0')
+
+    def test_d04_a_stripped_member_at_or_after_the_cutoff_refuses_but_below_it_is_indistinguishable_from_legacy(tmp_path):
+        """DOCUMENTED LIMIT: below the host cutoff a stripped member is accepted as legacy (the unsigned store cannot tell the two apart). At or past it, it refuses."""
+        p, res, cfg, srcs, flow, d0 = S.authorized(tmp_path)
+        d1 = flow.decide(p, now=NOW)
+        for d in (d0, d1):
+            S.rewrite_member(tmp_path, d.decision_id, lambda b: b["runtime_authority"].pop(ecb.KEY))
+        cut = S.mk(tmp_path, res, cfg, T.families(None, srcs["a"], srcs["u"]), legacy_cutoff=1)  # index 0 is below, index 1 is AT the cutoff
+        T.bind_approval(res, cut.runtime_authority_profile)
+>       assert cut.configuration_binding_status(cut.records.decision(d0.decision_id)) == ecb.LEGACY
+E       AssertionError: assert 'unbound-after-cutoff' == 'legacy'
+E         
+E         - legacy
+E         + unbound-after-cutoff
+
+tests/test_effective_configuration_binding.py:339: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding.py::test_d04_a_stripped_member_at_or_after_the_cutoff_refuses_but_below_it_is_indistinguishable_from_legacy
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 95 passed in 37.00s

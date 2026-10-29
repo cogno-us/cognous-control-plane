@@ -1,0 +1,52 @@
+# dedicated-age-host-digest-is-effective: the dedicated class-age host digest is replaced by the effective digest
+# file: src/agent_control_plane/registry_f5_class_age_governance.py
+# verdict: KILLED (exit 1)
+
+........................................................................ [ 18%]
+........................................................................ [ 37%]
+....................x................................................... [ 56%]
+........................................................................ [ 75%]
+........................................................................ [ 93%]
+......................F
+=================================== FAILURES ===================================
+_ test_d19_a_different_host_age_with_the_same_final_ages_refuses[dedicated_age] _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1546/test_d19_a_different_host_age_0')
+kind = 'dedicated_age'
+
+    @pytest.mark.parametrize("kind", ["dedicated_age", "dedicated_unr_age"])
+    def test_d19_a_different_host_age_with_the_same_final_ages_refuses(tmp_path, kind):
+        """The class-age family narrows the scoped class to 20 whatever the host age (60 or 50): the FINAL profile is identical, only the host profile digest differs."""
+        p, res, cfg, store, flow, d = authorized(kind, tmp_path)
+        classes = dict(cfg.actions)
+        classes[p.action_id] = classes[p.action_id].model_copy(update={"max_status_age_seconds": 50})
+        host2 = cfg.model_copy(update={"actions": classes})
+        other = make(kind, store, res, host2)
+        assert other.runtime_authority_profile.model_dump() == flow.runtime_authority_profile.model_dump()
+        assert T.pol.agemod.profile_digest(host2) != T.pol.agemod.profile_digest(cfg)
+        rebind(res, other)
+>       assert_binding_refusal(other, p, d)
+
+tests/test_effective_configuration_binding_dedicated.py:333: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+wf = <agent_control_plane.registry_f5_class_age_governance.GovernedClassAgeWorkflow object at 0x7f48917234d0>
+p = TenantRuntimeProposal(manifest_id='refund-integration-pilot-v1', manifest_version='1.1', manifest_digest='sha256:4d1ad...'run-1', expected_side_effects=[], evidence_refs=['urn:cognous:evidence:refund-entitlement'], tenant_id='tenant-alpha')
+d = RuntimeDecision(reason_vocabulary_version='runtime-authority-reasons/0.1', rule_identity=None, reopen_conditions=[], d...c0b107f215773957e569ee85e5ca1abb94c267cd', missing=False, previous_observed_at=None, read_state=None, age_basis=None)])
+status = 'mismatch'
+
+    def assert_binding_refusal(wf, p, d, status=ecb.MISMATCH):
+        """execute refuses with the REGISTERED reason, a durable EffectTimeRefusal is written, nothing reached the destination and no attempt exists."""
+        n_ref = len(wf.records.load().refusals)
+        before = wf.destination.snapshot()
+>       assert wf.configuration_binding_status(wf.records.decision(d.decision_id)) == status
+E       AssertionError: assert 'bound' == 'mismatch'
+E         
+E         - mismatch
+E         + bound
+
+tests/test_effective_configuration_binding.py:48: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding_dedicated.py::test_d19_a_different_host_age_with_the_same_final_ages_refuses[dedicated_age]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 381 passed, 1 xfailed in 77.81s (0:01:17)

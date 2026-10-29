@@ -63,9 +63,10 @@ from typing import Any, Callable, Mapping, Optional
 from agent_control_plane.bounded import _now
 from agent_control_plane.registry_governed_lifecycle import (
     GovernedLifecycle, GovernedScope, Refusal, RegistrySelectionRefused, SelectionMaterial, _GatedDestination, _declared_authority, _text,
-    check_scope, check_source, construction_now, read_source, require_authority, take_destination, valid_scope,
+    check_cutoff, check_scope, check_source, construction_now, read_source, require_authority, take_destination, valid_scope,
 )
 from agent_control_plane.registry_f5_class_age_governance import derive_effective as derive_class_age, host_class_ages, profile_digest
+from agent_control_plane import effective_configuration_binding as ecb
 from agent_control_plane.runtime_authority import RuntimeAuthorityProfile
 
 CONTRACT_V5 = "r08-v5"
@@ -242,7 +243,8 @@ class GovernedClassUnreadableWorkflow(GovernedLifecycle):
 
     def __init__(self, *, scope: GovernedScope, selection_source: Callable[[], Any], verifier: Any, runtime_authority_profile: Any,
                  class_age_scope: Optional[GovernedScope] = None, class_age_selection_source: Optional[Callable[[], Any]] = None,
-                 construction_time: Optional[datetime] = None, **workflow_kwargs: Any):
+                 construction_time: Optional[datetime] = None, legacy_cutoff: int = 0, **workflow_kwargs: Any):
+        check_cutoff(legacy_cutoff, _refuse)  # D-06: explicit finite int, default 0 = no legacy decision accepted
         check_scope(scope, _refuse)
         check_source(selection_source, _refuse)
         if (class_age_scope is None) != (class_age_selection_source is None):
@@ -290,6 +292,7 @@ class GovernedClassUnreadableWorkflow(GovernedLifecycle):
         self._fu_source, self._fu_age_source, self._fu_verifier = selection_source, class_age_selection_source, verifier
         self._fu_host, self._fu_host_values, self._fu_host_ages, self._fu_authority = host, host_values, host_ages, authority
         self._gl_attach(scope=scope, authority=authority, bound=(dict(effective), digest, age_part, profile_digest(profile)))
+        self._gl_bind_configuration(legacy_cutoff, _refuse)  # D-06: shared lifecycle step (validates the scalars, snapshots them for the held-state guard)
 
     _fu_commit_gate = GovernedLifecycle._gl_commit_gate
 
@@ -322,7 +325,16 @@ class GovernedClassUnreadableWorkflow(GovernedLifecycle):
         held = self.runtime_authority_profile
         if type(held) is not RuntimeAuthorityProfile or profile_digest(held) != self._gl_bound[3]:
             return "profile_modified"
-        return None
+        return self._gl_config_defect()  # D-06: the five scalars and the ObservationPolicy
+
+    def _gl_configuration_members(self) -> dict:
+        """D-06: the live members through the shared builder (host and held profile digests; the unreadable family and, when joint, the class-age family)."""
+        held = self.runtime_authority_profile
+        if type(held) is not RuntimeAuthorityProfile:
+            raise ecb.BindingInvalid("effective_profile")
+        effective, digest, age_part, _ = self._gl_bound
+        return self._gl_build_members(host_profile_digest=profile_digest(self._fu_host), effective_profile_digest=profile_digest(held),
+                                      bound={"class_age": age_part, "class_unreadable": (effective, digest)})
 
     def _gl_read_sources(self, boundary: str) -> Any:
         material = read_source(self._fu_source, _refuse, boundary)

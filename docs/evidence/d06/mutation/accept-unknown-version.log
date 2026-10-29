@@ -1,0 +1,24 @@
+# accept-unknown-version: an unknown version is treated like the supported one
+# file: src/agent_control_plane/effective_configuration_binding.py
+# verdict: KILLED (exit 1)
+
+...............F
+=================================== FAILURES ===================================
+_ test_an_unknown_version_is_unsupported_even_when_everything_else_is_consistent[effective-configuration-binding/0.2] _
+
+version = 'effective-configuration-binding/0.2'
+
+    @pytest.mark.parametrize("version", ["effective-configuration-binding/0.2", "effective-configuration-binding/0.0", "", "EFFECTIVE-CONFIGURATION-BINDING/0.1", "effective-configuration-binding/0.1 "])
+    def test_an_unknown_version_is_unsupported_even_when_everything_else_is_consistent(version):
+        m = members()
+>       assert ecb.classify(persisted({"version": version, "digest": independent_digest(m, version), "members": m}), LIVE, **CLS) == ecb.VERSION_UNSUPPORTED
+E       AssertionError: assert 'mismatch' == 'version-unsupported'
+E         
+E         - version-unsupported
+E         + mismatch
+
+tests/test_effective_configuration_binding_unit.py:191: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding_unit.py::test_an_unknown_version_is_unsupported_even_when_everything_else_is_consistent[effective-configuration-binding/0.2]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 15 passed in 1.53s

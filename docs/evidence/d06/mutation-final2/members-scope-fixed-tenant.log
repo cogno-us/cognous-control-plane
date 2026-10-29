@@ -1,0 +1,26 @@
+# members-scope-fixed-tenant: the tenant in the scope member is a constant
+# file: src/agent_control_plane/registry_governed_lifecycle.py
+# verdict: KILLED (exit 1)
+
+.......................................................F
+=================================== FAILURES ===================================
+_______________ test_a02_the_members_are_the_live_configuration ________________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1525/test_a02_the_members_are_the_l0')
+
+    def test_a02_the_members_are_the_live_configuration(tmp_path):
+        p, res, cfg, srcs, flow, d = S.authorized(tmp_path)
+        m = member_of(flow, d)["members"]
+>       assert m["scope"] == {"consumer_id": "consumer-test", "tenant_id": T.TENANT.lower(), "action_id": T.ACTION_ID, "institution_id": T.base.INSTITUTION, "authority_domain": T.base.DOMAIN}
+E       AssertionError: assert {'consumer_id...service', ...} == {'consumer_id...service', ...}
+E         
+E         Omitting 4 identical items, use -vv to show
+E         Differing items:
+E         {'tenant_id': 'tenant'} != {'tenant_id': 'tenant-alpha'}
+E         Use -v to get more diff
+
+tests/test_effective_configuration_binding.py:80: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding.py::test_a02_the_members_are_the_live_configuration
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 55 passed in 1.94s

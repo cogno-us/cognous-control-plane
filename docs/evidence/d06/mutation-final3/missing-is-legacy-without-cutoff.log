@@ -1,0 +1,24 @@
+# missing-is-legacy-without-cutoff: an absent member is legacy whatever the cutoff
+# file: src/agent_control_plane/effective_configuration_binding.py
+# verdict: KILLED (exit 1)
+
+...............................F
+=================================== FAILURES ===================================
+_____ test_a_missing_member_is_legacy_only_below_an_explicit_valid_cutoff ______
+
+    def test_a_missing_member_is_legacy_only_below_an_explicit_valid_cutoff():
+        ra = persisted(None)
+        assert ecb.classify(ra, LIVE, index=0, cutoff=1, decision_count=1) == ecb.LEGACY
+        assert ecb.classify(ra, LIVE, index=4, cutoff=5, decision_count=9) == ecb.LEGACY
+>       assert ecb.classify(ra, LIVE, index=0, cutoff=0, decision_count=1) == ecb.UNBOUND_AFTER_CUTOFF  # default cutoff 0: nothing is legacy
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert 'legacy' == 'unbound-after-cutoff'
+E         
+E         - unbound-after-cutoff
+E         + legacy
+
+tests/test_effective_configuration_binding_unit.py:219: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding_unit.py::test_a_missing_member_is_legacy_only_below_an_explicit_valid_cutoff
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 31 passed in 2.92s

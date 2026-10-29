@@ -1,0 +1,45 @@
+# cutoff-count-load-failure-ignored: an unreadable store while counting decisions lets the cutoff through
+# file: src/agent_control_plane/registry_governed_lifecycle.py
+# verdict: KILLED (exit 1)
+
+........................................................................ [ 18%]
+........................................................................ [ 36%]
+........................................................................ [ 55%]
+........................................................................ [ 73%]
+........................................................................ [ 92%]
+..............................F
+=================================== FAILURES ===================================
+_ test_d20_an_unreadable_store_while_counting_the_decisions_refuses_a_positive_cutoff _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1705/test_d20_an_unreadable_store_w0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fd0e34b81a0>
+
+    def test_d20_an_unreadable_store_while_counting_the_decisions_refuses_a_positive_cutoff(tmp_path, monkeypatch):
+        """The cutoff is judged against the decisions in the store at construction; if they cannot be counted the construction is refused (fail closed). A cutoff of 0 reads nothing."""
+        from agent_control_plane.bounded import BoundedRecordStore
+        p, res, cfg, store, flow, d = authorized("dedicated_f4", tmp_path)
+        real, calls = BoundedRecordStore.load, []
+    
+        def counting(self):
+            calls.append(1)
+            return real(self)
+        monkeypatch.setattr(BoundedRecordStore, "load", counting)
+        make("dedicated_f4", store, res, cfg)  # cutoff 0
+        n = len(calls)
+        calls.clear()
+    
+        def failing(self):
+            calls.append(1)
+            if len(calls) > n:  # the one extra read a positive cutoff adds, as the last step of the construction
+                raise OSError("store unreadable")
+            return real(self)
+        monkeypatch.setattr(BoundedRecordStore, "load", failing)
+>       with pytest.raises(RegistrySelectionRefused) as e:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE RegistrySelectionRefused
+
+tests/test_effective_configuration_binding_dedicated.py:366: Failed
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding_dedicated.py::test_d20_an_unreadable_store_while_counting_the_decisions_refuses_a_positive_cutoff
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 390 passed in 222.52s (0:03:42)

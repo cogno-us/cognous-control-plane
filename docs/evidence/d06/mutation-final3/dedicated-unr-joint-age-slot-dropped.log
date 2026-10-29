@@ -1,0 +1,41 @@
+# dedicated-unr-joint-age-slot-dropped: the joint workflow does not bind the class-age family
+# file: src/agent_control_plane/registry_f5_class_unreadable_governance.py
+# verdict: KILLED (exit 1)
+
+........................................................................ [ 18%]
+........................................................................ [ 36%]
+.......................................................F
+=================================== FAILURES ===================================
+_ test_d01_every_authorized_decision_of_a_dedicated_workflow_carries_the_member[dedicated_unr_age] _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1688/test_d01_every_authorized_deci3')
+kind = 'dedicated_unr_age'
+
+    @pytest.mark.parametrize("kind", KINDS)
+    def test_d01_every_authorized_decision_of_a_dedicated_workflow_carries_the_member(tmp_path, kind):
+        p, res, cfg, store, flow, d = authorized(kind, tmp_path)
+        ra = stored(flow, d).binding.runtime_authority
+        member = ra[ecb.KEY]
+        assert d.binding.runtime_authority[ecb.KEY] == member and ecb.record_defect(member) is None and member["version"] == ecb.VERSION
+        assert member["digest"] == ecb.digest_of(ecb.VERSION, member["members"]) == ecb.mint(flow._gl_configuration_members())["digest"]
+        assert stored(flow, d) == d
+        assert flow.configuration_binding_status(d) == ecb.BOUND
+        if cfg is None:  # F4 carries no profile: the extension is the only runtime-authority content
+            assert set(ra) == {ecb.KEY}
+        else:
+            assert set(ra) == {"profile", "approval_commitment", "required_inputs_digest", "catalogue_digest", "expected_effective_grant_digest",
+                               "effective_grant_derivation_version", ecb.KEY}
+        families = [row["family_id"] for row in member["members"]["families"]]
+        expected = {"dedicated_f4": ["f4_ages"], "dedicated_age": ["class_age"], "dedicated_unr": ["class_unreadable"], "dedicated_unr_age": ["class_age", "class_unreadable"]}[kind]
+>       assert [row["slot"] for row in member["members"]["families"]] == expected and len(families) == len(expected)
+E       AssertionError: assert (['class_unreadable'] == ['class_age',...s_unreadable']
+E         
+E         At index 0 diff: 'class_unreadable' != 'class_age'
+E         Right contains one more item: 'class_unreadable'
+E         Use -v to get more diff)
+
+tests/test_effective_configuration_binding_dedicated.py:113: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding_dedicated.py::test_d01_every_authorized_decision_of_a_dedicated_workflow_carries_the_member[dedicated_unr_age]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 199 passed in 118.52s (0:01:58)

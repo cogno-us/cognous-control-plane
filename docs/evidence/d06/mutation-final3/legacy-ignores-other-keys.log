@@ -1,0 +1,26 @@
+# legacy-ignores-other-keys: a legacy decision is accepted by replacing the whole live binding with the persisted one
+# file: src/agent_control_plane/registry_governed_lifecycle.py
+# verdict: KILLED (exit 1)
+
+........................................................................ [ 18%]
+........................F
+=================================== FAILURES ===================================
+__________ test_d05_the_legacy_comparison_never_ignores_any_other_key __________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1591/test_d05_the_legacy_comparison0')
+
+    def test_d05_the_legacy_comparison_never_ignores_any_other_key(tmp_path):
+        p, res, cfg, srcs, flow, d = S.authorized(tmp_path)
+        S.rewrite_member(tmp_path, d.decision_id, lambda b: (b["runtime_authority"].pop(ecb.KEY), b["runtime_authority"].__setitem__("catalogue_digest", "sha256:" + "5" * 64)))
+        cut = S.mk(tmp_path, res, cfg, T.families(None, srcs["a"], srcs["u"]), legacy_cutoff=1)
+        assert cut.configuration_binding_status(cut.records.decision(d.decision_id)) == ecb.LEGACY  # classified legacy ...
+        n = len(cut.records.load().refusals)
+>       with pytest.raises(PermissionError, match="authorization-critical inputs changed"):  # ... yet the existing equality still refuses on the OTHER key
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE PermissionError
+
+tests/test_effective_configuration_binding.py:352: Failed
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding.py::test_d05_the_legacy_comparison_never_ignores_any_other_key
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 96 passed in 59.91s

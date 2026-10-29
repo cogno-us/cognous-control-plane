@@ -1,0 +1,18 @@
+# family-unknown-slot-skipped: a governed slot unknown to the family table is silently left out
+# file: src/agent_control_plane/effective_configuration_binding.py
+# verdict: KILLED (exit 1)
+
+....................................................F
+=================================== FAILURES ===================================
+_ test_a_governed_slot_unknown_to_the_table_is_refused_never_silently_left_out _
+
+    def test_a_governed_slot_unknown_to_the_table_is_refused_never_silently_left_out():
+>       with pytest.raises(ecb.BindingInvalid):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE BindingInvalid
+
+tests/test_effective_configuration_binding_unit.py:309: Failed
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding_unit.py::test_a_governed_slot_unknown_to_the_table_is_refused_never_silently_left_out
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 52 passed in 1.88s

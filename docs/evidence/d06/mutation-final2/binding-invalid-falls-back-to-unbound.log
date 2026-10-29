@@ -1,0 +1,24 @@
+# binding-invalid-falls-back-to-unbound: an unbindable live configuration silently falls back to the unbound path
+# file: src/agent_control_plane/registry_governed_lifecycle.py
+# verdict: KILLED (exit 1)
+
+............................................................F
+=================================== FAILURES ===================================
+_ test_a05c_a_live_configuration_that_cannot_be_bound_refuses_and_never_falls_back_to_unbound _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1512/test_a05c_a_live_configuration0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fe4b3941350>
+
+    def test_a05c_a_live_configuration_that_cannot_be_bound_refuses_and_never_falls_back_to_unbound(tmp_path, monkeypatch):
+        p, res, cfg, srcs, flow, d = S.authorized(tmp_path)
+        monkeypatch.setattr(flow, "_gl_configuration_members", lambda: (_ for _ in ()).throw(ecb.BindingInvalid("family_slot_unknown")))
+        n = len(flow.records.load().decisions)
+>       with pytest.raises(RegistryGovernedPolicyRefused) as e:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE RegistryGovernedPolicyRefused
+
+tests/test_effective_configuration_binding.py:137: Failed
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding.py::test_a05c_a_live_configuration_that_cannot_be_bound_refuses_and_never_falls_back_to_unbound
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 60 passed in 2.94s

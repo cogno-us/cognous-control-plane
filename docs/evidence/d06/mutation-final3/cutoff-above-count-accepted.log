@@ -1,0 +1,25 @@
+# cutoff-above-count-accepted: a legacy_cutoff above the decisions in the store is accepted at construction
+# file: src/agent_control_plane/registry_governed_lifecycle.py
+# verdict: KILLED (exit 1)
+
+........................................................................ [ 18%]
+..................................F
+=================================== FAILURES ===================================
+_________ test_d07_a_cutoff_beyond_the_store_refuses_the_construction __________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1632/test_d07_a_cutoff_beyond_the_s0')
+
+    def test_d07_a_cutoff_beyond_the_store_refuses_the_construction(tmp_path):
+        """Fail closed (review F2): the decision list only grows, so a cutoff above today's count could later cover post-activation appends. It is refused at construction."""
+        p, res, cfg, srcs, flow, d = S.authorized(tmp_path)  # the store holds ONE decision
+        S.rewrite_member(tmp_path, d.decision_id, lambda b: b["runtime_authority"].pop(ecb.KEY))
+        for cutoff in (2, 5, 2 ** 31 - 1):
+>           with pytest.raises(RegistryGovernedPolicyRefused) as e:
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE RegistryGovernedPolicyRefused
+
+tests/test_effective_configuration_binding.py:370: Failed
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding.py::test_d07_a_cutoff_beyond_the_store_refuses_the_construction
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 106 passed in 76.23s (0:01:16)

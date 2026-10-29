@@ -1,0 +1,38 @@
+# skip-members-validation: persisted members are not validated for type and range
+# file: src/agent_control_plane/effective_configuration_binding.py
+# verdict: KILLED (exit 1)
+
+.......F
+=================================== FAILURES ===================================
+_ test_a_wrong_typed_or_out_of_range_value_in_any_integer_leaf_is_invalid_even_with_a_consistent_digest[bool] _
+
+kind = 'bool'
+
+    @pytest.mark.parametrize("kind", sorted(BAD_VALUES))
+    def test_a_wrong_typed_or_out_of_range_value_in_any_integer_leaf_is_invalid_even_with_a_consistent_digest(kind):
+        m = members()
+        count = 0
+        for path, value in leaves(m):
+            if type(value) is not int or path[0] == "families" and path[-1] != "family_schema_revision":
+                continue
+            if kind == "none" and path[-1] == "family_schema_revision":
+                continue  # null IS the valid value of a schema revision that the adapter does not record
+            count += 1
+            variant = copy.deepcopy(m)
+            set_at(variant, path, BAD_VALUES[kind])
+            rec = {"version": ecb.VERSION, "digest": "sha256:" + "0" * 64, "members": variant}  # digest of a non-canonical value cannot even be recomputed by the writer
+            assert ecb.classify(persisted(rec), LIVE, **CLS) == ecb.INVALID, (path, kind)
+            if kind not in ("float",):  # canonical JSON accepts these, so the digest CAN be consistent: the type/range rule alone must refuse
+                rec["digest"] = independent_digest(variant)
+>               assert ecb.classify(persisted(rec), LIVE, **CLS) == ecb.INVALID, (path, kind)
+E               AssertionError: (('f4_scalars', 'status_max_age_seconds'), 'bool')
+E               assert 'mismatch' == 'invalid'
+E                 
+E                 - invalid
+E                 + mismatch
+
+tests/test_effective_configuration_binding_unit.py:171: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding_unit.py::test_a_wrong_typed_or_out_of_range_value_in_any_integer_leaf_is_invalid_even_with_a_consistent_digest[bool]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 7 passed in 1.50s

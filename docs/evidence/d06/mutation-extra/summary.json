@@ -1,0 +1,36 @@
+{
+ "total": 2,
+ "killed": 2,
+ "survived": [],
+ "invalid": [],
+ "control": "PASS",
+ "results": [
+  {
+   "id": "__control__",
+   "verdict": "PASS",
+   "exit": 0,
+   "first_failure": null,
+   "desc": "unmutated copy",
+   "file": "-",
+   "note": null
+  },
+  {
+   "id": "redundant-guard-removed",
+   "verdict": "KILLED",
+   "exit": 1,
+   "first_failure": "FAILED tests/test_effective_configuration_binding.py::test_d01_a_malformed_or_inconsistent_persisted_member_refuses[float_scalar]",
+   "desc": "the defensive 'stamped equals persisted although not accepted' guard is removed (alone)",
+   "file": "src/agent_control_plane/registry_governed_lifecycle.py",
+   "note": "first assumed equivalent (unreachable); the run showed it is LOAD-BEARING: Python equality conflates 60.0 == 60 and True == 1, so a malformed persisted member can compare equal to the live one"
+  },
+  {
+   "id": "stamp-persisted-member-and-no-guard",
+   "verdict": "KILLED",
+   "exit": 1,
+   "first_failure": "FAILED tests/test_effective_configuration_binding.py::test_a05b_a_workflow_without_a_profile_refuses_a_changed_configuration_on_execute",
+   "desc": "the persisted member is stamped AND the defensive guard is removed (a mismatch would be accepted)",
+   "file": "src/agent_control_plane/registry_governed_lifecycle.py",
+   "note": null
+  }
+ ]
+}

@@ -1,0 +1,29 @@
+# dedicated-unr-bind-step-skipped: the dedicated unr constructor skips the shared bind step (no scalar validation, no held snapshot, no cutoff)
+# file: src/agent_control_plane/registry_f5_class_unreadable_governance.py
+# verdict: KILLED (exit 1)
+
+........................................................................ [ 18%]
+........................................................................ [ 36%]
+........................................................................ [ 55%]
+...........................................F
+=================================== FAILURES ===================================
+_ test_d09_an_invalid_scalar_refuses_the_construction_even_when_f4_is_not_declared[True-clock_tolerance_seconds-dedicated_unr] _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1665/test_d09_an_invalid_scalar_ref2')
+kind = 'dedicated_unr', name = 'clock_tolerance_seconds', bad = True
+
+    @pytest.mark.parametrize("kind", KINDS)
+    @pytest.mark.parametrize("name", ["clock_tolerance_seconds", "identity_max_age_seconds", "mandate_max_age_seconds"])
+    @pytest.mark.parametrize("bad", BAD)
+    def test_d09_an_invalid_scalar_refuses_the_construction_even_when_f4_is_not_declared(tmp_path, kind, name, bad):
+        """BEHAVIOUR TIGHTENING (documented in docs/effective-configuration-binding.md section 10)."""
+        p, res, cfg, store, flow = setup(kind, tmp_path)
+>       with pytest.raises(RegistrySelectionRefused) as e:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE RegistrySelectionRefused
+
+tests/test_effective_configuration_binding_dedicated.py:207: Failed
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding_dedicated.py::test_d09_an_invalid_scalar_refuses_the_construction_even_when_f4_is_not_declared[True-clock_tolerance_seconds-dedicated_unr]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 259 passed in 146.58s (0:02:26)

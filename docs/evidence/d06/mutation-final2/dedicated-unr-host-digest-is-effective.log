@@ -1,0 +1,47 @@
+# dedicated-unr-host-digest-is-effective: the dedicated class-unreadable host digest is replaced by the effective digest
+# file: src/agent_control_plane/registry_f5_class_unreadable_governance.py
+# verdict: KILLED (exit 1)
+
+........................................................................ [ 18%]
+........................................................................ [ 37%]
+....................x................................................... [ 56%]
+.........F
+=================================== FAILURES ===================================
+_ test_d05_a_different_host_profile_with_the_same_final_profile_refuses[dedicated_unr] _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1542/test_d05_a_different_host_prof1')
+kind = 'dedicated_unr'
+
+    @pytest.mark.parametrize("kind", ["dedicated_age", "dedicated_unr", "dedicated_unr_age"])
+    def test_d05_a_different_host_profile_with_the_same_final_profile_refuses(tmp_path, kind):
+        p, res, cfg, store, flow, d = authorized(kind, tmp_path)
+        host2 = T.base.host_profile(p, t1=T.R_)  # host T1 `refuse` instead of `bounded_tolerance`: Registry makes both `refuse`, so the FINAL profile is identical
+        other = make(kind, store, res, host2)
+        if kind != "dedicated_age":
+            assert other.runtime_authority_profile.model_dump() == flow.runtime_authority_profile.model_dump()
+        rebind(res, other)
+>       assert_binding_refusal(other, p, d)
+
+tests/test_effective_configuration_binding_dedicated.py:166: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+wf = <agent_control_plane.registry_f5_class_unreadable_governance.GovernedClassUnreadableWorkflow object at 0x7feb1dce25d0>
+p = TenantRuntimeProposal(manifest_id='refund-integration-pilot-v1', manifest_version='1.1', manifest_digest='sha256:4d1ad...'run-1', expected_side_effects=[], evidence_refs=['urn:cognous:evidence:refund-entitlement'], tenant_id='tenant-alpha')
+d = RuntimeDecision(reason_vocabulary_version='runtime-authority-reasons/0.1', rule_identity=None, reopen_conditions=[], d...c0b107f215773957e569ee85e5ca1abb94c267cd', missing=False, previous_observed_at=None, read_state=None, age_basis=None)])
+status = 'mismatch'
+
+    def assert_binding_refusal(wf, p, d, status=ecb.MISMATCH):
+        """execute refuses with the REGISTERED reason, a durable EffectTimeRefusal is written, nothing reached the destination and no attempt exists."""
+        n_ref = len(wf.records.load().refusals)
+        before = wf.destination.snapshot()
+>       assert wf.configuration_binding_status(wf.records.decision(d.decision_id)) == status
+E       AssertionError: assert 'bound' == 'mismatch'
+E         
+E         - mismatch
+E         + bound
+
+tests/test_effective_configuration_binding.py:48: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding_dedicated.py::test_d05_a_different_host_profile_with_the_same_final_profile_refuses[dedicated_unr]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 224 passed, 1 xfailed in 77.18s (0:01:17)

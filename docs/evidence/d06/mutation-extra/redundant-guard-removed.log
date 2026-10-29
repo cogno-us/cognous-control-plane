@@ -1,0 +1,43 @@
+# redundant-guard-removed: the defensive 'stamped equals persisted although not accepted' guard is removed (alone)
+# file: src/agent_control_plane/registry_governed_lifecycle.py
+# verdict: KILLED (exit 1)
+
+........................................................................ [ 37%]
+.............F
+=================================== FAILURES ===================================
+_ test_d01_a_malformed_or_inconsistent_persisted_member_refuses[float_scalar] __
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1468/test_d01_a_malformed_or_incons4')
+form = 'float_scalar'
+
+    @pytest.mark.parametrize("form", sorted(INVALID_FORMS))
+    def test_d01_a_malformed_or_inconsistent_persisted_member_refuses(tmp_path, form):
+        p, res, cfg, srcs, flow, d = S.authorized(tmp_path)
+        if form == "not_a_dict":
+            S.rewrite_member(tmp_path, d.decision_id, lambda b: b["runtime_authority"].__setitem__(ecb.KEY, "x"))
+        else:
+            S.rewrite_member(tmp_path, d.decision_id, mutate_member(INVALID_FORMS[form]))
+>       assert_binding_refusal(flow, p, d, status=ecb.INVALID)
+
+tests/test_effective_configuration_binding.py:316: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+wf = <agent_control_plane.registry_governed_policy.GovernedPolicyWorkflow object at 0x7f36a14e6850>
+p = TenantRuntimeProposal(manifest_id='refund-integration-pilot-v1', manifest_version='1.1', manifest_digest='sha256:4d1ad...'run-1', expected_side_effects=[], evidence_refs=['urn:cognous:evidence:refund-entitlement'], tenant_id='tenant-alpha')
+d = RuntimeDecision(reason_vocabulary_version='runtime-authority-reasons/0.1', rule_identity=None, reopen_conditions=[], d...c0b107f215773957e569ee85e5ca1abb94c267cd', missing=False, previous_observed_at=None, read_state=None, age_basis=None)])
+status = 'invalid'
+
+    def assert_binding_refusal(wf, p, d, status=ecb.MISMATCH):
+        """execute refuses with the REGISTERED reason, a durable EffectTimeRefusal is written, nothing reached the destination and no attempt exists."""
+        n_ref = len(wf.records.load().refusals)
+        before = wf.destination.snapshot()
+        assert wf.configuration_binding_status(wf.records.decision(d.decision_id)) == status
+>       with pytest.raises(PermissionError, match="authorization-critical inputs changed before effect"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE PermissionError
+
+tests/test_effective_configuration_binding.py:49: Failed
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding.py::test_d01_a_malformed_or_inconsistent_persisted_member_refuses[float_scalar]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 85 passed in 32.21s

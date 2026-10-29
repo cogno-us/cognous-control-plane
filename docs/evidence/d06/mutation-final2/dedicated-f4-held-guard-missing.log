@@ -1,0 +1,34 @@
+# dedicated-f4-held-guard-missing: the dedicated F4 held-state guard does not cover the other scalars / ObservationPolicy
+# file: src/agent_control_plane/registry_f4_age_governance.py
+# verdict: KILLED (exit 1)
+
+........................................................................ [ 18%]
+........................................................................ [ 37%]
+....................x................................................... [ 56%]
+........................................................................ [ 75%]
+................................................F
+=================================== FAILURES ===================================
+_ test_d12_a_post_construction_edit_is_refused_before_any_selection_source_runs[bool_in_place-dedicated_f4] _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1532/test_d12_a_post_construction_e0')
+kind = 'dedicated_f4', edit = 'bool_in_place'
+
+    @pytest.mark.parametrize("kind", KINDS)
+    @pytest.mark.parametrize("edit", sorted(EDITS))
+    def test_d12_a_post_construction_edit_is_refused_before_any_selection_source_runs(tmp_path, kind, edit):
+        p, res, cfg, store, flow, d = authorized(kind, tmp_path)
+        EDITS[edit](flow)
+        for call in (lambda: flow.decide(p, now=NOW), lambda: flow.execute(p, d, adapter_id=p.adapter_id, now=NOW)):
+            with pytest.raises(RegistrySelectionRefused) as e:
+                call()
+>           assert e.value.refusal.code == "scalars_modified"
+E           AssertionError: assert 'configuratio...nding_invalid' == 'scalars_modified'
+E             
+E             - scalars_modified
+E             + configuration_binding_invalid
+
+tests/test_effective_configuration_binding_dedicated.py:244: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding_dedicated.py::test_d12_a_post_construction_edit_is_refused_before_any_selection_source_runs[bool_in_place-dedicated_f4]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 335 passed, 1 xfailed in 73.57s (0:01:13)

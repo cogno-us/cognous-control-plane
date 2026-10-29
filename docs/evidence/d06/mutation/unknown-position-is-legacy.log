@@ -1,0 +1,21 @@
+# unknown-position-is-legacy: an unknown decision position is treated as legacy
+# file: src/agent_control_plane/effective_configuration_binding.py
+# verdict: KILLED (exit 1)
+
+...............................F
+=================================== FAILURES ===================================
+_____ test_a_missing_member_is_legacy_only_below_an_explicit_valid_cutoff ______
+
+    def test_a_missing_member_is_legacy_only_below_an_explicit_valid_cutoff():
+        ra = persisted(None)
+>       assert ecb.classify(ra, LIVE, index=0, cutoff=1, decision_count=1) == ecb.LEGACY
+E       AssertionError: assert 'unbound-after-cutoff' == 'legacy'
+E         
+E         - legacy
+E         + unbound-after-cutoff
+
+tests/test_effective_configuration_binding_unit.py:217: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding_unit.py::test_a_missing_member_is_legacy_only_below_an_explicit_valid_cutoff
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 31 passed in 2.12s

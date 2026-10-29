@@ -1,0 +1,31 @@
+# members-families-empty: the declared family set is not bound
+# file: src/agent_control_plane/registry_governed_policy.py
+# verdict: KILLED (exit 1)
+
+.......................................................F
+=================================== FAILURES ===================================
+_______________ test_a02_the_members_are_the_live_configuration ________________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1463/test_a02_the_members_are_the_l0')
+
+    def test_a02_the_members_are_the_live_configuration(tmp_path):
+        p, res, cfg, srcs, flow, d = S.authorized(tmp_path)
+        m = member_of(flow, d)["members"]
+        assert m["scope"] == {"consumer_id": "consumer-test", "tenant_id": T.TENANT.lower(), "action_id": T.ACTION_ID, "institution_id": T.base.INSTITUTION, "authority_domain": T.base.DOMAIN}
+        assert m["f4_scalars"] == {"status_max_age_seconds": 60, "approval_max_age_seconds": 60}  # live host values even though the F4 family is NOT declared
+        assert m["other_scalars"] == {"clock_tolerance_seconds": 5, "identity_max_age_seconds": 60, "mandate_max_age_seconds": 60}
+        assert m["observation_policy"] == {"max_age_seconds": 300, "clock_tolerance_seconds": 5}
+        assert m["effective_profile_digest"] == d.binding.runtime_authority["catalogue_digest"] == flow.registry_governed_policy_identity["effective_profile_digest"]
+        assert m["host_profile_digest"] == pol.agemod.profile_digest(cfg) != m["effective_profile_digest"]
+>       assert [(r["slot"], r["family_id"], r["contract_version"], r["family_schema_revision"]) for r in m["families"]] == [
+            ("class_age", "f5-action-class-age-bounds", "r08-v2", None), ("class_unreadable", "f5-action-class-unreadable-policy", "r08-v5", None)]
+E       AssertionError: assert [] == [('class_age'...08-v5', None)]
+E         
+E         Right contains 2 more items, first extra item: ('class_age', 'f5-action-class-age-bounds', 'r08-v2', None)
+E         Use -v to get more diff
+
+tests/test_effective_configuration_binding.py:86: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding.py::test_a02_the_members_are_the_live_configuration
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 55 passed in 1.79s

@@ -1,0 +1,21 @@
+# cutoff-beyond-store-accepted: a cutoff larger than the decisions in the store still enables legacy
+# file: src/agent_control_plane/effective_configuration_binding.py
+# verdict: KILLED (exit 1)
+
+...........................................F
+=================================== FAILURES ===================================
+_ test_a_cutoff_larger_than_the_decisions_in_the_store_disables_the_legacy_rule _
+
+    def test_a_cutoff_larger_than_the_decisions_in_the_store_disables_the_legacy_rule():
+        """The decisions list only grows, so a cutoff above its length cannot be 'the decisions at activation'; it must not accept a later legacy-writer append."""
+>       assert ecb.classify(persisted(None), LIVE, index=2, cutoff=9, decision_count=3) == ecb.UNBOUND_AFTER_CUTOFF
+E       AssertionError: assert 'legacy' == 'unbound-after-cutoff'
+E         
+E         - unbound-after-cutoff
+E         + legacy
+
+tests/test_effective_configuration_binding_unit.py:233: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding_unit.py::test_a_cutoff_larger_than_the_decisions_in_the_store_disables_the_legacy_rule
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 43 passed in 2.34s

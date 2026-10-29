@@ -1,0 +1,27 @@
+{
+ "total": 1,
+ "killed": 1,
+ "survived": [],
+ "invalid": [],
+ "control": "PASS",
+ "results": [
+  {
+   "id": "__control__",
+   "verdict": "PASS",
+   "exit": 0,
+   "first_failure": null,
+   "desc": "unmutated copy",
+   "file": "-",
+   "note": null
+  },
+  {
+   "id": "cutoff-count-load-failure-ignored",
+   "verdict": "KILLED",
+   "exit": 1,
+   "first_failure": "FAILED tests/test_effective_configuration_binding_dedicated.py::test_d20_an_unreadable_store_while_counting_the_decisions_refuses_a_positive_cutoff",
+   "desc": "an unreadable store while counting decisions lets the cutoff through",
+   "file": "src/agent_control_plane/registry_governed_lifecycle.py",
+   "note": null
+  }
+ ]
+}

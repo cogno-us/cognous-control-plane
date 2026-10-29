@@ -1,0 +1,47 @@
+# members-families-skip-schema-revisions: the family schema revisions are not bound
+# file: src/agent_control_plane/registry_governed_lifecycle.py
+# verdict: KILLED (exit 1)
+
+........................................................................ [ 18%]
+....F
+=================================== FAILURES ===================================
+_____ test_c05_a_family_contract_version_or_schema_revision_change_refuses _____
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1629/test_c05_a_family_contract_ver0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f6cb572b7e0>
+
+    def test_c05_a_family_contract_version_or_schema_revision_change_refuses(tmp_path, monkeypatch):
+        p, res, cfg, srcs, flow, d = S.authorized(tmp_path)
+        same = S.mk(tmp_path, res, cfg, T.families(None, srcs["a"], srcs["u"]))
+        assert same.configuration_binding_status(d) == ecb.BOUND
+        monkeypatch.setitem(eff.FAMILY_TABLE, "class_age", (eff.FAMILY_TABLE["class_age"][0], "r08-v99"))
+        assert_binding_refusal(same, p, d)
+        monkeypatch.undo()
+        S.patch_clock(monkeypatch)
+        assert same.configuration_binding_status(d) == ecb.BOUND
+        monkeypatch.setitem(eff.SCHEMA_REVISIONS, "class_unreadable", 2)
+>       assert_binding_refusal(same, p, d)
+
+tests/test_effective_configuration_binding.py:243: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+wf = <agent_control_plane.registry_governed_policy.GovernedPolicyWorkflow object at 0x7f6cb4b74050>
+p = TenantRuntimeProposal(manifest_id='refund-integration-pilot-v1', manifest_version='1.1', manifest_digest='sha256:4d1ad...'run-1', expected_side_effects=[], evidence_refs=['urn:cognous:evidence:refund-entitlement'], tenant_id='tenant-alpha')
+d = RuntimeDecision(reason_vocabulary_version='runtime-authority-reasons/0.1', rule_identity=None, reopen_conditions=[], d...c0b107f215773957e569ee85e5ca1abb94c267cd', missing=False, previous_observed_at=None, read_state=None, age_basis=None)])
+status = 'mismatch'
+
+    def assert_binding_refusal(wf, p, d, status=ecb.MISMATCH):
+        """execute refuses with the REGISTERED reason, a durable EffectTimeRefusal is written, nothing reached the destination and no attempt exists."""
+        n_ref = len(wf.records.load().refusals)
+        before = wf.destination.snapshot()
+>       assert wf.configuration_binding_status(wf.records.decision(d.decision_id)) == status
+E       AssertionError: assert 'bound' == 'mismatch'
+E         
+E         - mismatch
+E         + bound
+
+tests/test_effective_configuration_binding.py:48: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding.py::test_c05_a_family_contract_version_or_schema_revision_change_refuses
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 76 passed in 17.61s

@@ -1,0 +1,25 @@
+# record-extra-keys-allowed: extra keys inside the persisted record are tolerated
+# file: src/agent_control_plane/effective_configuration_binding.py
+# verdict: KILLED (exit 1)
+
+.............................F
+=================================== FAILURES ===================================
+_______ test_extra_missing_or_renamed_record_and_member_keys_are_invalid _______
+
+    def test_extra_missing_or_renamed_record_and_member_keys_are_invalid():
+        m = members()
+        good = record(m)
+        for bad in (dict(good, extra=1), {k: v for k, v in good.items() if k != "digest"}, {k: v for k, v in good.items() if k != "members"},
+                    dict(good, members=dict(m, extra_member=1)), dict(good, members={k: v for k, v in m.items() if k != "families"}),
+                    dict(good, members=dict(m, scope=dict(m["scope"], extra="x"))), dict(good, members=dict(m, f4_scalars={"status_max_age_seconds": 1}))):
+>           assert ecb.classify(persisted(bad), LIVE, **CLS) == ecb.INVALID
+E           AssertionError: assert 'mismatch' == 'invalid'
+E             
+E             - invalid
+E             + mismatch
+
+tests/test_effective_configuration_binding_unit.py:206: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding_unit.py::test_extra_missing_or_renamed_record_and_member_keys_are_invalid
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 29 passed in 1.83s

@@ -1,0 +1,28 @@
+# digest-allows-all-zero: an all-zero digest is accepted as a digest
+# file: src/agent_control_plane/effective_configuration_binding.py
+# verdict: KILLED (exit 1)
+
+...............................................F
+=================================== FAILURES ===================================
+______________ test_build_members_refuses_every_wrong_typed_value ______________
+
+    def test_build_members_refuses_every_wrong_typed_value():
+        ok = dict(scope=members()["scope"], host_profile_digest=H("a"), effective_profile_digest=None, f4_scalars={"status_max_age_seconds": 1, "approval_max_age_seconds": 2},
+                  other_scalars={"clock_tolerance_seconds": 0, "identity_max_age_seconds": 3, "mandate_max_age_seconds": MAXV}, observation_policy=None, families=[])
+        assert ecb.build_members(**ok)["other_scalars"]["mandate_max_age_seconds"] == MAXV
+        for bad in (True, 1.0, "1", -1, MAXV + 1, None):
+            for group, key in (("f4_scalars", "status_max_age_seconds"), ("other_scalars", "identity_max_age_seconds")):
+                with pytest.raises(ecb.BindingInvalid):
+                    ecb.build_members(**dict(ok, **{group: dict(ok[group], **{key: bad})}))
+            with pytest.raises(ecb.BindingInvalid):
+                ecb.build_members(**dict(ok, observation_policy={"max_age_seconds": bad, "clock_tolerance_seconds": 0}))
+        for bad_digest in ("sha256:" + "0" * 64, "sha256:" + "A" * 64, "sha256:abc", "md5:" + "a" * 32, 5):
+>           with pytest.raises(ecb.BindingInvalid):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE BindingInvalid
+
+tests/test_effective_configuration_binding_unit.py:267: Failed
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding_unit.py::test_build_members_refuses_every_wrong_typed_value
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 47 passed in 2.37s

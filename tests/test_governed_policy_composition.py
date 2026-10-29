@@ -466,14 +466,27 @@ def test_i03_restart_with_the_same_families_resumes_a_persisted_decision(tmp_pat
 
 
 def test_i04_the_f4_scalars_are_NOT_in_the_persisted_decision_binding_documented_unresolved_decision(tmp_path):
-    """Characterization of the reported design decision: dropping ONLY the F4 family leaves the profile (hence `catalogue_digest` and the approval commitment) identical, so a
-    decision persisted under narrowed scalars is executable by a workflow whose scalars are the host's. Freshness is re-resolved at execute under the executing workflow's own
-    scalars. Binding the scalars would need a new commitment preimage: NOT invented here (Architect decision)."""
+    """SUCCESSOR FORM, converted in place (D-06 Option B, Architect authorization 2026-10-29; docs/effective-configuration-binding.md).
+
+    SUPERSESSION RECORD. At Control Plane b7eb11aaeed9c766ecaae7d22955093f7f7cd1aa this test characterized a design gap: dropping ONLY the F4 family leaves the profile (hence
+    `catalogue_digest` and the approval commitment) identical, so a decision persisted under narrowed scalars was executable by a workflow whose scalars are the host's.
+    The ORIGINAL assertions, quoted verbatim as text (they passed at b7eb11a; the original passing output is docs/evidence/d06/baseline-b7eb11a-v7pin.log):
+
+        p, res, cfg, srcs, flow, d = authorized(tmp_path)
+        no_f4 = build(tmp_path, res, cfg, families(None, srcs["a"], srcs["u"]))
+        assert no_f4.runtime_authority_profile.model_dump() == flow.runtime_authority_profile.model_dump() and no_f4.status_max_age_seconds == 60
+        attempt, observed = no_f4.execute(p, d, adapter_id=p.adapter_id, now=NOW)
+        assert attempt.status == "acknowledged" and observed.state == "applied"
+
+    Since the persisted effective-configuration binding that outcome is REFUSED. This function keeps the same fixtures and the same first assertion; the final execution
+    assertion is inverted to the new refusal outcome. It runs in the gated suites as an ordinary passing test (no xfail/skip). Further successor: tests/test_effective_configuration_binding.py::
+    test_c03_the_documented_i04_scenario_now_refuses (adds the status classification and the durable refusal row)."""
     p, res, cfg, srcs, flow, d = authorized(tmp_path)
     no_f4 = build(tmp_path, res, cfg, families(None, srcs["a"], srcs["u"]))
     assert no_f4.runtime_authority_profile.model_dump() == flow.runtime_authority_profile.model_dump() and no_f4.status_max_age_seconds == 60
-    attempt, observed = no_f4.execute(p, d, adapter_id=p.adapter_id, now=NOW)
-    assert attempt.status == "acknowledged" and observed.state == "applied"
+    with pytest.raises(PermissionError, match="authorization-critical inputs changed before effect"):  # was: executed and applied (see the record above)
+        no_f4.execute(p, d, adapter_id=p.adapter_id, now=NOW)
+    assert no_f4.destination.snapshot()["effects"] == {}
 
 
 @pytest.mark.parametrize("edit", ["scalars", "profile_drop", "profile_swap"])

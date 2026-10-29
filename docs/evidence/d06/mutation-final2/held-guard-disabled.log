@@ -1,0 +1,28 @@
+# held-guard-disabled: the new held-state comparison is removed
+# file: src/agent_control_plane/registry_governed_lifecycle.py
+# verdict: KILLED (exit 1)
+
+........................................................................ [ 18%]
+..................................................................F
+=================================== FAILURES ===================================
+_ test_e03_a_post_construction_edit_of_a_scalar_or_the_observation_policy_is_refused_at_every_boundary[approval_not_declared_f4] _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-1518/test_e03_a_post_construction_e0')
+edit = 'approval_not_declared_f4'
+
+    @pytest.mark.parametrize("edit", sorted(EDITS))
+    def test_e03_a_post_construction_edit_of_a_scalar_or_the_observation_policy_is_refused_at_every_boundary(tmp_path, edit):
+        """New held-state coverage: before D-06 only the F4 scalars (when declared) and the profile were guarded."""
+        p, res, cfg, srcs, flow, d = S.authorized(tmp_path)
+        EDITS[edit](flow)
+        calls = {k: x.calls for k, x in srcs.items() if x is not None}
+        for boundary, call in (("decision", lambda: flow.decide(p, now=NOW)), ("effect", lambda: flow.execute(p, d, adapter_id=p.adapter_id, now=NOW))):
+>           with pytest.raises(RegistryGovernedPolicyRefused) as e:
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE RegistryGovernedPolicyRefused
+
+tests/test_effective_configuration_binding.py:409: Failed
+=========================== short test summary info ============================
+FAILED tests/test_effective_configuration_binding.py::test_e03_a_post_construction_edit_of_a_scalar_or_the_observation_policy_is_refused_at_every_boundary[approval_not_declared_f4]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 138 passed in 39.79s
