@@ -248,7 +248,7 @@ jobs:
           suite = suite if suite.tag == "testsuite" else suite[0]
           n, skipped, failed = int(suite.get("tests")), int(suite.get("skipped")), int(suite.get("failures")) + int(suite.get("errors"))
           print(f"FINAL3 consumers + earlier governed suites under the r08-v8 pin: {n} run, {skipped} skipped, {failed} failed")
-          assert skipped == 0 and failed == 0 and n >= @@N@@, "Registry-governed FINAL3 tests were skipped or did not run"
+          assert skipped == 0 and failed == 0 and n >= 841, "Registry-governed FINAL3 tests were skipped or did not run"
           PY
           } 2>&1 | tee final3-out.txt || {
             echo "::error title=FINAL3 consumer tests failed::$(tail -n 40 final3-out.txt | sed ':a;N;$!ba;s/\n/%0A/g')"
