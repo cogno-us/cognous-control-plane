@@ -120,3 +120,14 @@ Mutation evidence (developer evidence, not qualification): `docs/evidence/d07/mu
 * Not run, and why: `tests/test_v02_claim_policy_binding.py` against its own Registry pin `943ab18...` (checkout not available here: 6 baseline environmental failures, unchanged); async-marked AGT suites (`pytest-asyncio` not installed: baseline failures, unchanged); CI workflows and the qualification-repository reusable workflows (not available locally, pinned SHAs untouched); cross-component suites per `CROSS_COMPONENT_TESTS.md`; no real payments, networks, subprocesses or credentials were used anywhere.
 * Original failures vs new: original (predecessor) results retained verbatim; 41 baseline failures are environmental and identical before and after; 5 predecessor tests inverted by the authorized change plus 3 byte-pin tests, all superseded or updated as documented; no other new failure.
 * Remaining qualification obligations: F3-B independent qualification PENDING (specified in `03-f3-qualification-expectations-F3A-F3B-2026-10-29.md` before this change was made); independent Tier 1 DEFERRED, NOT WAIVED; F3 requalification, refreeze and re-review required by `CLAUDE.md` before acceptance; Architect and human review of the consolidated change. Accounting unchanged until the enforcement implementations merge: 0 independently accepted. Nothing was pushed, opened as a PR, or merged.
+
+## Errata and integration status (new text, 2026-10-29; the sections above are not rewritten)
+
+* **"Before" quotation.** In the "Before" block the third comment line is not verbatim. `runtime_authority.py` at `061a986` (identical to `b7eb11a`, sha256 `a4b4ac36cca6e75d8fc3408b8738163acfb609a7265633aec2f799700ff9ea66`), line 407, reads exactly:
+
+```
+                    # bound is the class bound, or the recorded bound of an accepted cached snapshot (<= the ceiling by construction).
+```
+
+  The parenthetical "(which may include a signed outage extension; see section 6)" appears in the corrected (After) comment, not in the predecessor. The code lines 404-406 and 408-413 are quoted exactly.
+* **Integration status.** PR #95 merged into the #94 feature branch (`fb9c7e06075d18f518f0d2e8782b167e368c0512`, not an ancestor of Control Plane `main`). The D-07 correction reached `main` only through PR #97 (merge `739efe7d8f16a0cee1efc7dd3a978d5d4d85fe69`); `runtime_authority.py` on `main` has sha256 `45a27db8695ff9d23516e1937f3bafa2391bbc1587ed0fb09f56ea8f3e01d23f`. Statements above that nothing was pushed or merged are as of authoring.
