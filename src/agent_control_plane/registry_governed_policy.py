@@ -1,4 +1,5 @@
-"""Composed Registry-governed bounded-authorization workflow: F4 status/approval ages, F5 per-class status age and F5 per-class unreadable policy governing ONE scope together.
+"""Composed Registry-governed bounded-authorization workflow: F4 status/approval ages, F5 per-class status age, F5 per-class unreadable policy, per-class `requires_revocation_assurance` and
+terminal-revocation enablement (the last two: Registry `r08-v6`, see `registry_revocation_governance`) governing ONE scope together.
 
 BUILDER_TESTED developer implementation. NOT independently qualified. NOT an authorization mechanism and NOT a policy interpreter: every Registry selection only NARROWS a
 host-configured value and grants nothing. `bounded.py`, `runtime_authority.py`, `freshness.py`, `policy_binding.py` and every evaluator are unchanged; the per-family derivations
@@ -9,7 +10,8 @@ mandatory: it is verified at construction, decision entry, execute entry and imm
 expired, changed, out of scope) refuses the whole workflow. There is no partial activation, no fallback to a smaller set and no optional overlay. A family that is not declared is not
 governed by Registry here (the host value stays in force). The scopes must share consumer, tenant and action (operation ids may differ).
 
-Deterministic composition. Order: (1) F4 scalars, (2) class status age over the host profile, (3) class unreadable policy over the age-effective profile. The result is ONE
+Deterministic composition. Order: (1) F4 scalars, (2) class status age over the host profile, (3) class unreadable policy over the age-effective profile, (4) per-class revocation assurance (a
+requirement that can only add a holder-inventory hold), (5) terminal-revocation enablement (an obligation that can only add a refusal). The result is ONE
 effective `RuntimeAuthorityProfile` (profile-bearing fields) plus the two F4 constructor scalars (which are NOT part of the profile). Before use the ORIGINAL host profile is validated
 against the existing invariant (an irreversible class that is not `refuse` is invalid: no Registry value may repair it), and the FINAL composed configuration is validated: every
 value is at most the host value, only the governed fields differ from the host, and the result still satisfies the host invariants (`composed_*` refusals).
@@ -42,6 +44,7 @@ from typing import Any, Callable, Mapping, Optional
 from agent_control_plane import registry_f4_age_governance as f4mod
 from agent_control_plane import registry_f5_class_age_governance as agemod
 from agent_control_plane import registry_f5_class_unreadable_governance as unrmod
+from agent_control_plane import registry_revocation_governance as revmod
 from agent_control_plane.bounded import _now, commitment
 from agent_control_plane.registry_governed_lifecycle import (
     GovernedLifecycle, GovernedScope, Refusal, RegistrySelectionRefused, _GatedDestination, _scalar, check_scope, check_source, construction_now, read_source, require_authority,
@@ -50,7 +53,7 @@ from agent_control_plane.registry_governed_lifecycle import (
 from agent_control_plane.runtime_authority import RuntimeAuthorityProfile
 
 REJECTION_CODE = "registry_governed_policy_selection_invalid"
-FAMILY_NAMES = ("f4_ages", "class_age", "class_unreadable")  # deterministic composition order
+FAMILY_NAMES = ("f4_ages", "class_age", "class_unreadable", "class_revocation_assurance", "terminal_revocation")  # deterministic composition order
 
 
 class RegistryGovernedPolicyRefused(RegistrySelectionRefused):
@@ -78,6 +81,8 @@ class GovernedFamilies:
     f4_ages: Optional[GovernedFamily] = None
     class_age: Optional[GovernedFamily] = None
     class_unreadable: Optional[GovernedFamily] = None
+    class_revocation_assurance: Optional[GovernedFamily] = None  # Registry r08-v6; only ADDS a holder-inventory hold
+    terminal_revocation: Optional[GovernedFamily] = None  # Registry r08-v6; only ADDS the terminal-revocation refusal
 
 
 class GovernedActivationLedger:
@@ -116,7 +121,7 @@ def _prefixed(name: str, refusal: Refusal) -> Refusal:
 
 
 def final_composition_defect(host: Optional[RuntimeAuthorityProfile], final: Optional[RuntimeAuthorityProfile], host_scalars: Mapping[str, int],
-                             final_scalars: Optional[Mapping[str, int]]) -> Optional[str]:
+                             final_scalars: Optional[Mapping[str, int]], *, assurance_declared: bool = False, terminal_declared: bool = False) -> Optional[str]:
     """Validate the FINAL composed configuration against the ORIGINAL host: no value above the host value, only the governed fields differ, the host invariants still hold."""
     if final_scalars is not None and any(final_scalars[k] > host_scalars[k] for k in f4mod.AGES):
         return "composed_widens_host"
@@ -133,20 +138,31 @@ def final_composition_defect(host: Optional[RuntimeAuthorityProfile], final: Opt
         cf = df["actions"][aid]
         if cf["max_status_age_seconds"] > ch["max_status_age_seconds"] or unrmod._RANK[cf["on_unreadable"]] > unrmod._RANK[ch["on_unreadable"]]:
             return "composed_widens_host"
+        if assurance_declared and ch.get("requires_revocation_assurance", False) and not cf.get("requires_revocation_assurance", False):  # a host requirement may only be kept or added to
+            return "composed_widens_host"
         ch.pop("max_status_age_seconds"), cf.pop("max_status_age_seconds"), ch.pop("on_unreadable"), cf.pop("on_unreadable")
+        if assurance_declared:  # only a DECLARED family may differ in this field; otherwise any difference is a foreign change
+            ch.pop("requires_revocation_assurance", None), cf.pop("requires_revocation_assurance", None)
     fh, ff = dh.get("freshness"), df.get("freshness")
     if fh and ff:
         if ff.get("max_age_extension_seconds", 0) > fh.get("max_age_extension_seconds", 0):
             return "composed_widens_host"
         fh.pop("max_age_extension_seconds", None), ff.pop("max_age_extension_seconds", None)
+    if terminal_declared:
+        if dh.get("terminal_revocation") is not None and df.get("terminal_revocation") is None:  # the host opt-in may only be kept or added to
+            return "composed_widens_host"
+        if df.get("terminal_revocation") not in (None, revmod.TERMINAL_SECTION):
+            return "composed_profile_invalid"
+        dh.pop("terminal_revocation", None), df.pop("terminal_revocation", None)
     return None if dh == df else "composed_profile_invalid"
 
 
 def derive_policy(*, families: GovernedFamilies, host: Optional[RuntimeAuthorityProfile], host_scalars: Mapping[str, int], host_ages: Optional[Mapping[str, int]],
-                  host_values: Optional[Mapping[str, str]], materials: Mapping[str, Any], verifier: Any, institution_id: str, authority_domain: str, now: datetime):
+                  host_values: Optional[Mapping[str, str]], materials: Mapping[str, Any], verifier: Any, institution_id: str, authority_domain: str, now: datetime,
+                  host_assurance: Optional[Mapping[str, str]] = None, host_terminal: Optional[str] = None):
     """Pure verification of EVERY declared family and composition of the one effective configuration. Returns `((profile or None, scalars or None, bound), None)` or `(None, Refusal)`.
     Builds no workflow and writes nothing."""
-    scalars = age_part = unreadable = None
+    scalars = age_part = unreadable = assurance = terminal = None
     base = host
     if families.f4_ages is not None:
         values, digest, refusal = f4mod.verify_scope_selection(scope=families.f4_ages.scope, institution_id=institution_id, authority_domain=authority_domain,
@@ -172,11 +188,35 @@ def derive_policy(*, families: GovernedFamilies, host: Optional[RuntimeAuthority
         except Exception:
             return None, Refusal("effective_profile_invalid")
         unreadable = (dict(effective), digest)
-    defect = final_composition_defect(host, base, host_scalars, scalars[0] if scalars else None)
+    if families.class_revocation_assurance is not None:
+        derived_a, refusal = revmod.derive_assurance(scope=families.class_revocation_assurance.scope, institution_id=institution_id, authority_domain=authority_domain, host=host,
+                                                     host_values=host_assurance, material=materials["class_revocation_assurance"], verifier=verifier, now=now)
+        if refusal is not None:
+            return None, _prefixed("class_revocation_assurance", refusal)
+        effective, digest = derived_a
+        try:
+            base = revmod.compose_assurance(base, effective)
+        except Exception:
+            return None, Refusal("effective_profile_invalid")
+        assurance = (dict(effective), digest)
+    if families.terminal_revocation is not None:
+        derived_t, refusal = revmod.derive_terminal(scope=families.terminal_revocation.scope, institution_id=institution_id, authority_domain=authority_domain,
+                                                    host_value=host_terminal, material=materials["terminal_revocation"], verifier=verifier, now=now)
+        if refusal is not None:
+            return None, _prefixed("terminal_revocation", refusal)
+        effective, digest = derived_t
+        try:
+            base = revmod.compose_terminal(base, effective)
+        except Exception:
+            return None, Refusal("effective_profile_invalid")
+        terminal = (effective, digest)
+    defect = final_composition_defect(host, base, host_scalars, scalars[0] if scalars else None, assurance_declared=families.class_revocation_assurance is not None,
+                                      terminal_declared=families.terminal_revocation is not None)
     if defect is not None:
         return None, Refusal(defect)
-    pdigest = agemod.profile_digest(base) if (base is not None and (age_part or unreadable)) else None
-    bound = {"f4_ages": scalars, "class_age": age_part, "class_unreadable": unreadable, "effective_profile_digest": pdigest}
+    pdigest = agemod.profile_digest(base) if (base is not None and (age_part or unreadable or assurance or terminal)) else None
+    bound = {"f4_ages": scalars, "class_age": age_part, "class_unreadable": unreadable, "class_revocation_assurance": assurance, "terminal_revocation": terminal,
+             "effective_profile_digest": pdigest}
     return (base, scalars, bound), None
 
 
@@ -204,7 +244,8 @@ class GovernedPolicyWorkflow(GovernedLifecycle):
         if any((f.scope.consumer_id, f.scope.tenant_id, f.scope.action_id) != (first.consumer_id, first.tenant_id, first.action_id) for _, f in declared):
             raise _refuse("family_scope_mismatch", "construction")
         scope = first
-        profile_families = families.class_age is not None or families.class_unreadable is not None
+        profile_families = (families.class_age is not None or families.class_unreadable is not None or families.class_revocation_assurance is not None
+                            or families.terminal_revocation is not None)
         host = None
         if profile_families and runtime_authority_profile is None:
             raise _refuse("runtime_authority_profile_required", "construction")
@@ -227,6 +268,17 @@ class GovernedPolicyWorkflow(GovernedLifecycle):
             host_ages, code = agemod.host_class_ages(host)
             if host_ages is None:
                 raise _refuse(code, "construction")
+        host_assurance = host_terminal = None
+        if families.class_revocation_assurance is not None or families.terminal_revocation is not None:
+            defect = unrmod.host_class_defect(host)  # ORIGINAL host validity FIRST (nothing composed here may repair it): before any Registry call or source read
+            if defect is not None:
+                raise _refuse(defect, "construction")
+        if families.class_revocation_assurance is not None:
+            host_assurance, code = revmod.host_class_assurance(host)
+            if host_assurance is None:
+                raise _refuse(code, "construction")
+        if families.terminal_revocation is not None:
+            host_terminal = revmod.host_terminal_value(host)
         if profile_families and scope.action_id not in host.actions:
             raise _refuse("action_class_unknown", "construction")
         if families.f4_ages is not None and not (_scalar(status_max_age_seconds) and _scalar(approval_max_age_seconds)):
@@ -236,7 +288,8 @@ class GovernedPolicyWorkflow(GovernedLifecycle):
         host_scalars = {f4mod.AGES[0]: status_max_age_seconds, f4mod.AGES[1]: approval_max_age_seconds}
         materials = {name: read_source(fam.selection_source, _refuse, "construction") for name, fam in declared}
         derived, refusal = derive_policy(families=families, host=host, host_scalars=host_scalars, host_ages=host_ages, host_values=host_values, materials=materials,
-                                         verifier=verifier, institution_id=authority[0], authority_domain=authority[1], now=now)
+                                         verifier=verifier, institution_id=authority[0], authority_domain=authority[1], now=now, host_assurance=host_assurance,
+                                         host_terminal=host_terminal)
         if refusal is not None:
             raise RegistryGovernedPolicyRefused(refusal, "construction")
         profile, scalars, bound = derived
@@ -244,7 +297,8 @@ class GovernedPolicyWorkflow(GovernedLifecycle):
         # effective values, the F4 scalars and the FINAL effective-profile digest. Two differently governed configurations therefore cannot claim the same identity.
         configuration = commitment({"families": [n for n, _ in declared], "scopes": {n: f.scope.operation_id for n, f in declared}, "consumer_id": scope.consumer_id,
                                     "tenant_id": scope.tenant_id, "action_id": scope.action_id, "institution_id": authority[0], "authority_domain": authority[1],
-                                    "host": {"scalars": host_scalars if scalars is not None else None, "class_age": host_ages, "class_unreadable": host_values},
+                                    "host": {"scalars": host_scalars if scalars is not None else None, "class_age": host_ages, "class_unreadable": host_values,
+                                             "class_revocation_assurance": host_assurance, "terminal_revocation": host_terminal},
                                     "bound": bound})
         key = (scope.tenant_id, scope.action_id, authority[0], authority[1])
         destination = take_destination(workflow_kwargs, _refuse)
@@ -258,6 +312,7 @@ class GovernedPolicyWorkflow(GovernedLifecycle):
         super().__init__(destination=_GatedDestination(destination, self._gl_commit_gate), **extra, **workflow_kwargs)
         self._gp_families, self._gp_verifier, self._gp_host, self._gp_host_scalars = families, verifier, host, host_scalars
         self._gp_host_values, self._gp_host_ages = host_values, host_ages
+        self._gp_host_assurance, self._gp_host_terminal = host_assurance, host_terminal
         self._gp_ledger, self._gp_key, self._gp_configuration = activation_ledger, key, configuration
         self._gl_attach(scope=scope, authority=authority, bound=bound)
         # The claim is the LAST step: a construction that failed anywhere above never leaves a stale claim. `claim` is atomic under the ledger lock.
@@ -282,12 +337,17 @@ class GovernedPolicyWorkflow(GovernedLifecycle):
                 "scope": {"consumer_id": scope.consumer_id, "tenant_id": scope.tenant_id, "action_id": scope.action_id,
                           "operation_ids": {n: f.scope.operation_id for n, f in _declared(self._gp_families)}},
                 "host": {"f4_ages": dict(self._gp_host_scalars) if b["f4_ages"] else None, "class_age": dict(self._gp_host_ages) if self._gp_host_ages else None,
-                         "class_unreadable": dict(self._gp_host_values) if self._gp_host_values else None},
+                         "class_unreadable": dict(self._gp_host_values) if self._gp_host_values else None,
+                         "class_revocation_assurance": dict(self._gp_host_assurance) if self._gp_host_assurance else None, "terminal_revocation": self._gp_host_terminal},
                 "f4_ages": None if b["f4_ages"] is None else {"effective": dict(b["f4_ages"][0]), "effective_policy_digest": b["f4_ages"][1]},
                 "class_age": None if b["class_age"] is None else {"effective": dict(b["class_age"][0]), "effective_policy_digest": b["class_age"][1],
                                                                    "effective_profile_digest": b["class_age"][2]},
                 "class_unreadable": None if b["class_unreadable"] is None else {"effective": dict(b["class_unreadable"][0]),
                                                                                   "effective_policy_digest": b["class_unreadable"][1]},
+                "class_revocation_assurance": None if b["class_revocation_assurance"] is None else {"effective": dict(b["class_revocation_assurance"][0]),
+                                                                                                   "effective_policy_digest": b["class_revocation_assurance"][1]},
+                "terminal_revocation": None if b["terminal_revocation"] is None else {"effective": b["terminal_revocation"][0],
+                                                                                      "effective_policy_digest": b["terminal_revocation"][1]},
                 "effective_profile_digest": b["effective_profile_digest"], "f4_scalars_in_approval_commitment": False}
 
     def _gl_error(self, refusal: Refusal, boundary: str) -> Exception:
@@ -313,7 +373,7 @@ class GovernedPolicyWorkflow(GovernedLifecycle):
     def _gl_derive(self, materials: Any, authority: Any, now: datetime, boundary: str) -> Any:
         derived, refusal = derive_policy(families=self._gp_families, host=self._gp_host, host_scalars=self._gp_host_scalars, host_ages=self._gp_host_ages,
                                          host_values=self._gp_host_values, materials=materials, verifier=self._gp_verifier, institution_id=authority[0],
-                                         authority_domain=authority[1], now=now)
+                                         authority_domain=authority[1], now=now, host_assurance=self._gp_host_assurance, host_terminal=self._gp_host_terminal)
         if refusal is not None:
             raise RegistryGovernedPolicyRefused(refusal, boundary)
         return derived[2]

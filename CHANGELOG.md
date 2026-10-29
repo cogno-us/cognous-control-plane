@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added — Registry-governed `requires_revocation_assurance` and terminal-revocation enablement (Registry `r08-v6`; BUILDER_TESTED; non-authorizing)
+- Two more families in the composed `GovernedPolicyWorkflow` (new pure module `registry_revocation_governance.py`; no new workflow class). A Registry `required` can only add the existing `holder_inventory_missing` hold and a Registry `on` can only add the existing `grant_revocation_recorded` refusal; the effective value is the stricter of host and Registry and a host requirement or section can never be removed.
+- Both values live in the `RuntimeAuthorityProfile`, so `approval_commitment` and the persisted `catalogue_digest` already bind them (an approval for the host profile does not authorize the forced profile). No preimage, persisted-decision field, reason code or protected evaluator changed; the F4 scalar-binding decision (U-1) stays unresolved and is not repeated.
+- A requirement is not evidence: no assurance receipt, inventory or revocation record is created, and no revocation authority is granted. See `docs/registry-revocation-families-governance.md`.
+
 ### Added — EXT-S4-4 / V02: claim-carried canonical policy binding under a successor claim profile (BUILDER_TESTED; non-authorizing)
 - New `canonical_policy_binding.py` (strict `ocs-policy-binding/1` validator and `binding_digest`; implements the published profile, imports no Registry code). New successor profile `urn:cognous:profiles:local-authority-effect:0.2.0-proposed` (name proposed, not ratified) and a declared optional claim member `policy_binding`, omitted while absent. Issuance gains keyword-only `policy_binding`, `expected_consumer_id`, `expected_operation`; verification refuses undeclared members, a binding under the legacy profile and a missing or inconsistent binding under the successor profile.
 - Legacy claims (no binding) are byte-identical: frozen vectors generated on the unmodified base. `bounded.py`, `policy_binding.py`, `runtime_authority.py` are unchanged. No reason code is added; refusal evidence uses existing codes in the claim-stage check.
