@@ -131,3 +131,5 @@ Mutation evidence (developer evidence, not qualification): `docs/evidence/d07/mu
 
   The parenthetical "(which may include a signed outage extension; see section 6)" appears in the corrected (After) comment, not in the predecessor. The code lines 404-406 and 408-413 are quoted exactly.
 * **Integration status.** PR #95 merged into the #94 feature branch (`fb9c7e06075d18f518f0d2e8782b167e368c0512`, not an ancestor of Control Plane `main`). The D-07 correction reached `main` only through PR #97 (merge `739efe7d8f16a0cee1efc7dd3a978d5d4d85fe69`); `runtime_authority.py` on `main` has sha256 `45a27db8695ff9d23516e1937f3bafa2391bbc1587ed0fb09f56ea8f3e01d23f`. Statements above that nothing was pushed or merged are as of authoring.
+
+* **Status note (2026-10-30, append-only).** D-07 entered `main` through Control Plane #97. F3-B: scoped technical PASS (independent qualification, evidence in the qualification hub); the "PENDING" wording above is as of authoring. Formal independent acceptance: NOT ESTABLISHED. Final Tier 1: DEFERRED, NOT WAIVED. Production: HOLD.
