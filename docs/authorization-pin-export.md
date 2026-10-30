@@ -2,7 +2,7 @@
 
 Status: candidate, NON-AUTHORIZING. RELEASE, PUBLICATION and PRODUCTION: HOLD. Nothing here is qualified, certified or production ready.
 
-`agent_control_plane.authorization_pin_export.assess_authorization_pin(workflow, proposal, decision, *, now, host_policy_binding)` is the Control Plane side of the trusted handoff to the host authorization-pin installer. Profile string: `ocs-s4/authorization-pin-export/0.1`. It is read-only with respect to authorization state: it builds no claim, calls no `provision`, creates no decision, grant, approval or policy record, and has no claim or `expected_*` parameter. (The existing resolution step journals a resolution check in the Control Plane record store, as claim issuance does.)
+`agent_control_plane.authorization_pin_export.assess_authorization_pin(workflow, proposal, decision, *, now, host_policy_binding)` is the Control Plane side of the trusted handoff to the host authorization-pin installer. Profile string: `ocs-s4/authorization-pin-export/0.1`. It is read-only with respect to authorization state: it builds no claim, calls no `provision`, creates no decision, grant, approval or policy record, and has no claim or `expected_*` parameter. (The existing resolution step journals checks in the Control Plane record store, as claim issuance does; see "Journaling and non-authorization" below.)
 
 ## Result
 
@@ -32,3 +32,14 @@ Mismatches in what the export is given (decision not the persisted authorized on
 ## Custody
 
 Authenticity of the persisted Control Plane state rests on OS custody of the Control Plane stores, the resolver and the host configuration (Amendment 4 P-1 to P-4). A Python function boundary provides no OS isolation: the separation of the claim supplier, this export, the installer and the Runtime comes only from the deployment's OS identities and file permissions. No cryptographic scheme is introduced.
+
+## Journaling and non-authorization (documentation clarification, 2026-10-30)
+
+Verified from source at Control Plane `8616d5f64a901b8f858359809193961a1124b5f6` (code-equivalent to `739efe7`; not re-executed for this note). Nothing below describes a behavior change.
+
+* **Pin export is non-authorizing.** It grants, widens or installs nothing; `active` is an assessment for the host installer.
+* **Binding mismatch.** A persisted effective-configuration binding that differs from the live one (or is absent past the legacy cutoff, malformed or inconsistent) returns a non-`active` assessment (state `unknown`, no authorization payload). No durable `EffectTimeRefusal` is written on this read-only path and none is required; `append_refusal` is not called from this module. Effecting `execute` still requires the durable `authorization_binding_changed` `EffectTimeRefusal` (`bounded.py:1694`), and claim issuance still raises `PermissionError("authorization-critical inputs changed before claim issuance")` without a refusal row.
+* **Existing resolution-check journaling is retained, unchanged and shared with claim issuance.** The export calls `workflow._resolve(..., stage="claim")` (`authorization_pin_export.py:170-173`) and then `workflow._record_check(...)` (line 175); claim issuance makes the same two calls (`local_authority_effect.py:443-454`). Where the resolve step journals, it appends stage-`claim` `check_events` entries (one `opened`, one `input` per resolver input read, one `completed`; the number of `input` entries is data dependent, `bounded.py:2094`, `2142`), and `_record_check` appends one stage-`claim` `ResolutionCheck` row. Therefore a pin export or claim issuance may append a data-dependent number of `check_events` records plus one `ResolutionCheck`; "one `ResolutionCheck` row" alone understates this.
+* **Per-input `input_time_floors` may advance.** `record_resolution_check` (`bounded.py:627-661`) compares each input's `observed_at` with the stored floor and moves the floor forward only when the observation is not older than it and not beyond now plus tolerance; an older observation adds `input_observation_time_regressed` and does not move the floor. A floor can therefore only add a refusal reason on a later check; it never removes a reason, grants authority or creates an obligation. This is conservative refusal behavior.
+* **No new authority and no new obligation.** These rows are audit and freshness bookkeeping. Neither the journaling nor the floors grant new authority or create an `EffectTimeRefusal` obligation for read-only paths. Nothing else is written: no decision, attempt, observation or claim state.
+* **Not verified here:** the exact `input` count for any fixture, and row counts on exceptional branches (for example a failing record write), which were read from source only.

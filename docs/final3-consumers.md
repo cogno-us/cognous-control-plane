@@ -63,3 +63,8 @@ Source: `registry_final3_governance.py` (new), `registry_governed_policy.py`, `r
 * After PR #97 merged (Control Plane `main` `739efe7d8f16a0cee1efc7dd3a978d5d4d85fe69`, a first-parent merge), `main` DOES contain the D-07 correction. `src/agent_control_plane/runtime_authority.py` on `739efe7` has sha256 `45a27db8695ff9d23516e1937f3bafa2391bbc1587ed0fb09f56ea8f3e01d23f`, and `tests/test_freshness_purpose_residual.py` is the 217-line successor form. The section 6 statement that `main` does not contain D-07 (sha256 prefix `a4b4ac36`, 197-line predecessor) described `e921471` only.
 * PR #95 was merged into the #94 feature branch (`fb9c7e06075d18f518f0d2e8782b167e368c0512`, not an ancestor of `main`). The D-07 correction reached `main` only through PR #97.
 * Independent F3 qualification has since been performed (evidence `ed31764`, bundle sha256 `1d07a70439625de3b3e85e0ea3c088a43f14bc237649487d22d85da51a174fc5`); its verdicts are recorded there and are not restated or altered here. The "PENDING" wording above is as of authoring.
+
+## 8. Status note (2026-10-30; append-only)
+
+* D-07 entered `main` through Control Plane #97 (section 7); #95 was merged only into the #94 feature branch.
+* Original F3-A: FAIL (permanent historical result). Successor F3-A: conditional technical PASS, evidence not yet in published custody and not independently accepted. F3-B: scoped technical PASS. These remain separate. Formal independent acceptance: NOT ESTABLISHED. Final Tier 1: DEFERRED, NOT WAIVED. Production: HOLD. See the Registry records 11-13 under `docs/family-migration/final-three/`.
