@@ -25,8 +25,10 @@ persisted decision binding's `catalogue_digest`, so the FINAL effective profile 
 not decided here): whether the F4 scalars (or this identity) should enter the approval preimage / persisted decision binding. That is an authority-semantic change to a commitment and
 needs an explicit Architect decision and F3 requalification. RESOLVED by D-06 Option B (Architect-authorized 2026-10-29; BUILDER_TESTED, F3-A independent qualification PENDING): every authorized
 decision of THIS workflow now carries the persisted member `binding.runtime_authority["effective_configuration"]` (`effective_configuration_binding`, docs/effective-configuration-binding.md)
-which binds the F4 scalars, the other constructor scalars, the ObservationPolicy, both profile digests, the scope and the declared family set. `execute` and the pin-export claim refuse
-`authorization_binding_changed` when it is absent (outside the explicit `legacy_cutoff`), invalid, of an unknown version or unequal to the live configuration. `approval_commitment` is unchanged.
+which binds the F4 scalars, the other constructor scalars, the ObservationPolicy, both profile digests, the scope and the declared family set. `execute` refuses with
+`authorization_binding_changed` (a durable `EffectTimeRefusal`) when it is absent (outside the explicit `legacy_cutoff`), invalid, of an unknown version or unequal to the live configuration. Pin-export
+(`assess_authorization_pin`) instead returns a non-authorizing assessment (state not `active`, authorization payload suppressed; its existing `ResolutionCheck` journaling is unchanged and no
+`EffectTimeRefusal` is added), and claim issuance continues to fail closed with `PermissionError`. `approval_commitment` is unchanged.
 
 Applicability (deployment). `activation_ledger` (optional, host-owned, in-process, `GovernedActivationLedger`) lets a host refuse a second DIFFERENTLY configured governed workflow for
 the same (tenant, action, institution, authority domain); the configuration identity covers the declared families and scopes and the bound identity (host values, Registry
