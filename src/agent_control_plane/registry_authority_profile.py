@@ -1,6 +1,6 @@
 """Configurable Registry authority profile `ocs-authority-profile/0.1` for the F4 age-bounds selection source (CAP v0.1, gate G1).
 
-BUILDER_TESTED developer implementation. NOT independently qualified. NO durable anti-rollback (G2): this gate keeps NO state, so a replayed OLDER pinned
+BUILDER_TESTED developer implementation. NOT independently qualified. Durable anti-rollback exists ONLY for `state.backend = file-g2` (G2, `registry_authority_state.py`); `none-g1` keeps NO state, so a replayed OLDER pinned
 snapshot/selection that still satisfies the pin is not detected across processes. Claim scope is unchanged from the F4 PoC: claim A only (the Registry selection signature
 is admitted at decision time by the injected real Ed25519 verifier). Operational trust, issuer identity, key custody, adoption and a decision-authenticated claim (B)
 are NOT established here.
@@ -36,6 +36,7 @@ from agent_control_plane.strict_json import strict_loads
 PROFILE_VERSION = "ocs-authority-profile/0.1"
 MODES = ("synthetic", "operational")
 SYNTHETIC_IDENTITY = "UNSELECTED-SYNTHETIC"
+STATE_BACKENDS = ("none-g1", "file-g2")
 MAX_CONFIG_BYTES = 65536
 MAX_SNAPSHOT_BYTES = 1048576
 
@@ -43,6 +44,8 @@ CODES = (
     "authority_config_missing", "authority_config_malformed", "authority_config_version_unsupported", "authority_config_secret_material",
     "authority_config_mode_mismatch", "authority_config_unprovisioned", "authority_config_digest_mismatch", "authority_config_scope_mismatch",
     "snapshot_pin_mismatch", "epoch_floor_missing", "verifier_unavailable", "authority_factory_argument_refused",
+    "state_missing", "state_corrupt", "state_authority_mismatch", "state_lock_failed", "state_write_failed", "freshness_refused",
+    "bootstrap_invalid", "bootstrap_expired", "bootstrap_consumed", "bootstrap_state_exists",
 )
 
 _TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
@@ -154,6 +157,9 @@ class AuthorityProfile:
     as_of: Optional[str]
     declared_issuers: tuple
     declared_keys: tuple
+    state_backend: str = "none-g1"
+    state_namespace: str = ""
+    state_path: str = ""
 
 
 def _parse_clock(clock: Any, mode: str) -> tuple:
@@ -256,6 +262,11 @@ def load_authority_profile(config_path: Any, *, expected_mode: Any = None, expec
                 raise _refuse("authority_config_malformed", f"{name} must be a non-empty string")
     clock_kind, as_of = _parse_clock(config["clock"], mode)
     if mode == "synthetic":
+        if state["backend"] not in STATE_BACKENDS:
+            raise _refuse("authority_config_malformed", "state.backend must be none-g1 or file-g2")
+        if state["backend"] == "file-g2":
+            _tok(state["namespace"], "state.namespace")
+            _tok(Path(state["reference"]).name or "", "state.reference")
         if any(v != SYNTHETIC_IDENTITY for v in ident.values()):
             raise _refuse("authority_config_malformed", "synthetic identities must be UNSELECTED-SYNTHETIC")
     else:
@@ -265,10 +276,12 @@ def load_authority_profile(config_path: Any, *, expected_mode: Any = None, expec
         raise _refuse("authority_config_unprovisioned", "durable anti-rollback state is not implemented in G1 (G2); operational mode cannot be activated")
     ref = Path(source["reference"])
     snapshot_path = str(ref if ref.is_absolute() else path.resolve().parent / ref)
+    sref = Path(state["reference"])
+    state_path = str(sref if sref.is_absolute() else path.resolve().parent / sref) if state["backend"] == "file-g2" else ""
     return AuthorityProfile(profile_id=profile_id, mode=mode, config_digest=digest, config=config, snapshot_path=snapshot_path,
                             pin_snapshot_id=_tok(expected["snapshot_id"], "snapshot.expected.snapshot_id"), pin_version=expected["version"],
                             pin_fingerprint=expected["fingerprint"], context=context, clock_kind=clock_kind, as_of=as_of,
-                            declared_issuers=tuple(sorted(issuers)), declared_keys=tuple(sorted(keys)))
+                            declared_issuers=tuple(sorted(issuers)), declared_keys=tuple(sorted(keys)), state_backend=state["backend"], state_namespace=state["namespace"], state_path=state_path)
 
 
 # ------------------------------------------------------------------------------------------------------------------------ registry (lazy)
@@ -375,6 +388,18 @@ class PinnedSelectionSource:
         if type(self._verifier) is not ed.Ed25519Verifier:
             raise _refuse("verifier_unavailable", "verifier is not the exact Registry Ed25519Verifier")
         trust, fingerprint = load_pinned_trust(profile)
+        txn = None
+        if profile.state_backend == "file-g2":  # one lock spans read -> verify -> advance; a missing/corrupt/mismatched store refuses here
+            from agent_control_plane import registry_authority_state as state_mod
+            txn = state_mod.open_transaction(profile, _now(profile))
+        try:
+            return self._admit_locked(profile, trust, fingerprint, txn)
+        finally:
+            if txn is not None:
+                txn.close()
+
+    def _admit_locked(self, profile, trust, fingerprint, txn) -> SelectionMaterial:
+        verify, ident, common, vsel, ed = _registry()
         host = self._host()
         if type(host) is not SelectionMaterial or type(host.record_text) is not str or type(host.selection_text) is not str:
             raise _refuse("material_invalid")
@@ -386,13 +411,16 @@ class PinnedSelectionSource:
             raise _refuse("snapshot_pin_mismatch", "host-supplied snapshot differs from the pin")
         context = common.ExpectedContext(*profile.context)
         verdict = vsel.verify_f4_selection_v2(host.selection_text, host.record_text, context, trust, self._verifier, _now(profile),
-                                              min_trust_snapshot_version=profile.pin_version, last_accepted_snapshot=None)
+                                              min_trust_snapshot_version=profile.pin_version,
+                                              last_accepted_snapshot=None if txn is None else txn.last_accepted)
         if verdict.admitted is not True:
             raise _refuse("registry_not_applied", verdict.detail, verdict.code)
         if verdict.trust_snapshot_fingerprint != fingerprint:
             raise _refuse("snapshot_pin_mismatch", "verdict fingerprint differs from the pin")
         if verdict.epoch_floor_applied is not True:
             raise _refuse("epoch_floor_missing", "no per-selection epoch floor in the pinned snapshot")
+        if txn is not None:
+            txn.commit(verdict, host.selection_text, trust)
         return SelectionMaterial(host.record_text, host.selection_text, trust)
 
 
