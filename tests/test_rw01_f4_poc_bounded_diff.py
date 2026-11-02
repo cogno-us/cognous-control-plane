@@ -235,3 +235,12 @@ def test_e1_exactly_the_authorized_source_inventory_is_new_or_changed():
     byte-pinned: they are the implementation). This test pins that bounded.py is the ONLY protected evaluator edited and that the F4 consumer module is byte-unchanged."""
     assert (SRC / "selection_evidence.py").is_file()
     assert blob_id((SRC / "registry_f4_age_governance.py").read_bytes()) == PROTECTED_BLOBS_AT_B19C47DD["registry_f4_age_governance.py"]
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------------------- addendum: a SEVENTH pin
+def test_e1_addendum_the_seventh_pinned_assertion_found_in_test_f5_class_age_governance_keeps_its_old_value():
+    """`tests/test_f5_class_age_governance.py` (PROTECTED['bounded.py']) also pinned bounded.py; it was not in the Phase-0 list of six. Re-pinned the same way; needs ratification."""
+    text = (ROOT / "tests/test_f5_class_age_governance.py").read_text(encoding="utf-8")
+    assert re.search(rf'^BOUNDED_SHA256_BEFORE_RW01_F4_POC = "{OLD_SHA256}"', text, re.M)
+    assert re.search(rf'^BOUNDED_SHA256_RW01_F4_POC = "{NEW_SHA256}"', text, re.M)
+    assert text.count(OLD_SHA256) == 1 and text.count(NEW_SHA256) == 1
