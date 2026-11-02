@@ -1006,8 +1006,11 @@ def test_n04_the_module_excludes_clock_tolerance_other_families_and_every_other_
 
 #: sha256 of the protected evaluator modules and of the unchanged F4 consumer at Control Plane main 673ef092cf083b235b2c99e3cd4a6ad8361f2973. Computed from bytes (no git history), so it
 #: runs in shallow CI. A change to any of them in this increment fails the test.
+# RW-01-F4-PoC E-1 ADDENDUM (a SEVENTH pinned assertion, not in the Phase-0 list of six; needs Architect ratification): bounded.py gained 6 added lines, 0 removed (tests/test_rw01_f4_poc_bounded_diff.py). The OLD pin is kept as a named constant.
+BOUNDED_SHA256_BEFORE_RW01_F4_POC = "c219f8825a8ddf9da1fe6771ae575af0a9069ac8a04eadd40f093a9adb13655b"  # OLD pin (CP b19c47dd)
+BOUNDED_SHA256_RW01_F4_POC = "4052ff87bfc90d3a4092ee690969354cd58769a9b542c4e5d1fa74ce821856ae"  # NEW pin: exact sha256 of the edited bounded.py
 PROTECTED = {
-    "bounded.py": "c219f8825a8ddf9da1fe6771ae575af0a9069ac8a04eadd40f093a9adb13655b",
+    "bounded.py": BOUNDED_SHA256_RW01_F4_POC,  # was BOUNDED_SHA256_BEFORE_RW01_F4_POC
     # D-07 Option A (Architect-authorized 2026-10-29): the ONLY protected-file change; previous pin a4b4ac36cca6e75d8fc3408b8738163acfb609a7265633aec2f799700ff9ea66 (CP main b7eb11a / #94 061a986).
     # D-07 head fb24ed0 pinned ad7b95e5d3bc3ddcba110a6758cf63e7f22b537766d3d072cbc7af17385bce01; re-pinned after a comment-only prose correction (code tokens identical).
     "runtime_authority.py": "45a27db8695ff9d23516e1937f3bafa2391bbc1587ed0fb09f56ea8f3e01d23f",

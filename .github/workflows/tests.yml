@@ -57,7 +57,7 @@ jobs:
             git -C registry-pin rev-parse HEAD
             test "$(git -C registry-pin rev-parse HEAD)" = "6f600ab1150f00ef3d96834159b1807e866a78b6"
             python -c "import nacl, sys; print('pynacl', nacl.__version__, sys.version.split()[0])"
-            pytest -q tests/test_f4_age_governance.py --junitxml=f4-age-junit.xml
+            pytest -q tests/test_f4_age_governance.py tests/test_f4_selection_evidence.py --junitxml=f4-age-junit.xml
             python - <<'PY'
           import xml.etree.ElementTree as ET
           suite = ET.parse("f4-age-junit.xml").getroot()

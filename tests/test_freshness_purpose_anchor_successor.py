@@ -258,8 +258,11 @@ def test_refusal_codes_across_the_grid_are_registered_in_the_frozen_vocabulary()
 
 
 # ------------------------------------------------------------------------------------------------ the only protected-file change
+# RW-01-F4-PoC E-1 (Architect-authorized 2026-11-02, narrow edit of bounded.py: +6 lines, 0 removed; see tests/test_rw01_f4_poc_bounded_diff.py). The OLD pin is kept as a named constant.
+BOUNDED_SHA256_BEFORE_RW01_F4_POC = "c219f8825a8ddf9da1fe6771ae575af0a9069ac8a04eadd40f093a9adb13655b"  # OLD pin (CP b19c47dd)
+BOUNDED_SHA256_RW01_F4_POC = "4052ff87bfc90d3a4092ee690969354cd58769a9b542c4e5d1fa74ce821856ae"  # NEW pin: exact sha256 of the edited bounded.py
 HASHES = {  # bytes of the protected evaluators; ONLY runtime_authority.py differs from CP main b7eb11a / CP #94 061a986
-    "bounded.py": "c219f8825a8ddf9da1fe6771ae575af0a9069ac8a04eadd40f093a9adb13655b",
+    "bounded.py": BOUNDED_SHA256_RW01_F4_POC,  # was BOUNDED_SHA256_BEFORE_RW01_F4_POC
     "freshness.py": "3f146ee11a3424d816c6f35ba07259833612a985901b4a96c0275395f05d51c0",
     "policy_binding.py": "defdfac5fd60cf5be707a76204a12513f2f289b0620ec56d063b56dac4081a35",
     "rule_revision.py": "a3833f49e96db52e0665b9816daee2654f74f7784faad5101252b4c8722415a5",
