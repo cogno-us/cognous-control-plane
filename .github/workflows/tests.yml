@@ -147,14 +147,14 @@ jobs:
           set -o pipefail
           {
             test "$(git -C registry-pin-cap rev-parse HEAD)" = "7de0ec9f8471c7a2ff630eb4035fa24d60b5e2eb"
-            pytest -q tests/test_registry_authority_profile.py --junitxml=cap-profile-junit.xml
+            pytest -q tests/test_registry_authority_profile.py tests/test_registry_authority_state.py --junitxml=cap-profile-junit.xml
             python - <<'PY'
           import xml.etree.ElementTree as ET
           suite = ET.parse("cap-profile-junit.xml").getroot()
           suite = suite if suite.tag == "testsuite" else suite[0]
           n, skipped, failed = int(suite.get("tests")), int(suite.get("skipped")), int(suite.get("failures")) + int(suite.get("errors"))
           print(f"cap profile tests: {n} run, {skipped} skipped, {failed} failed")
-          assert skipped == 0 and failed == 0 and n >= 48, "authority-profile tests were skipped or did not run"
+          assert skipped == 0 and failed == 0 and n >= 94, "authority-profile tests were skipped or did not run"
           PY
           } 2>&1 | tee cap-profile-out.txt || {
             echo "::error title=CAP authority-profile tests failed::$(tail -n 40 cap-profile-out.txt | sed ':a;N;$!ba;s/\n/%0A/g')"

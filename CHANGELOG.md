@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Added — durable restart-safe freshness state `ocs-cap-freshness-state/1` for the F4 authority profile (CAP v0.1 G2; BUILDER_TESTED; SYNTHETIC only; operational trust NOT established)
+- New `registry_authority_state.py`: with `state.backend = "file-g2"` the profile wrapper holds one exclusive `flock` across read -> Registry verify (with the stored snapshot as `last_accepted_snapshot`) -> kit `advance`/`guard` -> fsync + `os.replace`, wrapping the unchanged Registry `ocs-conformance-state/1`. Missing, corrupt, foreign or locked stores refuse; refusals never write; cold start is only an explicit one-shot `ocs-cap-bootstrap/1`. `none-g1` keeps the G1 stateless behavior as an explicit owner choice, never a fallback. Limit: a privileged writer can replace the whole store (G3). See `docs/registry-authority-profile.md`.
+
 ### Added — configurable Registry authority profile `ocs-authority-profile/0.1` for the F4 selection source (CAP v0.1 G1; BUILDER_TESTED; claim A only; NO durable anti-rollback until G2)
 - New module `registry_authority_profile.py`: a closed strict-JSON configuration (mode `synthetic` | `operational`, public trust anchor, issuers/grants, expected context, pinned snapshot, clock), a `selection_source` wrapper that re-reads the pinned snapshot per call, requires fingerprint and declaration equality, runs all eleven Registry layers via `verify_f4_selection_v2` with the exact `Ed25519Verifier`, refuses `epoch_floor_missing`, and a `governed_age_workflow` factory. Operational mode fails closed (placeholders, fixed instant, missing owner digest, and in G1 the absence of durable state). No pinned Control Plane file is edited. See `docs/registry-authority-profile.md`.
 
