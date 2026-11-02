@@ -30,6 +30,7 @@ from .runtime_authority import (RuntimeAuthorityProfile, VOCABULARY_VERSION_0_2,
 from .atomic_write import open_private_lock
 from .manifest_validation import manifest_errors
 from .strict_json import dumps_bytes, strict_loads
+from .selection_evidence import SelectionEvidence
 from .time_instant import TIME_INSTANT_NAIVE, InstantError, parse_instant
 from .rule_revision import RuleRevision, RuleRevisionProfile, RuleRevisionRefusal, resolve_rule, rule_identity
 from .operation_identity import (
@@ -356,6 +357,7 @@ class RuntimeDecision(BaseModel):
     operation_horizon: OperationHorizon | None = None
     binding: TenantAuthorizationBinding | AuthorizationBinding | None = None
     resolution_inputs: list[ResolutionInput] = Field(default_factory=list)
+    selection_evidence: SelectionEvidence | None = Field(default=None, exclude_if=lambda v: v is None)  # RW-01-F4-PoC E-1: top-level, outside `binding`, read by no gate
 
 
 class EffectAttempt(BaseModel):
@@ -1626,6 +1628,9 @@ class BoundedAuthorizationWorkflow:
                if self._merge_profile is not None else {}),
             recorded_at=self._write_time(now), time_source=self.time_source, **self._eval_stamp(now)))
 
+    def _decision_selection_evidence(self, reasons: list[str]) -> SelectionEvidence | None:  # RW-01-F4-PoC E-1 hook; governed lifecycles override
+        return None
+
     def decide(self, proposal: RuntimeProposal, *, now: datetime | None = None) -> RuntimeDecision:
         self._require_reaper_alive()
         now = self._evaluation_time(now)
@@ -1655,6 +1660,7 @@ class BoundedAuthorizationWorkflow:
             reopen_conditions=(reopen_conditions(reasons, inputs) if self.runtime_authority_profile else []),
             binding=binding if not reasons else None,
             resolution_inputs=inputs,
+            selection_evidence=self._decision_selection_evidence(reasons),
         )
         self.records.append_decision(decision)
         return decision

@@ -1,8 +1,8 @@
 """Shared lifecycle of the Registry-governed bounded-authorization workflows (F4 ages, F5 class status age, F5 per-class unreadable policy, and the composed workflow).
 
 BUILDER_TESTED developer implementation. NOT independently qualified. NOT an authorization mechanism and NOT a policy language: this module holds ONLY the lifecycle that the
-three governed workflows previously duplicated. It decides nothing about policy: every family keeps its own validators, composer and refusal vocabulary, and `bounded.py`,
-`runtime_authority.py`, `freshness.py`, `policy_binding.py` and every evaluator are unchanged.
+three governed workflows previously duplicated. It decides nothing about policy: every family keeps its own validators, composer and refusal vocabulary, and `runtime_authority.py`,
+`freshness.py`, `policy_binding.py` and every evaluator are unchanged; `bounded.py` has ONE narrow Architect-authorized edit (RW-01-F4-PoC E-1: an optional `selection_evidence` member and one hook).
 
 What is shared (and was identical, modulo names, in the three workflows):
   * the host-fixed `GovernedScope`, the raw `SelectionMaterial`, the closed `Refusal`, the base `RegistrySelectionRefused` and the transparent `_GatedDestination` (re-exported by
@@ -27,12 +27,14 @@ from datetime import datetime
 from typing import Any, Callable, Mapping, Optional
 
 from agent_control_plane import effective_configuration_binding as ecb
+from agent_control_plane import selection_evidence as _evidence
 from agent_control_plane.bounded import BoundedAuthorizationWorkflow, DefinitiveDestinationRejection, TenantRuntimeProposal
 
 CLASSIFICATION = "BUILDER_TESTED; not independently qualified; non-authorizing"
 SCALAR_MAX = 2147483647
 _EXEC_NOW: contextvars.ContextVar = contextvars.ContextVar("registry_governed_execute_now", default=None)
 _EXEC_DECISION: contextvars.ContextVar = contextvars.ContextVar("registry_governed_execute_decision", default=None)
+_DECISION_EVIDENCE: contextvars.ContextVar = contextvars.ContextVar("registry_governed_decision_selection_evidence", default=None)
 BINDING_CHANGED = "authorization_binding_changed"  # the REGISTERED durable reason (runtime-authority-reasons/0.3); this module introduces no reason code
 
 
@@ -170,6 +172,34 @@ class GovernedLifecycle(BoundedAuthorizationWorkflow):
     _gl_rejection_code: str = "registry_governed_selection_invalid"
     _gl_legacy_cutoff: int = 0  # explicit host-supplied finite int; 0 = no legacy decision is accepted (set by a family that binds its configuration)
     _gl_last_binding_status: Optional[str] = None  # evidence of the latest classification (not durable, not authority)
+    _gl_carry: bool = False  # RW-01-F4-PoC: opt-in carriage of the verified selection bytes on authorized decisions (host construction choice; not authority, not in the effective configuration)
+
+    def __init__(self, *args: Any, carry_selection_evidence: bool = False, **kwargs: Any):
+        if type(carry_selection_evidence) is not bool:
+            raise self._gl_error(Refusal("selection_evidence_flag_invalid"), "construction")
+        if carry_selection_evidence and not self._gl_carriage_supported():
+            raise self._gl_error(Refusal("selection_evidence_unsupported"), "construction")
+        super().__init__(*args, **kwargs)
+        self._gl_carry = carry_selection_evidence
+
+    def _gl_carriage_supported(self) -> bool:
+        """Carriage is defined for the F4 ages family only (contract r08-v2, family f4-control-plane-age-bounds); every other governed workflow refuses the flag."""
+        from agent_control_plane.registry_f4_age_governance import GovernedAgeWorkflow  # lazy: the F4 module imports this one
+        return isinstance(self, GovernedAgeWorkflow)
+
+    def _gl_selection_evidence(self, materials: Any, verified_at: datetime, boundary: str) -> Any:
+        """The carried evidence for ONE decision, built from the SAME `materials` that `_gl_reverify` just verified (no second source read). None unless carriage is on."""
+        if not self._gl_carry:
+            return None
+        try:
+            return _evidence.for_f4(record_text=materials.record_text, selection_text=materials.selection_text, operation_id=self._gl_scope.operation_id,
+                                    verified_at=verified_at)
+        except Exception:  # SelectionEvidenceRefused or an unexpected shape: one closed code, raised before any write
+            raise self._gl_error(Refusal("selection_evidence_unrepresentable"), boundary) from None
+
+    def _decision_selection_evidence(self, reasons: list[str]) -> Any:
+        """Base-class hook (bounded.py E-1): carried only on an authorized decision (no reasons); a hold or deny carries nothing."""
+        return None if reasons else _DECISION_EVIDENCE.get()
 
     def _gl_attach(self, *, scope: GovernedScope, authority: Any, bound: Any) -> None:
         self._gl_scope, self._gl_authority, self._gl_bound = scope, authority, bound
@@ -294,13 +324,13 @@ class GovernedLifecycle(BoundedAuthorizationWorkflow):
     def _gl_refuse(self, code: str, boundary: str) -> Exception:
         return self._gl_error(Refusal(code), boundary)
 
-    def _gl_revalidate(self, proposal: Any, boundary: str, now: datetime) -> None:
+    def _gl_revalidate(self, proposal: Any, boundary: str, now: datetime) -> Any:
         scope = self._gl_scope
         if not isinstance(proposal, TenantRuntimeProposal) or proposal.tenant_id != scope.tenant_id or proposal.action_id != scope.action_id:
             raise self._gl_refuse("proposal_out_of_scope", boundary)
-        self._gl_reverify(boundary, now)
+        return self._gl_reverify(boundary, now)
 
-    def _gl_reverify(self, boundary: str, now: datetime) -> None:
+    def _gl_reverify(self, boundary: str, now: datetime) -> Any:
         code = self._gl_held_defect()
         if code is not None:
             raise self._gl_refuse(code, boundary)
@@ -314,6 +344,7 @@ class GovernedLifecycle(BoundedAuthorizationWorkflow):
         code = self._gl_held_defect()  # LAST: nothing between this check and the caller's next step runs Registry source code
         if code is not None:
             raise self._gl_refuse(code, boundary)
+        return materials  # verified material (derivation raised on any refusal); only `decide` uses it, to carry the exact verified bytes
 
     def _gl_commit_gate(self) -> None:
         """Last Registry check before `destination.apply`. Clock: the execute-entry time under a test clock, else the real clock."""
@@ -324,8 +355,13 @@ class GovernedLifecycle(BoundedAuthorizationWorkflow):
             raise DefinitiveDestinationRejection(self._gl_rejection_code) from None
 
     def decide(self, proposal, *, now=None):
-        self._gl_revalidate(proposal, "decision", self._evaluation_time(now))
-        return super().decide(proposal, now=now)
+        verified_at = self._evaluation_time(now)
+        materials = self._gl_revalidate(proposal, "decision", verified_at)
+        token = _DECISION_EVIDENCE.set(self._gl_selection_evidence(materials, verified_at, "decision"))  # built BEFORE any store write
+        try:
+            return super().decide(proposal, now=now)
+        finally:
+            _DECISION_EVIDENCE.reset(token)
 
     def execute(self, proposal, decision, *, adapter_id, now=None, lose_ack=False, partial=False):
         entry_time = self._evaluation_time(now)

@@ -790,8 +790,11 @@ def test_z02_the_three_existing_workflows_keep_their_public_surface(tmp_path):
                                                                                    "registry_f5_unreadable_selection_invalid")
 
 
+# RW-01-F4-PoC E-1 (Architect-authorized 2026-11-02, narrow edit of bounded.py: +6 lines, 0 removed; see tests/test_rw01_f4_poc_bounded_diff.py). The OLD pin is kept as a named constant.
+BOUNDED_SHA256_BEFORE_RW01_F4_POC = "c219f8825a8ddf9da1fe6771ae575af0a9069ac8a04eadd40f093a9adb13655b"  # OLD pin (CP b19c47dd)
+BOUNDED_SHA256_RW01_F4_POC = "4052ff87bfc90d3a4092ee690969354cd58769a9b542c4e5d1fa74ce821856ae"  # NEW pin: exact sha256 of the edited bounded.py
 PROTECTED = {  # byte pins of the protected evaluators (identical to Control Plane ae47a04) and of the consolidated governance modules
-    "bounded.py": "c219f8825a8ddf9da1fe6771ae575af0a9069ac8a04eadd40f093a9adb13655b",
+    "bounded.py": BOUNDED_SHA256_RW01_F4_POC,  # was BOUNDED_SHA256_BEFORE_RW01_F4_POC
     # D-07 Option A (Architect-authorized 2026-10-29): the ONLY protected-file change. Previous pin (CP main b7eb11a, CP #94 061a986):
     # a4b4ac36cca6e75d8fc3408b8738163acfb609a7265633aec2f799700ff9ea66. The other five pins below are unchanged
     # (tests/test_freshness_purpose_anchor_successor.py::test_d07_only_runtime_authority_changed_among_the_protected_evaluators).

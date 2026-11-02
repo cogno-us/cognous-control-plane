@@ -619,10 +619,16 @@ def test_s01_module_excludes_clock_tolerance_and_other_families():
 BOUNDED_SHA256_AT_D66AE07 = "c219f8825a8ddf9da1fe6771ae575af0a9069ac8a04eadd40f093a9adb13655b"  # sha256 of src/agent_control_plane/bounded.py at d66ae07fa240510efdcc11ed4b3e1189dcefc822 (no git history needed, so it runs in shallow CI)
 
 
+# RW-01-F4-PoC E-1 (Architect-authorized 2026-11-02, narrow): bounded.py gained 6 added lines (SelectionEvidence import, one optional RuntimeDecision member, one hook, one call keyword); see tests/test_rw01_f4_poc_bounded_diff.py
+BOUNDED_SHA256_RW01_F4_POC = "4052ff87bfc90d3a4092ee690969354cd58769a9b542c4e5d1fa74ce821856ae"  # sha256 of bounded.py after the E-1 edit; BOUNDED_SHA256_AT_D66AE07 above is the OLD pin and is kept (the reverse-applied edit must reproduce it: test_rw01_f4_poc_bounded_diff.py)
+
+
 def test_s02_bounded_module_is_unmodified_by_this_increment():
+    """Exact byte pin of bounded.py. After RW-01-F4-PoC E-1 the pin is the NEW hash; the OLD one stays as a named constant (not weakened to a prefix or any-hash match)."""
     import hashlib
     text = (Path(__file__).resolve().parent.parent / "src/agent_control_plane/bounded.py").read_bytes()
-    assert hashlib.sha256(text).hexdigest() == BOUNDED_SHA256_AT_D66AE07
+    assert hashlib.sha256(text).hexdigest() == BOUNDED_SHA256_RW01_F4_POC
+    assert BOUNDED_SHA256_RW01_F4_POC != BOUNDED_SHA256_AT_D66AE07
 
 
 def test_d01_defence_in_depth_refuses_a_registry_result_wider_than_the_host(tmp_path, monkeypatch):

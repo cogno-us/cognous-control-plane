@@ -1433,8 +1433,11 @@ def test_n10_the_module_governs_one_field_only_and_excludes_every_other_paramete
 # protected files: the evaluators, the F4 consumer and the M12 class-age consumer are unmodified by this increment
 # Consolidation (shared governed lifecycle): the F4 and F5 class-age consumers are deliberately re-based on registry_governed_lifecycle.py; their pins are the consolidated hashes
 # (were 50cccf5f / 9f765492 at Control Plane 5f11e0f). The protected evaluators below are byte-identical to that baseline.
+# RW-01-F4-PoC E-1 (Architect-authorized 2026-11-02, narrow edit of bounded.py: +6 lines, 0 removed; see tests/test_rw01_f4_poc_bounded_diff.py). The OLD pin is kept as a named constant.
+BOUNDED_SHA256_BEFORE_RW01_F4_POC = "c219f8825a8ddf9da1fe6771ae575af0a9069ac8a04eadd40f093a9adb13655b"  # OLD pin (CP b19c47dd)
+BOUNDED_SHA256_RW01_F4_POC = "4052ff87bfc90d3a4092ee690969354cd58769a9b542c4e5d1fa74ce821856ae"  # NEW pin: exact sha256 of the edited bounded.py
 PROTECTED = {
-    "bounded.py": "c219f8825a8ddf9da1fe6771ae575af0a9069ac8a04eadd40f093a9adb13655b",
+    "bounded.py": BOUNDED_SHA256_RW01_F4_POC,  # was BOUNDED_SHA256_BEFORE_RW01_F4_POC
     # D-07 Option A (Architect-authorized 2026-10-29): the ONLY protected-file change; previous pin a4b4ac36cca6e75d8fc3408b8738163acfb609a7265633aec2f799700ff9ea66 (CP main b7eb11a / #94 061a986).
     # D-07 head fb24ed0 pinned ad7b95e5d3bc3ddcba110a6758cf63e7f22b537766d3d072cbc7af17385bce01; re-pinned after a comment-only prose correction (code tokens identical).
     "runtime_authority.py": "45a27db8695ff9d23516e1937f3bafa2391bbc1587ed0fb09f56ea8f3e01d23f",
