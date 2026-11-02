@@ -18,8 +18,8 @@ Bootstrap. `ocs-cap-bootstrap/1` (`bootstrap_id, namespace, authority_digest, is
 `bootstrap_state`, which creates the store EXCLUSIVELY with an EMPTY kit state and records a consumed-id ledger next to it. A missing store is never created implicitly.
 
 HONEST LIMITS (not claimed solved): (1) local file integrity (a digest) detects accidental or partial corruption, NOT an attacker who can replace or roll back the whole store directory,
-or delete the store together with its consumed ledger and replay a still-valid bootstrap; protection against a privileged state-store writer needs an independently anchored monotonic
-store (G3 operational responsibility, `anchor_reference`). (2) Floors advance only when a selection is ADMITTED; a snapshot whose only effect would be a revocation of a refused selection does not
+or simply create a fresh EMPTY store by hand (neither a valid bootstrap nor the ledger is needed; the ledger only stops accidental reuse of one id), or edit the profile to `none-g1` when no `expected_config_digest` is supplied; protection against a privileged state-store writer needs an independently anchored monotonic
+store (G3 operational responsibility, `anchor_reference`). (2) Floors advance only when a selection is ADMITTED, so a newer pinned snapshot whose only effect is to revoke the selection is not recorded and re-pinning the older snapshot afterwards re-admits it; a snapshot whose only effect would be a revocation of a refused selection does not
 by itself advance the store. (3) One host, one filesystem with working `flock`/`os.replace`; no distributed state. (4) Continued/effect-time authority is out of scope.
 """
 from __future__ import annotations
@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from agent_control_plane.atomic_write import write_bytes_atomic
-from agent_control_plane.registry_authority_profile import AuthorityProfile, _refuse, _secret_deny
+from agent_control_plane.registry_authority_profile import AuthorityProfile, _refuse, _secret_deny, require_backend
 from agent_control_plane.strict_json import strict_loads
 
 STATE_SCHEMA = "ocs-cap-freshness-state/1"
@@ -93,12 +93,23 @@ def _acquire(profile: AuthorityProfile) -> int:
     while True:
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            return fd
+            locked = True
         except OSError:
-            if time.monotonic() >= deadline:
-                os.close(fd)
-                raise _refuse("state_lock_failed", "state lock not acquired in time") from None
-            time.sleep(0.01)
+            locked = False
+        if locked:
+            try:  # the lock file must still be the file we locked (an unlinked lock would admit a second holder)
+                same = os.fstat(fd).st_ino == os.stat(_lock_path(profile)).st_ino
+            except OSError:
+                same = False
+            if same:
+                return fd
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
+            raise _refuse("state_lock_failed", "lock file was replaced while locking")
+        if time.monotonic() >= deadline:
+            os.close(fd)
+            raise _refuse("state_lock_failed", "state lock not acquired in time")
+        time.sleep(0.01)
 
 
 def _read_envelope(profile: AuthorityProfile) -> dict:
@@ -143,7 +154,7 @@ class Transaction:
     """Holds the exclusive lock and the state read at open. `commit` is the ONLY writer; closing without commit never writes."""
 
     def __init__(self, profile: AuthorityProfile, now: Any, fd: int, env: dict):
-        self._profile, self._fd, self._env, self._now = profile, fd, env, int(now.timestamp())
+        self._profile, self._fd, self._env, self._now_src = profile, fd, env, now
         snap = env["state"].get("snapshot")
         self.last_accepted = None if snap is None else (snap["version"], snap["fingerprint"])
         self.generation = env["generation"]
@@ -159,12 +170,20 @@ class Transaction:
 
     def commit(self, verdict: Any, selection_text: str, trust: Any) -> None:
         kit = _kit()
-        profile, env, now = self._profile, self._env, self._now
+        profile, env = self._profile, self._env
+        vsel = importlib.import_module("registry_successor.v2_verified_selection")
+        if type(verdict) is not vsel.VerifiedSelectionV2 or verdict.admitted is not True or verdict.epoch_floor_applied is not True or type(selection_text) is not str:
+            raise _refuse("freshness_refused", "only an admitted Registry verdict with an applied epoch floor can be committed", "verdict_not_admitted")
+        now = int((self._now_src() if callable(self._now_src) else self._now_src).timestamp())  # read AFTER the lock was taken
         try:
             from agent_control_plane.registry_authority_profile import _registry
             parsed = importlib.import_module("registry_successor.v2_selection").parse_selection_envelope_v2(selection_text)
             stmt = parsed.statement
-            key_id = next(k for (iss, k, _g) in profile.declared_issuers if iss == verdict.issuer_id)
+            if parsed.statement_digest != verdict.selection_digest or len(parsed.signatures) != 1:
+                raise ValueError("selection text differs from the admitted verdict")
+            key_id = parsed.signatures[0]["key_id"]
+            if not any(iss == verdict.issuer_id and k == key_id for (iss, k, _g) in profile.declared_issuers):
+                raise ValueError("signing key is not declared for the admitted issuer")
             scope = {"selection_id": verdict.selection_id, "consumer_id": verdict.consumer_id, "tenant": verdict.scope[0], "institution": verdict.scope[1],
                      "authority_domain": verdict.scope[2], "operation": verdict.operation, "family": verdict.family}
             norm = _registry()[1].trust_snapshot_from_verified(trust)
@@ -208,7 +227,7 @@ class Transaction:
 
 def open_transaction(profile: AuthorityProfile, now: Any) -> Transaction:
     """Acquire the lock and read the store, or refuse (`state_missing`, `state_corrupt`, `state_authority_mismatch`, `state_lock_failed`). Never creates a store."""
-    if profile.mode != "synthetic" or profile.state_backend != "file-g2" or not profile.state_path:
+    if profile.mode != "synthetic" or require_backend(profile) != "file-g2" or not profile.state_path:
         raise _refuse("authority_config_unprovisioned", "durable state is available only for a loader-validated synthetic file-g2 profile")
     fd = _acquire(profile)
     try:
@@ -222,6 +241,8 @@ def open_transaction(profile: AuthorityProfile, now: Any) -> Transaction:
 
 def read_state(profile: AuthorityProfile) -> dict:
     """Read-only inspection (takes the lock briefly). Returns a deep copy of the verified envelope."""
+    if profile.mode != "synthetic" or require_backend(profile) != "file-g2" or not profile.state_path:
+        raise _refuse("authority_config_unprovisioned", "state is available only for a loader-validated synthetic file-g2 profile")
     fd = _acquire(profile)
     try:
         return copy.deepcopy(_read_envelope(profile))
@@ -232,7 +253,7 @@ def read_state(profile: AuthorityProfile) -> dict:
 
 def bootstrap_state(profile: AuthorityProfile, bootstrap_path: Any, now: Any) -> dict:
     """Owner-run, one-shot cold start. Creates the store EXCLUSIVELY with an empty kit state. Refuses an expired, malformed, foreign or already consumed bootstrap and any existing store."""
-    if profile.mode != "synthetic" or profile.state_backend != "file-g2" or not profile.state_path:
+    if profile.mode != "synthetic" or require_backend(profile) != "file-g2" or not profile.state_path:
         raise _refuse("authority_config_unprovisioned", "bootstrap is available only for a loader-validated synthetic file-g2 profile")
     try:
         data = Path(bootstrap_path).read_bytes()[: 65537]

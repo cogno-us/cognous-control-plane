@@ -344,6 +344,15 @@ def _require_g1_mode(profile: AuthorityProfile) -> None:
         raise _refuse("authority_config_unprovisioned", "only a loader-validated synthetic profile is activatable in G1 (operational needs durable state, G2)")
 
 
+def require_backend(profile: AuthorityProfile) -> str:
+    """The state backend must be exactly a known one AND equal the validated configuration's declaration; anything else (replaced, typo, None) refuses instead of running stateless."""
+    backend = profile.state_backend
+    declared = profile.config.get("state", {}).get("backend") if isinstance(profile.config, Mapping) else None
+    if backend not in STATE_BACKENDS or backend != declared:
+        raise _refuse("authority_config_unprovisioned", "state backend is not a loader-validated none-g1 or file-g2")
+    return backend
+
+
 def _now(profile: AuthorityProfile) -> datetime:
     _require_g1_mode(profile)
     if profile.clock_kind == "fixed_instant":
@@ -359,6 +368,7 @@ class PinnedSelectionSource:
         if not isinstance(profile, AuthorityProfile) or not callable(host_source):
             raise _refuse("authority_factory_argument_refused", "profile and a callable host source are required")
         _require_g1_mode(profile)
+        require_backend(profile)
         self._profile, self._host, self._verifier = profile, host_source, verifier
         self._expected_mode, self._expected_digest = expected_mode, expected_config_digest
         self.last_refusal: Optional[Refusal] = None
@@ -389,9 +399,9 @@ class PinnedSelectionSource:
             raise _refuse("verifier_unavailable", "verifier is not the exact Registry Ed25519Verifier")
         trust, fingerprint = load_pinned_trust(profile)
         txn = None
-        if profile.state_backend == "file-g2":  # one lock spans read -> verify -> advance; a missing/corrupt/mismatched store refuses here
+        if require_backend(profile) == "file-g2":  # one lock spans read -> verify -> advance; a missing/corrupt/mismatched store refuses here
             from agent_control_plane import registry_authority_state as state_mod
-            txn = state_mod.open_transaction(profile, _now(profile))
+            txn = state_mod.open_transaction(profile, lambda: _now(profile))
         try:
             return self._admit_locked(profile, trust, fingerprint, txn)
         finally:
@@ -439,6 +449,7 @@ def governed_age_workflow(profile: AuthorityProfile, *, host_source: Callable[[]
     if profile.mode == "operational" and workflow_kwargs.get("allow_test_time"):
         raise _refuse("authority_factory_argument_refused", "allow_test_time is not available in operational mode")
     _require_g1_mode(profile)
+    require_backend(profile)
     if (scope.consumer_id, scope.tenant_id, scope.operation_id) != (profile.context[0], profile.context[1], profile.context[4]):
         raise _refuse("authority_config_scope_mismatch", "scope differs from expected_context")
     ed = _registry()[4]

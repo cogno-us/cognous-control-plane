@@ -457,3 +457,56 @@ if __name__ == "__main__":
         print("ok")
     except cap.AuthorityProfileRefusal as e:
         print(f"refused:{e.code}" + (f":{e.refusal.registry_code}" if e.refusal.registry_code else ""))
+
+
+@pytest.mark.parametrize("backend", ["none-g1", "FILE-G2", "", "file-g3", None])
+def test_m1_a_replaced_or_unknown_backend_cannot_downgrade_to_stateless(tmp_path, backend):
+    import dataclasses
+    env = env_g2(tmp_path)
+    boot(env)
+    m1 = sel(env, 1)
+    admit(env, m1)
+    admit(env, sel(env, 2, prior=(1, digest_of(m1))))
+    bad = dataclasses.replace(env.profile, state_backend=backend)
+    for call in (lambda: cap.PinnedSelectionSource(bad, Source(sel(env, 1)), ev.Ed25519Verifier(), expected_mode="synthetic"),
+                 lambda: cap.governed_age_workflow(bad, host_source=Source(sel(env, 1)), scope=SCOPE, expected_mode="synthetic"),
+                 lambda: st_mod.open_transaction(bad, cap._now(bad)), lambda: st_mod.read_state(bad)):
+        with pytest.raises(cap.AuthorityProfileRefusal) as e:
+            call()
+        assert e.value.code == "authority_config_unprovisioned"
+
+
+def test_m2_commit_refuses_a_duck_typed_or_unadmitted_verdict(tmp_path):
+    from types import SimpleNamespace
+    env = env_g2(tmp_path)
+    boot(env)
+    before = state_bytes(env)
+    txn = st_mod.open_transaction(env.profile, cap._now(env.profile))
+    try:
+        with pytest.raises(cap.AuthorityProfileRefusal) as e:
+            txn.commit(SimpleNamespace(admitted=False, epoch=1000, epoch_floor_applied=True), sel(env, 1).selection_text, env.trust)
+        assert e.value.code == "freshness_refused"
+    finally:
+        txn.close()
+    assert state_bytes(env) == before
+
+
+def test_m3_the_recorded_issuer_key_is_the_signing_key_not_the_first_declared_key(tmp_path):
+    env = env_g2(tmp_path)
+    boot(env)
+    admit(env, sel(env, 1))
+    row = next(iter(st_mod.read_state(env.profile)["state"]["rows"].values()))
+    assert row["issuer_key_id"] == "key-test-1" and row["issuer_id"] == "issuer-test-1"
+
+
+def test_n1_a_replaced_lock_file_is_refused(tmp_path, monkeypatch):
+    env = env_g2(tmp_path)
+    boot(env)
+    real = os.stat
+    lock = st_mod._lock_path(env.profile)
+    fake = os.stat(env.profile.state_path)
+
+    def stat(path, *a, **k):
+        return fake if str(path) == lock else real(path, *a, **k)
+    monkeypatch.setattr(os, "stat", stat)
+    assert refusal(env, sel(env, 1)).code == "state_lock_failed"
