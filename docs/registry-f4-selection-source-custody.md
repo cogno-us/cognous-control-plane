@@ -17,3 +17,5 @@ The workflow calls the host-supplied `selection_source()` four times per authori
 
 ## Residual window (not closed)
 The commit gate runs immediately BEFORE the delegated `destination.apply` is entered, not inside the destination's own transaction. A revocation that lands during the delegated call itself is seen only at the next boundary. Closing it requires the destination to expose a transaction hook for a Registry check, which no existing Control Plane interface provides.
+
+See also `docs/registry-authority-profile.md` (CAP v0.1 G1): a configurable, pinned authority profile that wraps the selection source; custody duties for freshness and rollback remain with the host until G2.
