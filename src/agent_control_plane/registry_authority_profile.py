@@ -45,11 +45,12 @@ CODES = (
     "snapshot_pin_mismatch", "epoch_floor_missing", "verifier_unavailable", "authority_factory_argument_refused",
 )
 
-_TOKEN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
-_SHA = re.compile(r"^sha256:[0-9a-f]{64}$")
+_TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
+_SHA = re.compile(r"sha256:[0-9a-f]{64}")
 _SECRET_KEY = re.compile(r"(private|secret|seed|passw|credential|signing)", re.IGNORECASE)
-_BARE_HEX = re.compile(r"^(?:[0-9a-fA-F]{64}|[0-9a-fA-F]{128})$")
-_BASE64_KEY = re.compile(r"^(?:[A-Za-z0-9+/]{43}=|[A-Za-z0-9+/]{86}==)$")
+_HEX_RUN = re.compile(r"[0-9a-fA-F]{64,}")
+_B64_KEY = re.compile(r"(?:[A-Za-z0-9+/_-]{43}=?|[A-Za-z0-9+/_-]{86}(?:==?)?)")
+_SHA_VALUE = re.compile(r"sha256:[0-9a-f]{64}")
 _PLACEHOLDER = re.compile(r"(?<![A-Za-z0-9])(unselected|placeholder|unprovisioned|changeme|replace[-_]?me|todo|tbd|example|dummy|fixme)(?![A-Za-z0-9])", re.IGNORECASE)
 _GRANT = ("consumer_id", "tenant", "institution", "authority_domain", "operation")
 
@@ -75,7 +76,7 @@ def _closed(obj: Any, members: tuple, where: str) -> dict:
 
 
 def _tok(v: Any, where: str) -> str:
-    if type(v) is not str or not _TOKEN.match(v):
+    if type(v) is not str or not _TOKEN.fullmatch(v):
         raise _refuse("authority_config_malformed", f"{where}: not a token")
     return v
 
@@ -98,12 +99,26 @@ def _walk(value: Any, path: str = ""):
         yield path, None, value
 
 
+def _key_shaped(text: str) -> bool:
+    if "-----BEGIN" in text:
+        return True
+    stripped = text.strip()
+    rest = _SHA_VALUE.sub("", stripped)  # a labelled digest is public data
+    squeezed = re.sub(r"[\s:_-]", "", rest.lower())
+    for prefix in ("0x", "ed25519"):
+        if squeezed.startswith(prefix):
+            squeezed = squeezed[len(prefix):]
+    if _HEX_RUN.search(squeezed) or _HEX_RUN.search(rest):
+        return True
+    return bool(_B64_KEY.fullmatch(rest.strip()))
+
+
 def _secret_deny(config: Any) -> None:
     """Refuse any member name or string value that looks like private/secret key material. Applies in BOTH modes."""
     for path, key, text in _walk(config):
         if key is not None and _SECRET_KEY.search(key):
             raise _refuse("authority_config_secret_material", f"member name at {path}")
-        if text is not None and ("-----BEGIN" in text or _BARE_HEX.match(text) or _BASE64_KEY.match(text)):
+        if text is not None and _key_shaped(text):
             raise _refuse("authority_config_secret_material", f"key-shaped value at {path}")
 
 
@@ -111,6 +126,11 @@ def _placeholder_deny(config: Any) -> None:
     for path, _key, text in _walk(config):
         if text is not None and _PLACEHOLDER.search(text):
             raise _refuse("authority_config_unprovisioned", f"placeholder at {path}")
+
+
+def _read_bounded(path: Path, limit: int) -> bytes:
+    with open(path, "rb") as fh:
+        return fh.read(limit + 1)
 
 
 def _digest(data: bytes) -> str:
@@ -145,8 +165,12 @@ def _parse_clock(clock: Any, mode: str) -> tuple:
     _closed(clock, ("kind", "as_of"), "clock")
     if mode == "operational":
         raise _refuse("authority_config_unprovisioned", "operational clock must be system_utc")
-    if type(clock["as_of"]) is not str or not re.match(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$", clock["as_of"]):
-        raise _refuse("authority_config_malformed", "clock.as_of")
+    try:
+        if type(clock["as_of"]) is not str or not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", clock["as_of"]):
+            raise ValueError
+        datetime.strptime(clock["as_of"], "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
+        raise _refuse("authority_config_malformed", "clock.as_of") from None
     return "fixed_instant", clock["as_of"]
 
 
@@ -156,7 +180,7 @@ def load_authority_profile(config_path: Any, *, expected_mode: Any = None, expec
         raise _refuse("authority_config_mode_mismatch", "expected_mode is required and must be synthetic or operational")
     try:
         path = Path(config_path)
-        data = path.read_bytes()
+        data = _read_bounded(path, MAX_CONFIG_BYTES)
     except Exception:
         raise _refuse("authority_config_missing", "configuration file unreadable") from None
     if len(data) > MAX_CONFIG_BYTES:
@@ -191,7 +215,7 @@ def load_authority_profile(config_path: Any, *, expected_mode: Any = None, expec
     keys = []
     for k in _nonempty_list(anchor["keys"], "trust_anchor.keys"):
         _closed(k, ("key_id", "public_key_sha256"), "trust_anchor.keys[]")
-        if type(k["public_key_sha256"]) is not str or not _SHA.match(k["public_key_sha256"]):
+        if type(k["public_key_sha256"]) is not str or not _SHA.fullmatch(k["public_key_sha256"]):
             raise _refuse("authority_config_malformed", "public_key_sha256 must be sha256:<64 hex>")
         keys.append((_tok(k["key_id"], "key_id"), k["public_key_sha256"]))
     if len({k[0] for k in keys}) != len(keys):
@@ -222,7 +246,7 @@ def load_authority_profile(config_path: Any, *, expected_mode: Any = None, expec
         raise _refuse("authority_config_malformed", "snapshot.source must be a file reference")
     if type(expected["version"]) is not int or isinstance(expected["version"], bool) or expected["version"] < 1:
         raise _refuse("authority_config_malformed", "snapshot.expected.version")
-    if type(expected["fingerprint"]) is not str or not _SHA.match(expected["fingerprint"]):
+    if type(expected["fingerprint"]) is not str or not _SHA.fullmatch(expected["fingerprint"]):
         raise _refuse("authority_config_malformed", "snapshot.expected.fingerprint")
     state = _closed(config["state"], ("backend", "namespace", "reference", "anchor_reference"), "state")
     ident = _closed(config["identities"], ("snapshot_publisher_ref", "enforcing_operator_ref", "state_admin_ref"), "identities")
@@ -262,7 +286,7 @@ def load_pinned_trust(profile: AuthorityProfile):
     issuers, keys and grants EQUAL the declared ones. Never cached; never reads host-supplied trust."""
     verify, ident, _common, _vsel, _ed = _registry()
     try:
-        data = Path(profile.snapshot_path).read_bytes()
+        data = _read_bounded(Path(profile.snapshot_path), MAX_SNAPSHOT_BYTES)
     except Exception:
         raise _refuse("authority_config_missing", "pinned snapshot file unreadable") from None
     if len(data) > MAX_SNAPSHOT_BYTES:
@@ -300,7 +324,15 @@ def load_pinned_trust(profile: AuthorityProfile):
     return trust, fingerprint
 
 
+def _require_g1_mode(profile: AuthorityProfile) -> None:
+    """The loader is not the only way to hold an `AuthorityProfile`; the wrapper, factory and Replay helper re-check the mode so a hand-built or `replace`d profile cannot reach
+    an operational path. In G1 only `synthetic` is activatable."""
+    if not isinstance(profile, AuthorityProfile) or profile.mode != "synthetic":
+        raise _refuse("authority_config_unprovisioned", "only a loader-validated synthetic profile is activatable in G1 (operational needs durable state, G2)")
+
+
 def _now(profile: AuthorityProfile) -> datetime:
+    _require_g1_mode(profile)
     if profile.clock_kind == "fixed_instant":
         return datetime.strptime(profile.as_of, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
     return datetime.now(timezone.utc)
@@ -313,6 +345,7 @@ class PinnedSelectionSource:
     def __init__(self, profile: AuthorityProfile, host_source: Callable[[], Any], verifier: Any, *, expected_mode: Any, expected_config_digest: Any = None):
         if not isinstance(profile, AuthorityProfile) or not callable(host_source):
             raise _refuse("authority_factory_argument_refused", "profile and a callable host source are required")
+        _require_g1_mode(profile)
         self._profile, self._host, self._verifier = profile, host_source, verifier
         self._expected_mode, self._expected_digest = expected_mode, expected_config_digest
         self.last_refusal: Optional[Refusal] = None
@@ -320,10 +353,14 @@ class PinnedSelectionSource:
 
     def __call__(self) -> SelectionMaterial:
         self.reads += 1
+        self.last_refusal = None
         try:
             material = self._admit()
         except AuthorityProfileRefusal as e:
             self.last_refusal = e.refusal
+            raise
+        except BaseException:
+            self.last_refusal = Refusal("selection_source_failed")
             raise
         self.last_refusal = None
         return material
@@ -366,13 +403,14 @@ _FORBIDDEN_KW = ("selection_source", "verifier")
 def governed_age_workflow(profile: AuthorityProfile, *, host_source: Callable[[], Any], scope: GovernedScope, expected_mode: Any, expected_config_digest: Any = None,
                           **workflow_kwargs):
     """Build a `GovernedAgeWorkflow` whose `selection_source` is the pinned wrapper and whose verifier is the exact Registry `Ed25519Verifier`. The caller cannot supply
-    either, and in operational mode cannot enable test time. Sets read-only `cap_authority_mode`, `cap_authority_id` and `cap_selection_source` on the workflow."""
+    either, and in operational mode cannot enable test time. Sets advisory (NOT tamper-proof) `cap_authority_mode`, `cap_authority_id` and `cap_selection_source` attributes on the workflow."""
     from agent_control_plane.registry_f4_age_governance import GovernedAgeWorkflow
     for name in _FORBIDDEN_KW:
         if name in workflow_kwargs:
             raise _refuse("authority_factory_argument_refused", f"{name} is supplied by the profile")
     if profile.mode == "operational" and workflow_kwargs.get("allow_test_time"):
         raise _refuse("authority_factory_argument_refused", "allow_test_time is not available in operational mode")
+    _require_g1_mode(profile)
     if (scope.consumer_id, scope.tenant_id, scope.operation_id) != (profile.context[0], profile.context[1], profile.context[4]):
         raise _refuse("authority_config_scope_mismatch", "scope differs from expected_context")
     ed = _registry()[4]
@@ -396,6 +434,7 @@ def governed_age_workflow(profile: AuthorityProfile, *, host_source: Callable[[]
 def replay_trust_kwargs(profile: AuthorityProfile) -> dict:
     """Operator-side trust inputs for a stateless Replay admission, derived from the configuration and the pinned snapshot ONLY (never from decision data). Keys use
     Replay's `RegistryEvidenceTrust` field names; the operator adds the verifier, action/operation ids, host ages and revisions. Control Plane never imports Replay."""
+    _require_g1_mode(profile)
     trust, fingerprint = load_pinned_trust(profile)
     consumer, tenant, institution, domain, operation = profile.context
     return {"trust_snapshot": trust, "trust_snapshot_ref": (profile.pin_snapshot_id, profile.pin_version),

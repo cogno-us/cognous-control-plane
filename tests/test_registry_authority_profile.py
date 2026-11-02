@@ -451,3 +451,53 @@ def test_n4_unsigned_or_wrongly_signed_selection_is_not_admitted(tmp_path, verif
 
 def test_module_text_carries_no_forbidden_scanner_marker():
     assert "on_" + "unreadable" not in Path(cap.__file__).read_text()
+
+
+def test_m1_a_hand_built_operational_profile_cannot_reach_wrapper_factory_or_replay_helper(tmp_path):
+    env = Env(tmp_path)
+    src = Source(host_material(env.trust))
+    op = dataclasses.replace(env.profile, mode="operational")
+    for call in (lambda: cap.PinnedSelectionSource(op, src, ev.Ed25519Verifier(), expected_mode="operational"),
+                 lambda: cap.governed_age_workflow(op, host_source=src, scope=SCOPE, expected_mode="operational"),
+                 lambda: cap.replay_trust_kwargs(op)):
+        with pytest.raises(cap.AuthorityProfileRefusal) as e:
+            call()
+        assert refusal_code(e) == "authority_config_unprovisioned"
+
+
+@pytest.mark.parametrize("value", [base64.b64encode(bytes(range(32))).decode().rstrip("="), base64.urlsafe_b64encode(bytes(range(64))).decode(),
+                                   "0x" + "ab" * 32, "ed25519:" + "ab" * 32, ":".join(["ab"] * 32), "key is " + "ab" * 32, " " + "ab" * 32 + " "])
+def test_m1_secret_shapes_in_free_strings_are_refused(tmp_path, value):
+    env = Env(tmp_path)
+    cfg = copy.deepcopy(env.config)
+    cfg["state"]["reference"] = value
+    env.config_path.write_text(json.dumps(cfg))
+    with pytest.raises(cap.AuthorityProfileRefusal) as e:
+        cap.load_authority_profile(env.config_path, expected_mode="synthetic")
+    assert refusal_code(e) == "authority_config_secret_material"
+
+
+def test_m2_trailing_newline_and_impossible_instant_are_malformed(tmp_path):
+    env = Env(tmp_path)
+    for mutate in (lambda c_: c_.update(id="cap-id\n"), lambda c_: c_["clock"].update(as_of="2026-13-45T99:99:99Z")):
+        cfg = copy.deepcopy(env.config)
+        mutate(cfg)
+        env.config_path.write_text(json.dumps(cfg))
+        with pytest.raises(cap.AuthorityProfileRefusal) as e:
+            cap.load_authority_profile(env.config_path, expected_mode="synthetic")
+        assert refusal_code(e) == "authority_config_malformed"
+
+
+def test_m3_last_refusal_is_cleared_per_call_and_set_on_host_failure(tmp_path):
+    env = Env(tmp_path)
+    good = Source(host_material(env.trust))
+    w = cap.PinnedSelectionSource(env.profile, good, ev.Ed25519Verifier(), expected_mode="synthetic")
+    w()
+    assert w.last_refusal is None
+
+    def boom():
+        raise RuntimeError("down")
+    w._host = boom
+    with pytest.raises(RuntimeError):
+        w()
+    assert w.last_refusal.code == "selection_source_failed"

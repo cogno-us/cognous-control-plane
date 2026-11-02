@@ -21,3 +21,5 @@ Fails closed: placeholders, `UNSELECTED` identities, fixed instants, a missing o
 
 ## Limits
 No state: a replayed older snapshot or selection that still satisfies the pin is not detected across processes (G2). Hosts that do not build workflows through `governed_age_workflow` bypass the profile (operational responsibility). Replay stays stateless and unedited; its fixed claim note ("synthetic keys") is not changed here (G3 gate). `replay_trust_kwargs` and `check_replay_markers` are pure helpers; Control Plane never imports Replay.
+
+The `cap_*` workflow attributes are advisory markers, not tamper-proof; a host that mutates workflow internals after construction bypasses the profile (host trust boundary). Wrapper, factory and Replay helper accept only a loader-validated `synthetic` profile in G1.
