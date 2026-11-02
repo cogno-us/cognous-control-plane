@@ -130,6 +130,37 @@ jobs:
             exit 1
           }
 
+      # CAP v0.1 G1 (configurable Registry authority profile): needs Registry 7de0ec9f (contains verify_f4_selection_v2), a THIRD checkout; no existing step is touched.
+      # Same rules: missing/wrong pin or missing PyNaCl is a FAILURE (OCS_REQUIRE_REGISTRY_PIN=1) and the junit gate fails on any skip or fewer tests than expected.
+      - name: Check out the Registry at the CAP v0.1 pin
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: cogno-us/cognous-ocs-registry
+          ref: 7de0ec9f8471c7a2ff630eb4035fa24d60b5e2eb
+          path: registry-pin-cap
+
+      - name: Run the authority-profile tests (must not skip)
+        env:
+          OCS_CAP_REGISTRY_DIR: ${{ github.workspace }}/registry-pin-cap
+          OCS_REQUIRE_REGISTRY_PIN: "1"
+        run: |
+          set -o pipefail
+          {
+            test "$(git -C registry-pin-cap rev-parse HEAD)" = "7de0ec9f8471c7a2ff630eb4035fa24d60b5e2eb"
+            pytest -q tests/test_registry_authority_profile.py --junitxml=cap-profile-junit.xml
+            python - <<'PY'
+          import xml.etree.ElementTree as ET
+          suite = ET.parse("cap-profile-junit.xml").getroot()
+          suite = suite if suite.tag == "testsuite" else suite[0]
+          n, skipped, failed = int(suite.get("tests")), int(suite.get("skipped")), int(suite.get("failures")) + int(suite.get("errors"))
+          print(f"cap profile tests: {n} run, {skipped} skipped, {failed} failed")
+          assert skipped == 0 and failed == 0 and n >= 48, "authority-profile tests were skipped or did not run"
+          PY
+          } 2>&1 | tee cap-profile-out.txt || {
+            echo "::error title=CAP authority-profile tests failed::$(tail -n 40 cap-profile-out.txt | sed ':a;N;$!ba;s/\n/%0A/g')"
+            exit 1
+          }
+
       # Composed governed policy workflow (F4 + F5 class age + F5 on_unreadable, shared lifecycle consolidation). Reuses the r08-v5 Registry checkout above (no new pin); same rules:
       # missing/wrong pin or missing PyNaCl is a FAILURE and the junit gate fails on any skip or fewer tests than expected.
       - name: Run the composed Registry-governed policy tests (must not skip)

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Added — configurable Registry authority profile `ocs-authority-profile/0.1` for the F4 selection source (CAP v0.1 G1; BUILDER_TESTED; claim A only; NO durable anti-rollback until G2)
+- New module `registry_authority_profile.py`: a closed strict-JSON configuration (mode `synthetic` | `operational`, public trust anchor, issuers/grants, expected context, pinned snapshot, clock), a `selection_source` wrapper that re-reads the pinned snapshot per call, requires fingerprint and declaration equality, runs all eleven Registry layers via `verify_f4_selection_v2` with the exact `Ed25519Verifier`, refuses `epoch_floor_missing`, and a `governed_age_workflow` factory. Operational mode fails closed (placeholders, fixed instant, missing owner digest, and in G1 the absence of durable state). No pinned Control Plane file is edited. See `docs/registry-authority-profile.md`.
+
 ### Documentation — F3 final closeout (2026-10-30; no behavior change)
 - Clarified in `docs/authorization-pin-export.md` and `docs/effective-configuration-binding.md` that pin export and claim issuance keep the existing resolution-check journaling (a data-dependent number of `check_events` records plus one `ResolutionCheck` row; per-input `input_time_floors` may advance), which is non-authorizing and creates no `EffectTimeRefusal` obligation on read-only paths. Added status notes: original F3-A FAIL and successor conditional technical PASS remain separate; formal independent acceptance NOT ESTABLISHED; D-07 entered `main` through #97.
 
