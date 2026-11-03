@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from typing import TYPE_CHECKING, Protocol
 
 from agent_control_plane.models import PolicyDecision, ToolExecutionResult
@@ -31,11 +32,14 @@ def execute_with_control(
 ) -> tuple[PolicyDecision, ToolExecutionResult | None]:
     """Propose, evaluate, and optionally execute an action through a tool adapter."""
 
+    # R1-A: one private deep snapshot of the caller's payload, taken before anything else runs. The recorded proposal, the policy
+    # evaluation and the adapter call all derive from it; the caller's (possibly nested, mutable) dict is never read again.
+    snapshot_payload = copy.deepcopy(payload) if payload else {}
     action = recorder.propose_action(
         tool_name=tool_name,
         action_type=action_type,
         target=target,
-        payload=payload or {},
+        payload=snapshot_payload,
         reason=reason,
     )
     decision, _blocked = recorder.evaluate_action(action)
@@ -68,8 +72,9 @@ def execute_with_control(
             ),
         )
 
-    frozen_payload = dict(payload or {})
-    frozen_target = str(target)
+    # Execute exactly the recorded/evaluated proposal (detached copy; the adapter cannot alias the recorded state either).
+    frozen_payload = copy.deepcopy(action.payload)
+    frozen_target = str(action.target)
 
     try:
         result = adapter.execute(frozen_target, frozen_payload)
@@ -88,7 +93,7 @@ def execute_with_control(
     recorder.record_reliance(
         source_name=tool_name,
         source_type="tool",
-        scope=f"Executed {action_type} on {target}",
+        scope=f"Executed {action_type} on {action.target}",
         referenced_action_id=action.action_id,
     )
     return (

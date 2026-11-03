@@ -5,6 +5,7 @@ is an additional restriction surface; it never grants Cognous authority.
 """
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal, Mapping, Protocol
@@ -213,6 +214,11 @@ class MicrosoftAgtPreToolCallAdapter:
         snapshot: Mapping[str, Any] | None = None,
         now: datetime | None = None,
     ) -> MicrosoftAgtCompatibilityResult:
+        # R1-A: one private deep snapshot, taken synchronously before the first await. The original commitment, the arguments given to
+        # AGT, the Cognous authorization, the binding check and the returned proposal all derive from it; the caller's proposal
+        # (nested payload included) is never read again, so mutation during the awaited backend call cannot change any of them.
+        proposal = proposal.model_copy(deep=True)
+        snapshot = copy.deepcopy(dict(snapshot)) if snapshot else None
         # The tenant is an opaque exact string: never trimmed or case-folded (a padded tenant is passed on, and compared, as given).
         tenant = tenant_id if isinstance(tenant_id, str) and tenant_id.strip() else ""
         original_commitment = commitment(
@@ -264,7 +270,7 @@ class MicrosoftAgtPreToolCallAdapter:
             agt = await self._backend.evaluate_pre_tool_call(
                 tenant_id=tenant,
                 tool_name=tool_name,
-                arguments=proposal.payload,
+                arguments=copy.deepcopy(proposal.payload),
                 tool_call_id=tool_call_id,
                 snapshot=snapshot or {},
             )
@@ -358,7 +364,7 @@ class MicrosoftAgtPreToolCallAdapter:
         # never allowed to reuse authorization for the pre-transform commitment.
         try:
             cognous = self._authority.authorize(
-                proposal=effective,
+                proposal=effective.model_copy(deep=True),  # the authority gets its own copy: it cannot alter the snapshot
                 tenant_id=tenant,
                 now=now,
             )
@@ -376,9 +382,9 @@ class MicrosoftAgtPreToolCallAdapter:
                 reasons=(f"cognous_evaluation_error:{type(exc).__name__}",),
             )
 
-        if transformed and cognous.result == "authorized" and not self._binding_fixes(cognous.binding, effective):
-            # An authorization of a transformed proposal must carry a decision binding that fixes the new (transformed) proposal and
-            # payload commitments; a missing, stale or foreign binding does not.
+        if cognous.result == "authorized" and not self._binding_fixes(cognous.binding, effective):
+            # An authorization must carry a decision binding that fixes the snapshot's (or, after a transform, the transformed)
+            # proposal and payload commitments; a missing, stale or foreign binding does not.
             return self._finish(
                 result="hold",
                 tenant_id=tenant,
@@ -389,7 +395,7 @@ class MicrosoftAgtPreToolCallAdapter:
                 proposal=effective,
                 cognous=cognous,
                 transformed=transformed,
-                reasons=("transform_authorization_unbound",),
+                reasons=("transform_authorization_unbound" if transformed else "authorization_unbound",),
             )
 
         if cognous.result != "authorized":
@@ -444,6 +450,8 @@ class MicrosoftAgtPreToolCallAdapter:
         transformed: bool,
         reasons: tuple[str, ...],
     ) -> MicrosoftAgtCompatibilityResult:
+        if proposal is not None:
+            proposal = proposal.model_copy(deep=True)  # the returned proposal never aliases the private snapshot or the caller
         effective_commitment = (
             commitment(proposal.model_dump(mode="json", exclude_none=False))
             if proposal is not None
