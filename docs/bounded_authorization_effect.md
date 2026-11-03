@@ -212,20 +212,31 @@ cannot establish tenant equality, so it holds with `tenant_proposal_required`
 when any of those inputs carries a `tenant_id`; 0.1 behaviour is unchanged when
 no tenant is involved.
 
-Evidence status is tenant-bound only when the resolver supplies the optional
-`EvidenceStatus.tenant_id`. When present on a tenant-aware proposal it must equal
-the proposal's tenant (otherwise `evidence_binding_mismatch`), and a tenantless
-0.1 proposal refuses tenant-bearing evidence (`tenant_proposal_required`). The
-field is omitted from dumps while unset, so tenantless evidence is unchanged.
-Compatibility limit: evidence that carries no `tenant_id` is still accepted for
-a tenant-aware proposal, so if tenants share an institution/domain and reuse
-obligation or source identifiers, tenantless evidence from one tenant can satisfy
-another tenant's obligation unless the trusted resolver returns only the
-evaluating tenant's evidence. Deployment rule: where the engine keys evidence by
-obligation id alone, use one engine database per tenant, or tenant-unique obligation
-ids. The opt-in runtime-authority profile's evidence
-statements (Ed25519-verified against host-admitted producer keys; attribution, not validator correctness) include
-`tenant_id` and are compared with the Authority Context tenant.
+Tenant-binding generations (persisted per decision). A tenant-aware decision is made under exactly one of two generations, named in
+`TenantAuthorizationBinding.generation` and persisted with the decision:
+
+| Generation | Constant | Evidence rule for a `TenantRuntimeProposal` |
+|---|---|---|
+| strict (default for a newly constructed workflow) | `TENANT_GENERATION_STRICT` = `bounded-authorization-effect/0.3-strict-tenant` | `EvidenceStatus.tenant_id` must equal `proposal.tenant_id` exactly (exact `str` type and value: no padding, case folding or `str` subclass). `None` is never a wildcard. Mismatch or tenantless: `evidence_binding_mismatch`. If a signed validation record participates, its signed `tenant_id` must equal the proposal tenant exactly as well. |
+| legacy (explicit, deprecated for tenant-aware use) | `TENANT_GENERATION_LEGACY` = `bounded-authorization-effect/0.2` | Unchanged 0.2 semantics: evidence that names a tenant must match; evidence that carries no `tenant_id` is still accepted. |
+
+Select legacy only by passing `tenant_binding_generation=TENANT_GENERATION_LEGACY` to `BoundedAuthorizationWorkflow` (and subclasses). The
+parameter governs NEW decisions only. Effect-time revalidation, claim issuance and pin assessment evaluate a persisted decision under the
+generation stored in its binding: a legacy decision is never re-judged strict and a strict decision is never re-judged legacy, whatever
+the workflow object is configured with. A decision presented with a different generation than the persisted one is refused as not the
+immutable persisted decision; for strict decisions the generation is part of the effect identity (`effect_id`), so a flip inside the store
+is refused as an invalid effect identity. Legacy effect identities are byte-identical to before. Tenantless (0.1) proposals are not affected.
+
+Legacy compatibility limit (why it is deprecated for tenant-aware use): evidence that carries no `tenant_id` is accepted for a
+tenant-aware proposal, so if tenants share an institution/domain and reuse obligation or source identifiers, tenantless evidence from one
+tenant can satisfy another tenant's obligation unless the trusted resolver returns only the evaluating tenant's evidence. Under legacy,
+keep the deployment rule: where the engine keys evidence by obligation id alone, use one engine database per tenant, or tenant-unique
+obligation ids. The strict generation does not change the Execution Runtime or its stores (an engine that keys evidence by obligation id
+alone still needs the per-tenant database rule; strict only refuses evidence status that does not name the proposal tenant). Under both
+generations a tenantless 0.1 proposal refuses tenant-bearing evidence (`tenant_proposal_required`). The local-execution claim schema is
+unchanged (`authorization_generation` stays `bounded-authorization-effect/0.2`); a strict decision's claim differs only in the `effect_id`
+value. The opt-in runtime-authority profile's evidence statements (Ed25519-verified against host-admitted producer keys; attribution, not
+validator correctness) include `tenant_id` and are compared with the Authority Context tenant, which a tenant-aware proposal must already equal.
 
 Grant, policy, conflict, identity, mandate and approval observations use explicit maximum
 ages. Required evidence uses its Authority Context max_age_seconds. All observed_at values

@@ -621,14 +621,16 @@ BOUNDED_SHA256_AT_D66AE07 = "c219f8825a8ddf9da1fe6771ae575af0a9069ac8a04eadd40f0
 
 # RW-01-F4-PoC E-1 (Architect-authorized 2026-11-02, narrow): bounded.py gained 6 added lines (SelectionEvidence import, one optional RuntimeDecision member, one hook, one call keyword); see tests/test_rw01_f4_poc_bounded_diff.py
 BOUNDED_SHA256_RW01_F4_POC = "4052ff87bfc90d3a4092ee690969354cd58769a9b542c4e5d1fa74ce821856ae"  # sha256 of bounded.py after the E-1 edit; BOUNDED_SHA256_AT_D66AE07 above is the OLD pin and is kept (the reverse-applied edit must reproduce it: test_rw01_f4_poc_bounded_diff.py)
+# P1 CP-2 (Architect-authorized strict tenant-binding generation, csf_4a764c7437e3bd47679c7b44): bounded.py re-pinned deliberately; the E-1 pin above is kept as history (tests/test_rw01_f4_poc_bounded_diff.py proves CP-2 is exactly the listed hunks over it)
+BOUNDED_SHA256_CP2_STRICT_TENANT = "1b4a5f8fc6d64723da8f60cfe495736f4a92acb593e88787643fb9cba5f376ba"  # sha256 of bounded.py with the strict tenant-binding generation
 
 
 def test_s02_bounded_module_is_unmodified_by_this_increment():
     """Exact byte pin of bounded.py. After RW-01-F4-PoC E-1 the pin is the NEW hash; the OLD one stays as a named constant (not weakened to a prefix or any-hash match)."""
     import hashlib
     text = (Path(__file__).resolve().parent.parent / "src/agent_control_plane/bounded.py").read_bytes()
-    assert hashlib.sha256(text).hexdigest() == BOUNDED_SHA256_RW01_F4_POC
-    assert BOUNDED_SHA256_RW01_F4_POC != BOUNDED_SHA256_AT_D66AE07
+    assert hashlib.sha256(text).hexdigest() == BOUNDED_SHA256_CP2_STRICT_TENANT
+    assert len({BOUNDED_SHA256_CP2_STRICT_TENANT, BOUNDED_SHA256_RW01_F4_POC, BOUNDED_SHA256_AT_D66AE07}) == 3
 
 
 def test_d01_defence_in_depth_refuses_a_registry_result_wider_than_the_host(tmp_path, monkeypatch):

@@ -1009,8 +1009,10 @@ def test_n04_the_module_excludes_clock_tolerance_other_families_and_every_other_
 # RW-01-F4-PoC E-1 ADDENDUM (a SEVENTH pinned assertion, not in the Phase-0 list of six; needs Architect ratification): bounded.py gained 6 added lines, 0 removed (tests/test_rw01_f4_poc_bounded_diff.py). The OLD pin is kept as a named constant.
 BOUNDED_SHA256_BEFORE_RW01_F4_POC = "c219f8825a8ddf9da1fe6771ae575af0a9069ac8a04eadd40f093a9adb13655b"  # OLD pin (CP b19c47dd)
 BOUNDED_SHA256_RW01_F4_POC = "4052ff87bfc90d3a4092ee690969354cd58769a9b542c4e5d1fa74ce821856ae"  # NEW pin: exact sha256 of the edited bounded.py
+# P1 CP-2 (Architect-authorized strict tenant-binding generation, csf_4a764c7437e3bd47679c7b44): bounded.py re-pinned deliberately; the E-1 pin above is kept as history (tests/test_rw01_f4_poc_bounded_diff.py proves CP-2 is exactly the listed hunks over it)
+BOUNDED_SHA256_CP2_STRICT_TENANT = "1b4a5f8fc6d64723da8f60cfe495736f4a92acb593e88787643fb9cba5f376ba"  # sha256 of bounded.py with the strict tenant-binding generation
 PROTECTED = {
-    "bounded.py": BOUNDED_SHA256_RW01_F4_POC,  # was BOUNDED_SHA256_BEFORE_RW01_F4_POC
+    "bounded.py": BOUNDED_SHA256_CP2_STRICT_TENANT,  # was BOUNDED_SHA256_RW01_F4_POC (E-1), before that BOUNDED_SHA256_BEFORE_RW01_F4_POC
     # D-07 Option A (Architect-authorized 2026-10-29): the ONLY protected-file change; previous pin a4b4ac36cca6e75d8fc3408b8738163acfb609a7265633aec2f799700ff9ea66 (CP main b7eb11a / #94 061a986).
     # D-07 head fb24ed0 pinned ad7b95e5d3bc3ddcba110a6758cf63e7f22b537766d3d072cbc7af17385bce01; re-pinned after a comment-only prose correction (code tokens identical).
     "runtime_authority.py": "45a27db8695ff9d23516e1937f3bafa2391bbc1587ed0fb09f56ea8f3e01d23f",

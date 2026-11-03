@@ -10,6 +10,8 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from agent_control_plane.bounded import (
+    TENANT_GENERATION_LEGACY,
+    TENANT_GENERATION_STRICT,
     ApprovalStatus,
     AuthorizationBinding,
     BoundedAuthorizationWorkflow,
@@ -340,10 +342,11 @@ def resolver_for(p, *, tier="T1", with_grant=True, delegated=False):
     )
 
 
-def workflow(tmp_path, p, *, tier="T1", resolver=None):
+def workflow(tmp_path, p, *, tier="T1", resolver=None, **extra):
     resolver = resolver or resolver_for(p, tier=tier)
     return BoundedAuthorizationWorkflow(
         allow_test_time=True,
+        **extra,
         manifest=manifest(),
         resolver=resolver,
         destination=LocalRefundDestination(tmp_path / "destination.json"),
@@ -1256,7 +1259,10 @@ def tenant_proposal(tenant_id=TENANT):
     )
 
 
-def tenant_resolver_for(p, *, tenant_id=TENANT):
+def tenant_resolver_for(p, *, tenant_id=TENANT, evidence_tenant="same"):
+    """Tenant fixture. Strict generation (the default for new tenant-aware workflows) requires the evidence to carry the proposal
+    tenant, so the synthetic tenant is carried explicitly in every evidence status. ``evidence_tenant=None`` builds the historical
+    tenantless-evidence fixture (legacy 0.2 only)."""
     r = resolver_for(p)
     ctx = r.contexts[PROFILE]
     ctx["tenant_id"] = tenant_id
@@ -1266,6 +1272,8 @@ def tenant_resolver_for(p, *, tenant_id=TENANT):
     approval_ref = grant["approval_refs"][0]
     r.approvals[approval_ref].tenant_id = tenant_id
     r.policies[POLICY_REF].tenant_id = tenant_id
+    for ev in r.evidence.values():
+        ev.tenant_id = tenant_id if evidence_tenant == "same" else evidence_tenant
     return r
 
 
@@ -1283,7 +1291,7 @@ def test_tenant_v02_valid_refund_executes_and_persists_tenant_binding(tmp_path):
     decision = flow.decide(p, now=NOW)
     assert decision.result == "authorized", decision.reasons
     assert isinstance(decision.binding, TenantAuthorizationBinding)
-    assert decision.binding.generation == "bounded-authorization-effect/0.2"
+    assert decision.binding.generation == TENANT_GENERATION_STRICT  # new tenant-aware workflows default to the strict generation
     assert decision.binding.tenant_id == TENANT
 
     # Persist/reload must not collapse the v0.2 subtype into historical v0.1.
@@ -1458,7 +1466,7 @@ def _evidence_of(r):
 @pytest.mark.parametrize("evidence_tenant, tenant_aware, expect_hold", [
     ("tenant-other", True, True),
     (TENANT, True, False),
-    (None, True, False),
+    (None, True, True),  # STRICT default: tenantless evidence is not a wildcard (legacy 0.2 behaviour: test_legacy_generation_still_accepts_tenantless_evidence)
     (TENANT, False, True),
 ])
 def test_evidence_tenant_two_branch_check(tmp_path, evidence_tenant, tenant_aware, expect_hold):
@@ -1476,6 +1484,15 @@ def test_evidence_tenant_two_branch_check(tmp_path, evidence_tenant, tenant_awar
         assert "evidence_binding_mismatch" in decision.reasons or "tenant_proposal_required" in decision.reasons
     else:
         assert decision.result == "authorized", decision.reasons
+
+
+def test_legacy_generation_still_accepts_tenantless_evidence(tmp_path):
+    """Legacy bounded-authorization-effect/0.2 (explicit, deprecated for tenant-aware use) keeps its published wildcard semantics."""
+    p = tenant_proposal()
+    flow = workflow(tmp_path, p, resolver=tenant_resolver_for(p, evidence_tenant=None), tenant_binding_generation=TENANT_GENERATION_LEGACY)
+    decision = flow.decide(p, now=NOW)
+    assert decision.result == "authorized", decision.reasons
+    assert decision.binding.generation == TENANT_GENERATION_LEGACY
 
 
 def test_effect_limits_empty_dict_still_checks_max_effects(tmp_path):

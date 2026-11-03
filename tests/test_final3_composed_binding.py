@@ -329,8 +329,10 @@ def test_f02_the_registry_vectors_of_the_three_families_are_pinned():
 # RW-01-F4-PoC E-1 (Architect-authorized 2026-11-02, narrow edit of bounded.py: +6 lines, 0 removed; see tests/test_rw01_f4_poc_bounded_diff.py). The OLD pin is kept as a named constant.
 BOUNDED_SHA256_BEFORE_RW01_F4_POC = "c219f8825a8ddf9da1fe6771ae575af0a9069ac8a04eadd40f093a9adb13655b"  # OLD pin (CP b19c47dd)
 BOUNDED_SHA256_RW01_F4_POC = "4052ff87bfc90d3a4092ee690969354cd58769a9b542c4e5d1fa74ce821856ae"  # NEW pin: exact sha256 of the edited bounded.py
+# P1 CP-2 (Architect-authorized strict tenant-binding generation, csf_4a764c7437e3bd47679c7b44): bounded.py re-pinned deliberately; the E-1 pin above is kept as history (tests/test_rw01_f4_poc_bounded_diff.py proves CP-2 is exactly the listed hunks over it)
+BOUNDED_SHA256_CP2_STRICT_TENANT = "1b4a5f8fc6d64723da8f60cfe495736f4a92acb593e88787643fb9cba5f376ba"  # sha256 of bounded.py with the strict tenant-binding generation
 PROTECTED_SHA256 = {  # byte pins of the protected evaluators at the integration base 86148b6; no git is used. runtime_authority.py is the D-07 value pinned in test_governed_policy_composition.py::test_z03
-    "bounded.py": BOUNDED_SHA256_RW01_F4_POC,  # was BOUNDED_SHA256_BEFORE_RW01_F4_POC
+    "bounded.py": BOUNDED_SHA256_CP2_STRICT_TENANT,  # was BOUNDED_SHA256_RW01_F4_POC (E-1), before that BOUNDED_SHA256_BEFORE_RW01_F4_POC
     "runtime_authority.py": "45a27db8695ff9d23516e1937f3bafa2391bbc1587ed0fb09f56ea8f3e01d23f",
     "freshness.py": "3f146ee11a3424d816c6f35ba07259833612a985901b4a96c0275395f05d51c0",
     "policy_binding.py": "defdfac5fd60cf5be707a76204a12513f2f289b0620ec56d063b56dac4081a35",
