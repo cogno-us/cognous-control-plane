@@ -58,7 +58,7 @@ async def test_mutation_during_awaited_backend_call_cannot_change_what_is_evalua
     backend = MutatingBackend(caller, mutate)
     authority = RecordingAuthority("authorized")
     result = await MicrosoftAgtPreToolCallAdapter(backend=backend, authority=authority).evaluate(
-        tenant_id="tenant-alpha", proposal=caller, tool_name="refund_adapter")
+        tenant_id="tenant-alpha", proposal=caller, tool_name="urn:cognous:adapter:synthetic-refund-v1")
 
     assert _pc(caller) != original_commitment  # the mutation really happened on the caller's object
     # AGT and Cognous evaluated the same original snapshot.
@@ -79,7 +79,7 @@ async def test_caller_mutation_after_success_does_not_change_returned_proposal()
     original = caller.model_copy(deep=True)
     result = await MicrosoftAgtPreToolCallAdapter(
         backend=MutatingBackend(caller, lambda p: None), authority=FakeAuthority("authorized")
-    ).evaluate(tenant_id="tenant-alpha", proposal=caller, tool_name="refund_adapter")
+    ).evaluate(tenant_id="tenant-alpha", proposal=caller, tool_name="urn:cognous:adapter:synthetic-refund-v1")
     assert result.result == "authorized"
     caller.amount = 12345
     caller.target = "urn:attacker:target"
@@ -107,7 +107,7 @@ async def test_backend_and_authority_cannot_alias_the_snapshot_or_the_returned_p
 
     result = await MicrosoftAgtPreToolCallAdapter(
         backend=Scribbling(caller, lambda p: None), authority=ScribblingAuthority("authorized")
-    ).evaluate(tenant_id="tenant-alpha", proposal=caller, tool_name="refund_adapter")
+    ).evaluate(tenant_id="tenant-alpha", proposal=caller, tool_name="urn:cognous:adapter:synthetic-refund-v1")
     assert result.proposal == original
     assert caller == original  # the caller's own object is untouched by the backend
 
@@ -121,7 +121,7 @@ async def test_an_authorization_whose_binding_does_not_fix_the_snapshot_is_held_
                                                                                 payload_commitment=proposal.payload_commitment))
 
     result = await MicrosoftAgtPreToolCallAdapter(backend=MutatingBackend(proposal(), lambda p: None), authority=UnboundAuthority()).evaluate(
-        tenant_id="tenant-alpha", proposal=proposal(), tool_name="refund_adapter")
+        tenant_id="tenant-alpha", proposal=proposal(), tool_name="urn:cognous:adapter:synthetic-refund-v1")
     assert result.result == "hold" and result.reasons == ("authorization_unbound",)
 
 
@@ -133,6 +133,6 @@ async def test_transform_is_still_applied_to_the_snapshot_not_the_mutated_caller
     backend = MutatingBackend(caller, _mut_amount, AgtDecision(decision="transform", transformed_policy_target=changed,
                                                                transformed_policy_target_applied=True))
     result = await MicrosoftAgtPreToolCallAdapter(backend=backend, authority=FakeAuthority("authorized")).evaluate(
-        tenant_id="tenant-alpha", proposal=caller, tool_name="refund_adapter")
+        tenant_id="tenant-alpha", proposal=caller, tool_name="urn:cognous:adapter:synthetic-refund-v1")
     assert result.result == "authorized" and result.evidence.transformed is True
     assert result.proposal.amount == original.amount and result.proposal.payload == changed

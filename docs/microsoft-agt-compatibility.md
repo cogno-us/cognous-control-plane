@@ -24,17 +24,30 @@ The compatibility adapter receives a Cognous `RuntimeProposal` plus an
 explicit `tenant_id`. It sends only the bounded tool name, tool call identity,
 proposal payload and supplied snapshot to AGT `pre_tool_call`.
 
-Limit: the `tool_name` sent to AGT is supplied by the caller of
-`MicrosoftAgtPreToolCallAdapter.evaluate`. By default the adapter does not check
-it against the proposal's `action_id`, `adapter_id` or the manifest tool mapping,
-so a caller can pair a benign tool name (evaluated by AGT) with a different
-proposal (evaluated by Cognous), and AGT's tool-specific rules then apply to the
-wrong tool identity. Opt-in binding: pass `tool_bindings={adapter_id: tool_name}`
-(built from the same trusted manifest entries as the proposals) to the adapter;
-an evaluation whose proposal adapter has no entry, or whose `tool_name` differs,
-is held with reason `tool_binding_mismatch` before AGT is asked. Without
-`tool_bindings` the integration must still derive `tool_name` from the same
-trusted manifest entry as the proposal.
+Tool identity invariant (R1-A2): AGT must never evaluate a tool identity that
+differs from the proposal identity Cognous authorizes. At adapter entry, on the
+private proposal snapshot and before AGT is asked, `tool_name` and
+`proposal.adapter_id` are bound as one identity:
+
+- without `tool_bindings`, `tool_name` must equal `proposal.adapter_id` exactly
+  (no trimming, case folding or inference); otherwise the evaluation is held with
+  reason `tool_identity_unbound`;
+- with `tool_bindings={adapter_id: tool_name}` (built from the same trusted
+  manifest entries as the proposals), the exact entry for `proposal.adapter_id`
+  must equal `tool_name`; a missing entry or any difference is held with reason
+  `tool_binding_mismatch`, and the adapter_id is not accepted as an alias;
+- a missing, empty or non-string `tool_name` or `adapter_id` is held with
+  `tool_identity_unbound`;
+- a transform replaces only the payload; if the effective proposal's `adapter_id`
+  differs from the bound one the evaluation is held with
+  `transform_identity_changed` and Cognous is not asked;
+- the bound `adapter_id` is recorded as `evidence.bound_adapter_id`, so the AGT
+  decision (`evidence.tool_name`) and the Cognous authorization (the effective
+  proposal) are tied to the same identity.
+
+All holds occur before AGT and Cognous are called. Callers must supply a
+`tool_bindings` map built from trusted configuration when the external AGT tool
+name differs from the adapter ID.
 
 Cognous remains authoritative for:
 - exact tenant;
@@ -57,7 +70,8 @@ The adapter recalculates `payload_commitment` and invokes Cognous authority
 again on the transformed proposal. Authorization for the original proposal is
 never reused.
 
-This is intentionally conservative. A transform that changes target, action,
+This is intentionally conservative. A transform cannot change the adapter
+identity bound at entry (held as `transform_identity_changed`). A transform that changes target, action,
 tool/adapter identity, tenant, amount, permissions, or other commitment-bearing
 fields is unsupported by this profile and must be represented as a new Cognous
 proposal by the caller, followed by fresh authorization.

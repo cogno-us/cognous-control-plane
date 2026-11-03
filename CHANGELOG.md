@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Fixed — AGT tool identity bound to the proposal adapter (R1-A2; Codex csf_4e1e796e81b0407be8a54206)
+- `MicrosoftAgtPreToolCallAdapter.evaluate` now establishes one tool identity on the private snapshot before AGT is asked: without `tool_bindings` `tool_name` must equal `proposal.adapter_id` exactly (hold `tool_identity_unbound`); with `tool_bindings={adapter_id: tool_name}` the exact entry must equal `tool_name` (missing or different: hold `tool_binding_mismatch`); a transform whose effective proposal carries another `adapter_id` is held (`transform_identity_changed`). New `MicrosoftAgtCompatibilityEvidence.bound_adapter_id` (defaulted field). Behaviour change: callers that pass an AGT tool name different from the adapter_id must now supply `tool_bindings`. Existing AGT tests that passed `refund_adapter` unbound now pass the adapter_id (no assertion weakened). Tests: `tests/test_r1a2_agt_tool_identity.py`. See `docs/microsoft-agt-compatibility.md`.
+
 ### Fixed — private immutable proposal snapshot in the AGT adapter, `execute_with_control` and the local-authority-effect claim path (R1-A; Codex csf_c7e3b3a6ffe782a80a860b30, csf_157f0532e46704d37e3f35e9, csf_da0ba5306958df9dd957f0a4)
 - `MicrosoftAgtPreToolCallAdapter.evaluate` takes one deep snapshot of the proposal before its first await; the AGT arguments (detached payload), the original and effective commitments, the Cognous authorization, the binding check and the returned `result.proposal` all derive from it, so mutation of the caller's proposal during the awaited backend call or afterwards changes none of them. The binding check now also applies to an untransformed `authorized` result (new hold reason `authorization_unbound`).
 - `execute_with_control` snapshots the caller payload at entry and executes a detached copy of the recorded `action.payload`/`action.target` instead of a shallow copy of the live dict.

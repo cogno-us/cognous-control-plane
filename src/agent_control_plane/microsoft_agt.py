@@ -78,6 +78,8 @@ class MicrosoftAgtCompatibilityEvidence:
     cognous_decision_id: str | None
     cognous_result: str | None
     limitation: str
+    # R1-A2: the proposal adapter_id bound to ``tool_name`` at entry (the identity both AGT and Cognous were asked about).
+    bound_adapter_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -200,8 +202,9 @@ class MicrosoftAgtPreToolCallAdapter:
     ) -> None:
         self._backend = backend
         self._authority = authority
-        # Opt-in: ``{adapter_id: tool_name}`` taken from the same trusted manifest entry as the proposals. When given, an
-        # evaluation whose proposal adapter has no entry, or whose ``tool_name`` differs, is held before AGT is asked.
+        # Optional ``{adapter_id: tool_name}`` from the same trusted manifest entry as the proposals. When given, an evaluation
+        # whose proposal adapter has no entry, or whose ``tool_name`` differs, is held before AGT is asked. When absent,
+        # tool_name must equal proposal.adapter_id exactly (R1-A2).
         self._tool_bindings = dict(tool_bindings) if tool_bindings is not None else None
 
     async def evaluate(
@@ -252,18 +255,25 @@ class MicrosoftAgtPreToolCallAdapter:
                 transformed=False,
                 reasons=("tenant_mismatch",),
             )
-        if self._tool_bindings is not None and self._tool_bindings.get(proposal.adapter_id) != tool_name:
+        # R1-A2: one authoritative tool identity, established on the private snapshot before AGT is asked. ``bound_adapter_id`` is the
+        # snapshot's adapter; ``tool_name`` is what AGT will evaluate. With ``tool_bindings`` the exact entry for the adapter must be
+        # this tool_name (missing entry or any difference is a hold); without them tool_name must equal the adapter_id exactly. Nothing
+        # is inferred, trimmed or case-folded.
+        bound_adapter_id = proposal.adapter_id
+        identity_hold = self._identity_hold_reason(bound_adapter_id, tool_name)
+        if identity_hold is not None:
             return self._finish(
                 result="hold",
                 tenant_id=tenant,
                 tool_name=tool_name,
                 tool_call_id=tool_call_id,
-                agt=AgtDecision(decision="unavailable", reason="tool_binding_mismatch"),
+                agt=AgtDecision(decision="unavailable", reason=identity_hold),
                 original_commitment=original_commitment,
                 proposal=None,
                 cognous=None,
                 transformed=False,
-                reasons=("tool_binding_mismatch",),
+                reasons=(identity_hold,),
+                bound_adapter_id=bound_adapter_id if isinstance(bound_adapter_id, str) else None,
             )
 
         try:
@@ -285,6 +295,7 @@ class MicrosoftAgtPreToolCallAdapter:
                 proposal=None,
                 cognous=None,
                 transformed=False,
+                bound_adapter_id=bound_adapter_id,
                 reasons=("capability_unavailable",),
             )
 
@@ -304,6 +315,7 @@ class MicrosoftAgtPreToolCallAdapter:
                 proposal=None,
                 cognous=None,
                 transformed=False,
+                bound_adapter_id=bound_adapter_id,
                 reasons=("agt_warning_requires_review",),
             )
 
@@ -318,6 +330,7 @@ class MicrosoftAgtPreToolCallAdapter:
                 proposal=None,
                 cognous=None,
                 transformed=False,
+                bound_adapter_id=bound_adapter_id,
                 reasons=(f"agt_{decision}",),
             )
 
@@ -336,6 +349,7 @@ class MicrosoftAgtPreToolCallAdapter:
                     proposal=None,
                     cognous=None,
                     transformed=False,
+                    bound_adapter_id=bound_adapter_id,
                     reasons=("unsupported_transform_response",),
                 )
             effective = proposal.model_copy(
@@ -346,6 +360,22 @@ class MicrosoftAgtPreToolCallAdapter:
                 },
             )
             transformed = True
+            if effective.adapter_id != bound_adapter_id:
+                # Defence in depth: a transform replaces only the payload. Should the effective proposal carry any other adapter
+                # identity than the one bound at entry, AGT's decision no longer corresponds to what Cognous would authorize.
+                return self._finish(
+                    result="hold",
+                    tenant_id=tenant,
+                    tool_name=tool_name,
+                    tool_call_id=tool_call_id,
+                    agt=agt,
+                    original_commitment=original_commitment,
+                    proposal=None,
+                    cognous=None,
+                    transformed=False,
+                    bound_adapter_id=bound_adapter_id,
+                    reasons=("transform_identity_changed",),
+                )
         elif decision != "allow":
             return self._finish(
                 result="hold",
@@ -357,6 +387,7 @@ class MicrosoftAgtPreToolCallAdapter:
                 proposal=None,
                 cognous=None,
                 transformed=False,
+                bound_adapter_id=bound_adapter_id,
                 reasons=("unsupported_agt_decision",),
             )
 
@@ -379,6 +410,7 @@ class MicrosoftAgtPreToolCallAdapter:
                 proposal=effective,
                 cognous=None,
                 transformed=transformed,
+                bound_adapter_id=bound_adapter_id,
                 reasons=(f"cognous_evaluation_error:{type(exc).__name__}",),
             )
 
@@ -395,6 +427,7 @@ class MicrosoftAgtPreToolCallAdapter:
                 proposal=effective,
                 cognous=cognous,
                 transformed=transformed,
+                bound_adapter_id=bound_adapter_id,
                 reasons=("transform_authorization_unbound" if transformed else "authorization_unbound",),
             )
 
@@ -409,6 +442,7 @@ class MicrosoftAgtPreToolCallAdapter:
                 proposal=effective,
                 cognous=cognous,
                 transformed=transformed,
+                bound_adapter_id=bound_adapter_id,
                 reasons=tuple(cognous.reasons) or (f"cognous_{cognous.result}",),
             )
 
@@ -422,8 +456,17 @@ class MicrosoftAgtPreToolCallAdapter:
             proposal=effective,
             cognous=cognous,
             transformed=transformed,
+            bound_adapter_id=bound_adapter_id,
             reasons=(),
         )
+
+    def _identity_hold_reason(self, adapter_id: Any, tool_name: Any) -> str | None:
+        """None when tool_name and adapter_id are one bound identity; else the typed hold reason."""
+        if not isinstance(adapter_id, str) or not adapter_id or not isinstance(tool_name, str) or not tool_name:
+            return "tool_identity_unbound"
+        if self._tool_bindings is None:
+            return None if tool_name == adapter_id else "tool_identity_unbound"
+        return None if self._tool_bindings.get(adapter_id) == tool_name else "tool_binding_mismatch"
 
     @staticmethod
     def _binding_fixes(binding: Any, effective: Any) -> bool:
@@ -449,6 +492,7 @@ class MicrosoftAgtPreToolCallAdapter:
         cognous: RuntimeDecision | None,
         transformed: bool,
         reasons: tuple[str, ...],
+        bound_adapter_id: str | None = None,
     ) -> MicrosoftAgtCompatibilityResult:
         if proposal is not None:
             proposal = proposal.model_copy(deep=True)  # the returned proposal never aliases the private snapshot or the caller
@@ -463,6 +507,7 @@ class MicrosoftAgtPreToolCallAdapter:
             source="microsoft/agent-governance-toolkit",
             tenant_id=tenant_id,
             tool_name=tool_name,
+            bound_adapter_id=bound_adapter_id,
             tool_call_id=tool_call_id,
             agt_decision=agt.decision,
             agt_reason=agt.reason,

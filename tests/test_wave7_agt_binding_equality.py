@@ -16,7 +16,7 @@ from tests.test_scan6_agt_exact import BoundAuthority, _transform, _binding
 
 async def _run(authority):
     adapter = MicrosoftAgtPreToolCallAdapter(backend=FakeBackend(_transform()), authority=authority)
-    return await adapter.evaluate(tenant_id="tenant-alpha", proposal=proposal(), tool_name="refund_adapter")
+    return await adapter.evaluate(tenant_id="tenant-alpha", proposal=proposal(), tool_name="urn:cognous:adapter:synthetic-refund-v1")
 
 
 @pytest.mark.asyncio
