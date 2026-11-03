@@ -1,0 +1,65 @@
+{
+  "version": "ocs-authority-profile/0.1",
+  "id": "SYNTHETIC-NOT-A-TRUST-ANCHOR-PROFILE",
+  "mode": "synthetic",
+  "verifier": {
+    "contract": "r08-v2",
+    "family": "f4"
+  },
+  "trust_anchor": {
+    "algorithm": "ed25519",
+    "keys": [
+      {
+        "key_id": "SYNTHETIC-KEY-1",
+        "public_key_sha256": "sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c"
+      }
+    ]
+  },
+  "issuers": [
+    {
+      "issuer_id": "SYNTHETIC-ISSUER-1",
+      "key_id": "SYNTHETIC-KEY-1",
+      "grants": [
+        {
+          "consumer_id": "SYNTHETIC-CONSUMER",
+          "tenant": "SYNTHETIC-TENANT",
+          "institution": "SYNTHETIC-INSTITUTION",
+          "authority_domain": "SYNTHETIC-DOMAIN",
+          "operation": "SYNTHETIC-OPERATION"
+        }
+      ]
+    }
+  ],
+  "expected_context": {
+    "consumer_id": "SYNTHETIC-CONSUMER",
+    "tenant": "SYNTHETIC-TENANT",
+    "institution": "SYNTHETIC-INSTITUTION",
+    "authority_domain": "SYNTHETIC-DOMAIN",
+    "operation": "SYNTHETIC-OPERATION"
+  },
+  "snapshot": {
+    "source": {
+      "kind": "file",
+      "reference": "synthetic.snapshot.json"
+    },
+    "expected": {
+      "snapshot_id": "SYNTHETIC-NOT-A-TRUST-ANCHOR",
+      "version": 1,
+      "fingerprint": "sha256:79564678f09a52038818330d0412dafdc0a3c603ce03b227045471e22cfe691e"
+    }
+  },
+  "clock": {
+    "kind": "system_utc"
+  },
+  "state": {
+    "backend": "none-g1",
+    "namespace": "synthetic-example",
+    "reference": "none",
+    "anchor_reference": "none"
+  },
+  "identities": {
+    "snapshot_publisher_ref": "UNSELECTED-SYNTHETIC",
+    "enforcing_operator_ref": "UNSELECTED-SYNTHETIC",
+    "state_admin_ref": "UNSELECTED-SYNTHETIC"
+  }
+}

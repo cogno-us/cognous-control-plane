@@ -1,0 +1,30 @@
+{
+  "snapshot_id": "SYNTHETIC-NOT-A-TRUST-ANCHOR",
+  "version": 1,
+  "valid_until": "2020-01-01T00:00:00Z",
+  "issuers": [
+    {
+      "key_id": "SYNTHETIC-KEY-1",
+      "issuer_id": "SYNTHETIC-ISSUER-1",
+      "alg": "ed25519",
+      "public_key": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+      "authority": [
+        [
+          "SYNTHETIC-CONSUMER",
+          "SYNTHETIC-TENANT",
+          "SYNTHETIC-INSTITUTION",
+          "SYNTHETIC-DOMAIN",
+          "SYNTHETIC-OPERATION"
+        ]
+      ]
+    }
+  ],
+  "revoked_key_ids": [],
+  "revoked_selections": [],
+  "min_epochs": [
+    [
+      "SYNTHETIC-SELECTION",
+      1
+    ]
+  ]
+}
