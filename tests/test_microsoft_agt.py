@@ -214,7 +214,7 @@ async def test_real_sdk_types_are_supported_when_installed():
     backend = MicrosoftAgtSdkBackend(runtime)
     result = await backend.evaluate_pre_tool_call(
         tenant_id="tenant-alpha",
-        tool_name="urn:cognous:adapter:synthetic-refund-v1",
+        tool_name="refund_adapter",
         arguments={"customer_id": "customer-001"},
         tool_call_id="sdk-call-1",
         snapshot={"run_id": "run-w5"},
