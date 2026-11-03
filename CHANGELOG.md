@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Fixed — private immutable proposal snapshot in the AGT adapter, `execute_with_control` and the local-authority-effect claim path (R1-A; Codex csf_c7e3b3a6ffe782a80a860b30, csf_157f0532e46704d37e3f35e9, csf_da0ba5306958df9dd957f0a4)
+- `MicrosoftAgtPreToolCallAdapter.evaluate` takes one deep snapshot of the proposal before its first await; the AGT arguments (detached payload), the original and effective commitments, the Cognous authorization, the binding check and the returned `result.proposal` all derive from it, so mutation of the caller's proposal during the awaited backend call or afterwards changes none of them. The binding check now also applies to an untransformed `authorized` result (new hold reason `authorization_unbound`).
+- `execute_with_control` snapshots the caller payload at entry and executes a detached copy of the recorded `action.payload`/`action.target` instead of a shallow copy of the live dict.
+- `_materialize_under_handoff` (claim materialization and provisioning) uses a private deep copy of the proposal and the decision for resolution, handoff ref, snapshot validation, validity interval, operation commitment and every claim field.
+- No public model is frozen and no `RuntimeProposal`, F4/G1/G2/CAP or H1 semantics change. The AGT adapter remains outside the private-preview scope. Tests: `tests/test_r1a_immutable_snapshot_{agt,tools,claim}.py`.
+
 ### Added — authority profile schema and NON-PRODUCTION examples (CAP H1; BUILDER_TESTED; documentation/tests only; no `src` change)
 - `schemas/ocs_authority_profile_0_1.schema.json` (non-authoritative; the loader is the sole authority), `examples/authority-profile/` (synthetic snapshot built on a PUBLIC seed, expired so it does not admit under a `system_utc` clock; a `fixed_instant` edit re-enables it unless `expected_config_digest` is supplied, synthetic profile, `UNSELECTED-*` operational template that must not load) and `tests/test_authority_profile_examples.py` (loader-driven drift test), wired into the must-not-skip authority-profile CI step (min 163). Operational mode is unchanged and still refuses. See `docs/registry-authority-profile.md`.
 

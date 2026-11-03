@@ -421,6 +421,11 @@ def _materialize_under_handoff(
         raise ValueError("claim issuance time must be timezone-aware")
     # One private copy, taken before any host code runs: every check below and the claim itself use this copy, never the caller's object.
     policy_binding = copy.deepcopy(policy_binding)
+    # R1-A: the same applies to the proposal and decision. Every later read (resolution, handoff ref, snapshot validation, validity
+    # interval, operation commitment, claim fields) uses these private deep copies, so a host callback that mutates the caller's
+    # objects cannot change what is evaluated or claimed.
+    proposal = proposal.model_copy(deep=True)
+    decision = decision.model_copy(deep=True)
     now = workflow._evaluation_time(now)
 
     persisted = workflow.records.decision(decision.decision_id)
@@ -435,13 +440,12 @@ def _materialize_under_handoff(
     if not callable(handoff) or not callable(snapshot_reader):
         raise PermissionError("resolver does not implement trusted authority-effect handoff")
 
-    frozen = proposal.model_copy(deep=True)
     with handoff(proposal.authority_context_ref or ""):
         inputs = []
         check_ref: list[str] = []
         journal = workflow.runtime_authority_profile is not None
         reasons, current = workflow._resolve(
-            frozen, now, inputs=inputs,
+            proposal, now, inputs=inputs,
             **({"stage": "claim", "decision": decision} if journal else {}),
             **({"check_ref": check_ref} if (workflow._identity or workflow._freshness) else {}),
         )
