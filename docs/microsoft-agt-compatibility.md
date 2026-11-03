@@ -36,8 +36,8 @@ private proposal snapshot and before AGT is asked, `tool_name` and
   manifest entries as the proposals), the exact entry for `proposal.adapter_id`
   must equal `tool_name`; a missing entry or any difference is held with reason
   `tool_binding_mismatch`, and the adapter_id is not accepted as an alias;
-- a missing, empty or non-string `tool_name` or `adapter_id` is held with
-  `tool_identity_unbound`;
+- a missing, empty or non-exact-`str` `tool_name` or `adapter_id` (a `str` subclass is refused, since it can override equality) is held with
+  `tool_identity_unbound`; `tool_bindings` keys and values must be non-empty exact `str` (else the constructor raises `ValueError`) and are copied at construction;
 - a transform replaces only the payload; if the effective proposal's `adapter_id`
   differs from the bound one the evaluation is held with
   `transform_identity_changed` and Cognous is not asked;

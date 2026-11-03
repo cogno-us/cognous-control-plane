@@ -205,7 +205,17 @@ class MicrosoftAgtPreToolCallAdapter:
         # Optional ``{adapter_id: tool_name}`` from the same trusted manifest entry as the proposals. When given, an evaluation
         # whose proposal adapter has no entry, or whose ``tool_name`` differs, is held before AGT is asked. When absent,
         # tool_name must equal proposal.adapter_id exactly (R1-A2).
-        self._tool_bindings = dict(tool_bindings) if tool_bindings is not None else None
+        # R1-A2: a private copy whose keys and values are exact plain ``str`` (a str subclass can override ``__eq__``/``__hash__``);
+        # anything else is refused at construction, and later mutation of the caller's mapping cannot change it.
+        if tool_bindings is None:
+            self._tool_bindings = None
+        else:
+            copied: dict[str, str] = {}
+            for key, value in dict(tool_bindings).items():
+                if type(key) is not str or type(value) is not str or not key or not value:
+                    raise ValueError("tool_bindings keys and values must be non-empty exact str")
+                copied[key] = value
+            self._tool_bindings = copied
 
     async def evaluate(
         self,
@@ -462,7 +472,7 @@ class MicrosoftAgtPreToolCallAdapter:
 
     def _identity_hold_reason(self, adapter_id: Any, tool_name: Any) -> str | None:
         """None when tool_name and adapter_id are one bound identity; else the typed hold reason."""
-        if not isinstance(adapter_id, str) or not adapter_id or not isinstance(tool_name, str) or not tool_name:
+        if type(adapter_id) is not str or not adapter_id or type(tool_name) is not str or not tool_name:  # exact str only: no subclass equality
             return "tool_identity_unbound"
         if self._tool_bindings is None:
             return None if tool_name == adapter_id else "tool_identity_unbound"

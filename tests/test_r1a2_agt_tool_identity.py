@@ -130,3 +130,63 @@ async def test_identity_is_checked_on_the_snapshot_not_the_live_proposal():
     r = await _run(adapter, ADAPTER, caller)
     caller.adapter_id = OTHER  # after the call: no effect on the recorded result
     assert r.proposal.adapter_id == ADAPTER and r.evidence.bound_adapter_id == ADAPTER
+
+
+class _AlwaysEqual(str):
+    def __eq__(self, other):
+        return True
+
+    def __ne__(self, other):
+        return False
+
+    __hash__ = str.__hash__
+
+
+@pytest.mark.asyncio
+async def test_9_str_subclass_tool_name_without_bindings_is_held():
+    adapter, backend, authority = _adapter()
+    _held_before_anything(await _run(adapter, _AlwaysEqual("read_only_lookup")), backend, authority, "tool_identity_unbound")
+
+
+@pytest.mark.asyncio
+async def test_9b_str_subclass_tool_name_with_bindings_is_held():
+    adapter, backend, authority = _adapter({ADAPTER: "refund_adapter"})
+    _held_before_anything(await _run(adapter, _AlwaysEqual("read_only_lookup")), backend, authority, "tool_identity_unbound")
+
+
+@pytest.mark.asyncio
+async def test_9c_str_subclass_adapter_id_is_held():
+    p = proposal()
+    object.__setattr__(p, "adapter_id", _AlwaysEqual("urn:other"))
+    adapter, backend, authority = _adapter()
+    _held_before_anything(await _run(adapter, ADAPTER, p), backend, authority, "tool_identity_unbound")
+
+
+@pytest.mark.parametrize("bad", [{_AlwaysEqual(ADAPTER): "refund_adapter"}, {ADAPTER: _AlwaysEqual("refund_adapter")},
+                                 {ADAPTER: 1}, {1: "x"}, {"": "x"}, {ADAPTER: ""}],
+                         ids=["key_subclass", "value_subclass", "int_value", "int_key", "empty_key", "empty_value"])
+def test_9d_non_exact_str_bindings_are_refused_at_construction(bad):
+    with pytest.raises(ValueError):
+        _adapter(bad)
+
+
+@pytest.mark.asyncio
+async def test_9e_mutating_the_callers_bindings_after_construction_changes_nothing():
+    source = {ADAPTER: "refund_adapter"}
+    adapter, backend, authority = _adapter(source)
+    source[ADAPTER] = "read_only_lookup"
+    source[OTHER] = "refund_adapter"
+    assert (await _run(adapter, "refund_adapter")).result == "authorized"
+    source2 = {ADAPTER: "refund_adapter"}
+    adapter2, b3, a3 = _adapter(source2)
+    source2[ADAPTER] = "read_only_lookup"
+    r = await _run(adapter2, "read_only_lookup")
+    assert r.result == "hold" and "tool_binding_mismatch" in r.reasons and b3.calls == [] and a3.calls == []
+
+
+@pytest.mark.asyncio
+async def test_9f_agt_and_evidence_receive_exact_plain_str():
+    adapter, backend, authority = _adapter()
+    r = await _run(adapter, ADAPTER)
+    assert type(backend.calls[0]["tool_name"]) is str and type(r.evidence.tool_name) is str
+    assert type(r.evidence.bound_adapter_id) is str
