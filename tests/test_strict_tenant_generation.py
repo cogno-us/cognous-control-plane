@@ -386,3 +386,39 @@ def test_signed_evidence_matching_tenant_allowed_strict(tmp_path):
     p, r, f, d, cfg = _journal(tmp_path)
     assert d.result == "authorized"
     assert any(ev.validation_record and ev.validation_record["statement"]["tenant_id"] == TENANT for ev in r.evidence.values())
+
+
+# ---- stored-decision tamper (flip / strip) at claim and pin time ------------------------------------------------------------------
+def _tamper_store(tmp_path, how):
+    path = tmp_path / "run.json"
+    doc = json.loads(path.read_text())
+    for row in doc["decisions"]:
+        if how == "flip":
+            row["binding"]["generation"] = TENANT_GENERATION_LEGACY
+        else:
+            row["binding"].pop("generation")  # parses to the legacy default
+    path.write_text(json.dumps(doc))
+
+
+@pytest.mark.parametrize("how", ["flip", "strip"])
+def test_stored_tamper_refused_at_provision_and_pin(tmp_path, how):
+    p, r, f, d, cfg = _journal(tmp_path)
+    _tamper_store(tmp_path, how)
+    _set_evidence(r, None)  # the point of the downgrade
+    sink = []
+    with pytest.raises(PermissionError, match="effect identity"):
+        provision_local_execution_claim(f, p, f.records.decision(d.decision_id), now=NOW, provision=sink.append, claim_id="c1")
+    assert sink == []
+    with pytest.raises(PermissionError, match="effect identity"):
+        assess_authorization_pin(f, p, f.records.decision(d.decision_id), now=NOW, host_policy_binding=v02.canonical_binding())
+
+
+@pytest.mark.parametrize("how", ["flip", "strip"])
+def test_stored_tamper_refused_at_materialize_without_profile(tmp_path, how):
+    from agent_control_plane.local_authority_effect import materialize_local_execution_claim
+    p, r, f = _flow(tmp_path, TENANT)
+    d = f.decide(p, now=NOW)
+    _tamper_store(tmp_path, how)
+    _set_evidence(r, None)
+    with pytest.raises(PermissionError, match="effect identity"):
+        materialize_local_execution_claim(f, p, f.records.decision(d.decision_id), now=NOW, claim_id="c1")

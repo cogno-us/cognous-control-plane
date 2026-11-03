@@ -225,7 +225,7 @@ parameter governs NEW decisions only. Effect-time revalidation, claim issuance a
 generation stored in its binding: a legacy decision is never re-judged strict and a strict decision is never re-judged legacy, whatever
 the workflow object is configured with. A decision presented with a different generation than the persisted one is refused as not the
 immutable persisted decision; for strict decisions the generation is part of the effect identity (`effect_id`), so a flip inside the store
-is refused as an invalid effect identity. Legacy effect identities are byte-identical to before. Tenantless (0.1) proposals are not affected.
+is refused as an invalid effect identity at effect, claim (materialize and provision) and pin time. Residual: `effect_id` is an unkeyed hash, so a writer to the decision store who also recomputes it defeats this check (the store is a trusted-writer boundary). Migration: a strict `effect_id` differs from the legacy one for the same proposal and grant, so drain unresolved effect attempts (or use operation identity) before flipping a deployment to the strict default. `schemas/runtime_authority_run_0_1.schema.json` still names the 0.2 constant for the binding generation and is not updated here. Legacy effect identities are byte-identical to before. Tenantless (0.1) proposals are not affected.
 
 Legacy compatibility limit (why it is deprecated for tenant-aware use): evidence that carries no `tenant_id` is accepted for a
 tenant-aware proposal, so if tenants share an institution/domain and reuse obligation or source identifiers, tenantless evidence from one

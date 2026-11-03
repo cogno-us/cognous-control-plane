@@ -437,6 +437,8 @@ def _materialize_under_handoff(
         raise PermissionError("decision is not the immutable persisted decision")
     if decision.result != "authorized" or decision.binding is None:
         raise PermissionError("decision is not authorized")
+    if persisted.effect_id != workflow._effect_id(persisted.binding):  # a stored generation flip/strip changes the strict effect identity
+        raise PermissionError("decision effect identity is invalid")
 
     resolver = workflow.resolver
     handoff = getattr(resolver, "authority_effect_handoff", None)
