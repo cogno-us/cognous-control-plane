@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Added — authority profile schema and NON-PRODUCTION examples (CAP H1; BUILDER_TESTED; documentation/tests only; no `src` change)
+- `schemas/ocs_authority_profile_0_1.schema.json` (non-authoritative; the loader is the sole authority), `examples/authority-profile/` (expired synthetic snapshot built on a PUBLIC seed, synthetic profile, `UNSELECTED-*` operational template that must not load) and `tests/test_authority_profile_examples.py` (loader-driven drift test), wired into the must-not-skip authority-profile CI step (min 162). Operational mode is unchanged and still refuses. See `docs/registry-authority-profile.md`.
+
 ### Added — durable restart-safe freshness state `ocs-cap-freshness-state/1` for the F4 authority profile (CAP v0.1 G2; BUILDER_TESTED; SYNTHETIC only; operational trust NOT established)
 - New `registry_authority_state.py`: with `state.backend = "file-g2"` the profile wrapper holds one exclusive `flock` across read -> Registry verify (with the stored snapshot as `last_accepted_snapshot`) -> kit `advance`/`guard` -> fsync + `os.replace`, wrapping the unchanged Registry `ocs-conformance-state/1`. Missing, corrupt, foreign or locked stores refuse; refusals never write; cold start is only an explicit one-shot `ocs-cap-bootstrap/1`. `none-g1` keeps the G1 stateless behavior as an explicit owner choice, never a fallback. Limit: a privileged writer can replace the whole store (G3). See `docs/registry-authority-profile.md`.
 

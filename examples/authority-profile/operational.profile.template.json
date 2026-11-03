@@ -1,0 +1,65 @@
+{
+  "version": "ocs-authority-profile/0.1",
+  "id": "UNSELECTED-CUSTOMER-INPUT",
+  "mode": "operational",
+  "verifier": {
+    "contract": "r08-v2",
+    "family": "f4"
+  },
+  "trust_anchor": {
+    "algorithm": "ed25519",
+    "keys": [
+      {
+        "key_id": "UNSELECTED-CUSTOMER-INPUT",
+        "public_key_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ]
+  },
+  "issuers": [
+    {
+      "issuer_id": "UNSELECTED-CUSTOMER-INPUT",
+      "key_id": "UNSELECTED-CUSTOMER-INPUT",
+      "grants": [
+        {
+          "consumer_id": "UNSELECTED-CUSTOMER-INPUT",
+          "tenant": "UNSELECTED-CUSTOMER-INPUT",
+          "institution": "UNSELECTED-CUSTOMER-INPUT",
+          "authority_domain": "UNSELECTED-CUSTOMER-INPUT",
+          "operation": "UNSELECTED-CUSTOMER-INPUT"
+        }
+      ]
+    }
+  ],
+  "expected_context": {
+    "consumer_id": "UNSELECTED-CUSTOMER-INPUT",
+    "tenant": "UNSELECTED-CUSTOMER-INPUT",
+    "institution": "UNSELECTED-CUSTOMER-INPUT",
+    "authority_domain": "UNSELECTED-CUSTOMER-INPUT",
+    "operation": "UNSELECTED-CUSTOMER-INPUT"
+  },
+  "snapshot": {
+    "source": {
+      "kind": "file",
+      "reference": "UNSELECTED-customer-snapshot-reference"
+    },
+    "expected": {
+      "snapshot_id": "UNSELECTED-CUSTOMER-INPUT",
+      "version": 1,
+      "fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "clock": {
+    "kind": "system_utc"
+  },
+  "state": {
+    "backend": "UNSELECTED",
+    "namespace": "UNSELECTED-CUSTOMER-INPUT",
+    "reference": "UNSELECTED",
+    "anchor_reference": "UNSELECTED"
+  },
+  "identities": {
+    "snapshot_publisher_ref": "UNSELECTED-CUSTOMER-INPUT",
+    "enforcing_operator_ref": "UNSELECTED-CUSTOMER-INPUT",
+    "state_admin_ref": "UNSELECTED-CUSTOMER-INPUT"
+  }
+}
