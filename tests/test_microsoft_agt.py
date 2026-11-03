@@ -82,7 +82,7 @@ async def test_allow_is_only_additional_restriction_and_requires_cognous_authori
     result = await adapter.evaluate(
         tenant_id="tenant-alpha",
         proposal=proposal(),
-        tool_name="refund_adapter",
+        tool_name="urn:cognous:adapter:synthetic-refund-v1",
         tool_call_id="call-1",
     )
 
@@ -102,7 +102,7 @@ async def test_agt_allow_cannot_override_cognous_deny():
     result = await adapter.evaluate(
         tenant_id="tenant-alpha",
         proposal=proposal(),
-        tool_name="refund_adapter",
+        tool_name="urn:cognous:adapter:synthetic-refund-v1",
     )
 
     assert result.result == "deny"
@@ -128,7 +128,7 @@ async def test_transform_gets_fresh_authorization_for_new_commitment():
     result = await adapter.evaluate(
         tenant_id="tenant-alpha",
         proposal=original,
-        tool_name="refund_adapter",
+        tool_name="urn:cognous:adapter:synthetic-refund-v1",
     )
 
     assert result.result == "authorized"
@@ -159,7 +159,7 @@ async def test_nonclean_or_unsupported_agt_results_never_authorize(agt, expected
     result = await adapter.evaluate(
         tenant_id="tenant-alpha",
         proposal=proposal(),
-        tool_name="refund_adapter",
+        tool_name="urn:cognous:adapter:synthetic-refund-v1",
     )
     assert result.result == expected
     assert authority.calls == []
@@ -175,7 +175,7 @@ async def test_missing_tenant_and_backend_failure_fail_closed():
     missing = await adapter.evaluate(
         tenant_id=" ",
         proposal=proposal(),
-        tool_name="refund_adapter",
+        tool_name="urn:cognous:adapter:synthetic-refund-v1",
     )
     assert missing.result == "hold"
     assert missing.reasons == ("tenant_missing",)
@@ -187,7 +187,7 @@ async def test_missing_tenant_and_backend_failure_fail_closed():
     unavailable = await failing.evaluate(
         tenant_id="tenant-alpha",
         proposal=proposal(),
-        tool_name="refund_adapter",
+        tool_name="urn:cognous:adapter:synthetic-refund-v1",
     )
     assert unavailable.result == "hold"
     assert unavailable.reasons == ("capability_unavailable",)
@@ -238,7 +238,7 @@ async def test_tenant_mismatch_between_argument_and_proposal_holds_before_agt():
     tenant_proposal = TenantRuntimeProposal(**proposal().model_dump(), tenant_id="tenant-beta")
 
     result = await adapter.evaluate(
-        tenant_id="tenant-alpha", proposal=tenant_proposal, tool_name="refund_adapter", tool_call_id="call-t"
+        tenant_id="tenant-alpha", proposal=tenant_proposal, tool_name="urn:cognous:adapter:synthetic-refund-v1", tool_call_id="call-t"
     )
 
     assert result.result == "hold"
@@ -256,7 +256,7 @@ async def test_matching_tenant_proposal_is_evaluated_normally():
     tenant_proposal = TenantRuntimeProposal(**proposal().model_dump(), tenant_id="tenant-alpha")
 
     result = await adapter.evaluate(
-        tenant_id="tenant-alpha", proposal=tenant_proposal, tool_name="refund_adapter", tool_call_id="call-t2"
+        tenant_id="tenant-alpha", proposal=tenant_proposal, tool_name="urn:cognous:adapter:synthetic-refund-v1", tool_call_id="call-t2"
     )
 
     assert result.result == "authorized"

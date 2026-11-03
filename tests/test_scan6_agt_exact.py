@@ -48,7 +48,7 @@ def _binding(proposal=None):
 async def test_a_transform_without_a_binding_is_not_authorized():
     authority = BoundAuthority(binding=None)
     adapter = MicrosoftAgtPreToolCallAdapter(backend=FakeBackend(_transform()), authority=authority)
-    result = await adapter.evaluate(tenant_id="tenant-alpha", proposal=proposal(), tool_name="refund_adapter")
+    result = await adapter.evaluate(tenant_id="tenant-alpha", proposal=proposal(), tool_name="urn:cognous:adapter:synthetic-refund-v1")
     assert result.result == "hold" and result.reasons == ("transform_authorization_unbound",)
     assert result.evidence.transformed is True
 
@@ -56,14 +56,14 @@ async def test_a_transform_without_a_binding_is_not_authorized():
 @pytest.mark.asyncio
 async def test_a_transform_with_a_binding_is_authorized():
     adapter = MicrosoftAgtPreToolCallAdapter(backend=FakeBackend(_transform()), authority=BoundAuthority(bind_evaluated=True))
-    result = await adapter.evaluate(tenant_id="tenant-alpha", proposal=proposal(), tool_name="refund_adapter")
+    result = await adapter.evaluate(tenant_id="tenant-alpha", proposal=proposal(), tool_name="urn:cognous:adapter:synthetic-refund-v1")
     assert result.result == "authorized"
 
 
 @pytest.mark.asyncio
 async def test_an_allow_is_unchanged_by_the_binding_rule():
     adapter = MicrosoftAgtPreToolCallAdapter(backend=FakeBackend(AgtDecision(decision="allow")), authority=FakeAuthority("authorized"))
-    result = await adapter.evaluate(tenant_id="tenant-alpha", proposal=proposal(), tool_name="refund_adapter")
+    result = await adapter.evaluate(tenant_id="tenant-alpha", proposal=proposal(), tool_name="urn:cognous:adapter:synthetic-refund-v1")
     assert result.result == "authorized"
 
 
@@ -73,7 +73,7 @@ async def test_an_inexact_decision_string_is_unsupported_and_never_authorizes(de
     backend = FakeBackend(AgtDecision(decision=decision, transformed_policy_target=CHANGED, transformed_policy_target_applied=True))
     authority = FakeAuthority("authorized")
     adapter = MicrosoftAgtPreToolCallAdapter(backend=backend, authority=authority)
-    result = await adapter.evaluate(tenant_id="tenant-alpha", proposal=proposal(), tool_name="refund_adapter")
+    result = await adapter.evaluate(tenant_id="tenant-alpha", proposal=proposal(), tool_name="urn:cognous:adapter:synthetic-refund-v1")
     assert result.result == "hold" and result.reasons == ("unsupported_agt_decision",)
     assert authority.calls == []
 
@@ -84,7 +84,7 @@ async def test_a_padded_tenant_is_passed_exactly_and_never_trimmed(tenant_id):
     backend = FakeBackend(AgtDecision(decision="allow"))
     authority = FakeAuthority("authorized")
     adapter = MicrosoftAgtPreToolCallAdapter(backend=backend, authority=authority)
-    result = await adapter.evaluate(tenant_id=tenant_id, proposal=proposal(), tool_name="refund_adapter")
+    result = await adapter.evaluate(tenant_id=tenant_id, proposal=proposal(), tool_name="urn:cognous:adapter:synthetic-refund-v1")
     assert result.evidence.tenant_id == tenant_id
     assert backend.calls[0]["tenant_id"] == tenant_id and authority.calls[0][1] == tenant_id
 
@@ -95,7 +95,7 @@ async def test_a_padded_tenant_does_not_match_a_tenant_bearing_proposal():
     tenant_proposal = TenantRuntimeProposal(**proposal().model_dump(), tenant_id="tenant-alpha")
     backend, authority = FakeBackend(AgtDecision(decision="allow")), FakeAuthority("authorized")
     adapter = MicrosoftAgtPreToolCallAdapter(backend=backend, authority=authority)
-    result = await adapter.evaluate(tenant_id="tenant-alpha ", proposal=tenant_proposal, tool_name="refund_adapter")
+    result = await adapter.evaluate(tenant_id="tenant-alpha ", proposal=tenant_proposal, tool_name="urn:cognous:adapter:synthetic-refund-v1")
     assert result.result == "hold" and result.reasons == ("tenant_mismatch",)
     assert backend.calls == [] and authority.calls == []
 
@@ -104,5 +104,5 @@ async def test_a_padded_tenant_does_not_match_a_tenant_bearing_proposal():
 @pytest.mark.parametrize("tenant_id", ["", "   ", None])
 async def test_a_blank_tenant_is_still_missing(tenant_id):
     adapter = MicrosoftAgtPreToolCallAdapter(backend=FakeBackend(AgtDecision(decision="allow")), authority=FakeAuthority("authorized"))
-    result = await adapter.evaluate(tenant_id=tenant_id, proposal=proposal(), tool_name="refund_adapter")
+    result = await adapter.evaluate(tenant_id=tenant_id, proposal=proposal(), tool_name="urn:cognous:adapter:synthetic-refund-v1")
     assert result.result == "hold" and result.reasons == ("tenant_missing",)
