@@ -208,6 +208,18 @@ def test_synthetic_example_cannot_be_reused_as_an_operational_config(tmp_path):
         assert _code(e) == "authority_config_unprovisioned"
 
 
+def test_limit_fixed_instant_edit_of_the_example_loads_and_is_caught_only_by_the_owner_digest(tmp_path):
+    """DOCUMENTED LIMIT (pinned): expiry protects only under a system_utc clock. Editing the copied example to a fixed_instant before the snapshot expiry loads in synthetic mode;
+    only the owner-supplied expected_config_digest refuses it."""
+    d = copy.deepcopy(PROFILE)
+    d["clock"] = {"kind": "fixed_instant", "as_of": "2019-06-01T00:00:00Z"}
+    p = _write(tmp_path, d)
+    assert cap.load_authority_profile(p, expected_mode="synthetic").clock_kind == "fixed_instant"
+    with pytest.raises(cap.AuthorityProfileRefusal) as e:
+        cap.load_authority_profile(p, expected_mode="synthetic", expected_config_digest=cap._digest(SYNTH.read_bytes()))  # noqa: SLF001
+    assert _code(e) == "authority_config_digest_mismatch"
+
+
 # ---------------------------------------------------------------------------------------------------------------------- non-secret and not-a-trust-anchor
 _PEM = re.compile(r"-----BEGIN")
 _HEX64 = re.compile(r"(?<![0-9a-fA-F])[0-9a-fA-F]{64}(?![0-9a-fA-F])")
@@ -259,4 +271,4 @@ def test_example_public_key_is_the_public_seed_key_and_the_pin_is_consistent(reg
     profile = cap.load_authority_profile(SYNTH, expected_mode="synthetic")
     trust, fingerprint = cap.load_pinned_trust(profile)  # the example is internally consistent with the loader's pin controls ...
     assert fingerprint == profile.pin_fingerprint
-    assert datetime.strptime(trust.valid_until, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc) < datetime.now(timezone.utc)  # ... and expired, so it never admits live
+    assert datetime.strptime(trust.valid_until, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc) < datetime.now(timezone.utc)  # ... and expired (refused under a system_utc clock; see the pinned limit below)
