@@ -35,6 +35,7 @@ from agent_control_plane.local_authority_effect import (
     _validate_issuance_snapshot,
 )
 from agent_control_plane.policy_binding import member_defects as _approval_binding_defects
+from agent_control_plane.registry_governed_lifecycle import RegistrySelectionRefused
 from agent_control_plane.runtime_authority import approval_commitment as _approval_commitment
 
 PIN_EXPORT_PROFILE = "ocs-s4/authorization-pin-export/0.1"
@@ -51,6 +52,11 @@ PAYLOAD_MEMBERS = (
 _REVOKED_REASONS = frozenset({"grant_revoked", "grant_revocation_recorded"})
 _SUPERSEDED_REASONS = frozenset({"grant_revision_stale", "policy_superseded"})
 _WITHDRAWN_REASONS = frozenset({"approval_policy_activation_mismatch"})
+# CP-1: existing governed-lifecycle refusal codes (composed workflows prefix them with the family slot) that keep the exceptional behavior at the pin boundary: a malformed or
+# unavailable Registry source/verifier result, and a proposal outside the workflow scope. Every other refusal of the shared revalidation (not applied: revoked, expired, stale;
+# changed selection; changed manifest authority; modified held configuration) means the Registry-governed authority is not currently supported: non-active `unknown`.
+_REGISTRY_EXCEPTIONAL = frozenset({"selection_source_failed", "material_invalid", "registry_unavailable", "registry_call_failed", "verifier_not_admitted",
+                                   "registry_decision_invalid", "proposal_out_of_scope"})
 _APPROVAL_REASON = "approval_not_active"  # revoked vs unknown is decided from the handoff snapshot, never guessed
 
 
@@ -164,6 +170,17 @@ def assess_authorization_pin(workflow: BoundedAuthorizationWorkflow, proposal: R
             _require_approval_commitment(profile, snapshot, persisted_approval, withdrawn=True)
             return _terminal(decision_id, "withdrawn", "approval-side policy binding disposition is withdrawn")
 
+        # CP-1: a Registry-governed workflow re-verifies its Registry selection (same canonical path as decide/execute) after the private copies and before the
+        # resolution. A Registry state that is no longer applied (revoked, expired, stale, changed) is a non-active `unknown` with no payload; a malformed or
+        # unavailable source or an out-of-scope proposal keeps the existing exceptional behavior.
+        _claim_revalidate = getattr(workflow, "_gl_claim_revalidate", None)
+        if callable(_claim_revalidate):
+            try:
+                _claim_revalidate(frozen, now)
+            except RegistrySelectionRefused as exc:
+                if exc.refusal.code.rpartition(":")[2] not in _REGISTRY_EXCEPTIONAL:
+                    return _unknown(decision_id, "registry selection is not current: " + exc.refusal.code)
+                raise
         inputs: list = []
         check_ref: list[str] = []
         try:

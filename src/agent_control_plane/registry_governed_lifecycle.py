@@ -346,6 +346,12 @@ class GovernedLifecycle(BoundedAuthorizationWorkflow):
             raise self._gl_refuse(code, boundary)
         return materials  # verified material (derivation raised on any refusal); only `decide` uses it, to carry the exact verified bytes
 
+    def _gl_claim_revalidate(self, proposal: Any, now: datetime) -> Any:
+        """CP-1: the claim/pin handoff boundary. The SAME canonical path as `decide`/`execute` (`_gl_revalidate` -> `_gl_reverify`: held state, manifest authority, source read,
+        Registry verification, bound-identity comparison, held state again) under the existing boundary name `claim`; no lifecycle logic is cloned and no refusal is added.
+        Called by `local_authority_effect` and `authorization_pin_export` with their private proposal copy, inside the resolver handoff, before the claim/pin resolution."""
+        return self._gl_revalidate(proposal, "claim", now)
+
     def _gl_commit_gate(self) -> None:
         """Last Registry check before `destination.apply`. Clock: the execute-entry time under a test clock, else the real clock."""
         try:

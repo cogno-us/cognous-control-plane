@@ -441,6 +441,11 @@ def _materialize_under_handoff(
         raise PermissionError("resolver does not implement trusted authority-effect handoff")
 
     with handoff(proposal.authority_context_ref or ""):
+        # CP-1: a Registry-governed workflow re-verifies its Registry selection here (same canonical path as decide/execute), AFTER the private copies above and
+        # BEFORE any resolution, claim construction or provision() callback. A refusal propagates as the workflow's existing refusal (a PermissionError).
+        _claim_revalidate = getattr(workflow, "_gl_claim_revalidate", None)
+        if callable(_claim_revalidate):
+            _claim_revalidate(proposal, now)
         inputs = []
         check_ref: list[str] = []
         journal = workflow.runtime_authority_profile is not None
