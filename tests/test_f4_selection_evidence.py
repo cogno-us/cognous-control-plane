@@ -58,6 +58,7 @@ from agent_control_plane import registry_governed_lifecycle as life  # noqa: E40
 from agent_control_plane.bounded import RuntimeDecision  # noqa: E402
 from agent_control_plane.registry_f4_age_governance import RegistrySelectionRefused, SelectionMaterial  # noqa: E402
 from tests import rw01_f4_poc_support as sup  # noqa: E402
+import tests.test_bounded_authorization as tba  # noqa: E402
 from tests.test_bounded_authorization import NOW, tenant_proposal  # noqa: E402
 from tests.test_f4_age_governance import (  # noqa: E402,F401  (the F4 harness is reused, not copied)
     CTX, OPERATION, SCOPE, Source, _fixed_synthetic_clock, aged, build, c, file_state, mat, refused, trust_for, record, material, r, s, _sign, PK, REVOKED, gov,
@@ -91,17 +92,31 @@ def test_n25_default_off_decisions_carry_nothing_and_the_member_is_absent_from_e
     assert flow.registry_f4_policy_identity and "carry" not in json.dumps(flow.registry_f4_policy_identity)  # the flag is not part of the exposed identity
 
 
+# P1 CP-2: the b19c47dd golden is a LEGACY (bounded-authorization-effect/0.2) store: tenantless evidence, generation 0.2. A new tenant-aware workflow is strict by default
+# (it persists generation 0.3-strict-tenant and the evidence tenant), so the golden is reproduced by selecting legacy explicitly with the historical tenantless fixture.
+def _legacy_build(tmp_path, source, **kw):
+    kw.setdefault("resolver", tba.tenant_resolver_for(tenant_proposal(), evidence_tenant=None))
+    return build(tmp_path, source, tenant_binding_generation="bounded-authorization-effect/0.2", **kw)
+
+
+def _legacy_aged(p, seconds, which):
+    rr = aged(p, seconds, which)
+    for ev in rr.evidence.values():
+        ev.tenant_id = None
+    return rr
+
+
 def test_n25_legacy_decision_is_byte_identical_to_the_decision_of_b19c47dd_golden_comparison(tmp_path, monkeypatch):
     """GOLDEN: `fixtures/rw01_f4_poc_legacy_run_b19c47dd.json` was produced by `rw01_f4_poc_support.legacy_run_document` on the UNTOUCHED b19c47dd tree. The edited tree with the
     flag off (default) must reproduce both stores (an authorized+executed flow and a hold) byte for byte."""
     golden = json.loads(GOLDEN_LEGACY.read_text())
-    got = sup.legacy_run_document(tmp_path, monkeypatch, build=build, mat=mat, Source=Source, tenant_proposal=tenant_proposal, NOW=NOW, aged=aged)
+    got = sup.legacy_run_document(tmp_path, monkeypatch, build=_legacy_build, mat=mat, Source=Source, tenant_proposal=tenant_proposal, NOW=NOW, aged=_legacy_aged)
     assert got == golden
 
 
 def test_n25_flag_on_changes_nothing_but_the_added_member_golden_comparison(tmp_path, monkeypatch):
     golden = json.loads(GOLDEN_LEGACY.read_text())
-    got = sup.legacy_run_document(tmp_path, monkeypatch, build=build, mat=mat, Source=Source, tenant_proposal=tenant_proposal, NOW=NOW, aged=aged,
+    got = sup.legacy_run_document(tmp_path, monkeypatch, build=_legacy_build, mat=mat, Source=Source, tenant_proposal=tenant_proposal, NOW=NOW, aged=_legacy_aged,
                                   extra_kwargs={"carry_selection_evidence": True})
     main, ref = json.loads(got["main"]), json.loads(golden["main"])
     carried = [d.pop("selection_evidence") for d in main["decisions"] if d["result"] == "authorized"]

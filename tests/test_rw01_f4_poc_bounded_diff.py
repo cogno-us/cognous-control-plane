@@ -41,6 +41,104 @@ CROSSWALK = (
     ("tests/test_v02_legacy_claim_vector.py", "git-blob", "BOUNDED_BLOB_BEFORE_RW01_F4_POC", "BOUNDED_BLOB_RW01_F4_POC", OLD_BLOB, NEW_BLOB),
 )
 
+# --- P1 CP-2 (Architect-authorized strict tenant-binding generation, csf_4a764c7437e3bd47679c7b44): the SECOND, deliberate re-pin ------------------------------------------
+CP2_SHA256 = "1b4a5f8fc6d64723da8f60cfe495736f4a92acb593e88787643fb9cba5f376ba"
+CP2_BLOB = "946109410c5cf662e1a97cb0db46c08f3644e08e"
+#: Exact (new_text, old_text) pairs; reverse-applying every pair (each new_text occurs exactly once) to the current bytes must reproduce the E-1 file (NEW_SHA256 / NEW_BLOB).
+CP2_HUNKS = [('MANIFEST_VERSION = "1.1"\n'
+  '# Tenant-binding generations of a tenant-aware decision. LEGACY is the published bounded-authorization-effect/0.2 semantics, in which\n'
+  '# tenantless evidence is accepted for a tenant proposal (legacy/deprecated for tenant-aware use, retained for compatibility and selected\n'
+  '# only explicitly). STRICT requires evidence.tenant_id to equal proposal.tenant_id exactly; None is never a wildcard. The generation is\n'
+  '# persisted in TenantAuthorizationBinding, so a decision keeps the generation it was made under at effect, claim and pin time.\n'
+  'TENANT_GENERATION_LEGACY = "bounded-authorization-effect/0.2"\n'
+  'TENANT_GENERATION_STRICT = "bounded-authorization-effect/0.3-strict-tenant"\n'
+  'TENANT_GENERATIONS = (TENANT_GENERATION_LEGACY, TENANT_GENERATION_STRICT)\n'
+  '_PINNED_GENERATION: ContextVar = ContextVar("bounded_pinned_tenant_generation", default=None)\n',
+  'MANIFEST_VERSION = "1.1"\n'),
+ ('class TenantAuthorizationBinding(AuthorizationBinding):\n'
+  '    """Tenant-aware binding. ``generation`` is the tenant-binding generation the decision was made under (legacy 0.2 by default so\n'
+  '    previously persisted bindings keep their meaning; a workflow stamps the strict generation explicitly)."""\n',
+  'class TenantAuthorizationBinding(AuthorizationBinding):\n    """Tenant-aware bounded-authorization-effect/0.2 binding."""\n'),
+ ('\n    generation: Literal["bounded-authorization-effect/0.2", "bounded-authorization-effect/0.3-strict-tenant"] = TENANT_GENERATION_LEGACY\n',
+  '\n    generation: Literal["bounded-authorization-effect/0.2"] = "bounded-authorization-effect/0.2"\n'),
+ ('        rule_revision_profile=None,\n        tenant_binding_generation: str = TENANT_GENERATION_STRICT,\n',
+  '        rule_revision_profile=None,\n'),
+ ('    ):\n'
+  '        if type(tenant_binding_generation) is not str or tenant_binding_generation not in TENANT_GENERATIONS:\n'
+  '            raise ValueError("tenant_binding_generation must be an exact supported generation string")\n'
+  '        # Applies to NEW decisions of tenant-aware proposals only; a persisted decision is always judged under its own generation.\n'
+  '        self.tenant_binding_generation = tenant_binding_generation\n',
+  '    ):\n'),
+ ('        check_ref: list[str] = []\n'
+  '        with self._generation_pin(persisted):\n'
+  '            reasons, current = self._resolve(frozen, now, inputs=inputs, **({"stage":"effect", "decision":persisted} if '
+  'self.runtime_authority_profile else {}),\n'
+  '                                             **({"check_ref": check_ref} if (self._identity or self._freshness) else {}))\n',
+  '        check_ref: list[str] = []\n'
+  '        reasons, current = self._resolve(frozen, now, inputs=inputs, **({"stage":"effect", "decision":persisted} if '
+  'self.runtime_authority_profile else {}),\n'
+  '                                         **({"check_ref": check_ref} if (self._identity or self._freshness) else {}))\n'),
+ ('    def _effect_id(self, binding: AuthorizationBinding) -> str:\n        identity = {\n',
+  '    def _effect_id(self, binding: AuthorizationBinding) -> str:\n        return commitment({\n'),
+ ('            "grant_revision": binding.grant_revision,\n'
+  '        }\n'
+  '        if getattr(binding, "generation", TENANT_GENERATION_LEGACY) == TENANT_GENERATION_STRICT:\n'
+  '            identity["tenant_generation"] = TENANT_GENERATION_STRICT  # a stored strict<->legacy flip changes the identity and is refused\n'
+  '        return commitment(identity)\n',
+  '            "grant_revision": binding.grant_revision,\n        })\n'),
+ ('\n'
+  '    @staticmethod\n'
+  '    def _persisted_generation(decision) -> str | None:\n'
+  '        """The tenant-binding generation a persisted decision was made under (None for a tenantless or unauthorized one)."""\n'
+  '        binding = getattr(decision, "binding", None)\n'
+  '        return binding.generation if isinstance(binding, TenantAuthorizationBinding) else None\n'
+  '\n'
+  '    @contextmanager\n'
+  '    def _generation_pin(self, decision):\n'
+  '        """Evaluate the enclosed resolution under the generation persisted in ``decision`` (no upgrade, no downgrade)."""\n'
+  '        token = _PINNED_GENERATION.set(self._persisted_generation(decision))\n'
+  '        try:\n'
+  '            yield\n'
+  '        finally:\n'
+  '            _PINNED_GENERATION.reset(token)\n'
+  '\n',
+  '\n'),
+ ('    def _resolve(self, proposal, now, *, inputs=None, stage="decision", decision=None, check_ref=None):\n'
+  '        if decision is not None:\n'
+  '            with self._generation_pin(decision):\n'
+  '                return self._resolve_pinned(proposal, now, inputs=inputs, stage=stage, decision=decision, check_ref=check_ref)\n'
+  '        return self._resolve_pinned(proposal, now, inputs=inputs, stage=stage, decision=decision, check_ref=check_ref)\n'
+  '\n'
+  '    def _resolve_pinned(self, proposal, now, *, inputs=None, stage="decision", decision=None, check_ref=None):\n',
+  '    def _resolve(self, proposal, now, *, inputs=None, stage="decision", decision=None, check_ref=None):\n'),
+ ('        tenant_aware = isinstance(proposal, TenantRuntimeProposal)\n'
+  '        generation = _PINNED_GENERATION.get() or self.tenant_binding_generation\n'
+  '        strict_tenant = generation == TENANT_GENERATION_STRICT\n',
+  '        tenant_aware = isinstance(proposal, TenantRuntimeProposal)\n'),
+ ('                current = None\n'
+  '            if current is not None and tenant_aware and strict_tenant:\n'
+  "                # STRICT generation: the evidence must name exactly this proposal's tenant. Exact type and value (a str subclass, a\n"
+  '                # padded or case-variant string is a different tenant); None is never a wildcard. A signed validation record that\n'
+  '                # participates must carry the same exact tenant.\n'
+  '                record = current.validation_record\n'
+  '                statement = record.get("statement") if isinstance(record, dict) else None\n'
+  '                signed_ok = (not isinstance(statement, dict) or "tenant_id" not in statement\n'
+  '                             or (type(statement["tenant_id"]) is str and statement["tenant_id"] == tenant_id))\n'
+  '                if (type(current.tenant_id) is not str or type(tenant_id) is not str or current.tenant_id != tenant_id\n'
+  '                        or not signed_ok):\n'
+  '                    reasons.append("evidence_binding_mismatch")\n'
+  '                    current = None\n'
+  '            elif current is not None:\n'
+  '                # LEGACY 0.2 compatibility: tenantless evidence is still accepted for a tenant-aware proposal (documented limit);\n',
+  '                current = None\n'
+  '            if current is not None:\n'
+  '                # Compatibility: tenantless evidence is still accepted for a tenant-aware proposal (documented limit);\n'),
+ ('        binding_type = TenantAuthorizationBinding if tenant_aware else AuthorizationBinding\n'
+  '        binding_extra = {"tenant_id": tenant_id, "generation": generation} if tenant_aware else {}\n',
+  '        binding_type = TenantAuthorizationBinding if tenant_aware else AuthorizationBinding\n'
+  '        binding_extra = {"tenant_id": tenant_id} if tenant_aware else {}\n')]
+
+
 def blob_id(data: bytes) -> str:
     return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
 
@@ -64,9 +162,18 @@ HUNKS = (
 ADDED_LINES = 6  # 1 import + 1 field + (hook def, hook body, blank separator) + 1 constructor keyword
 
 
-def reverse_apply(current: bytes) -> bytes:
-    """Remove each authorized insertion (it must occur exactly once, directly after its anchor). Returns the reconstructed OLD bytes, or raises AssertionError."""
+def cp2_reverse(current: bytes) -> bytes:
+    """Undo the CP-2 hunks (each must occur exactly once). Returns the reconstructed E-1 bytes, or raises AssertionError."""
     text = current.decode("utf-8")
+    for new_text, old_text in CP2_HUNKS:
+        assert text.count(new_text) == 1, ("CP-2 hunk is not present exactly once", new_text[:80])
+        text = text.replace(new_text, old_text)
+    return text.encode("utf-8")
+
+
+def reverse_apply(current: bytes) -> bytes:
+    """Current bytes -> CP-2 hunks undone -> E-1 hunks undone = the OLD file. Remove each authorized E-1 insertion (it must occur exactly once, directly after its anchor). Returns the reconstructed OLD bytes, or raises AssertionError."""
+    text = cp2_reverse(current).decode("utf-8")
     for anchor, inserted in HUNKS:
         needle = anchor + inserted
         assert text.count(needle) == 1, ("authorized hunk is not present exactly once", inserted)
@@ -76,13 +183,27 @@ def reverse_apply(current: bytes) -> bytes:
 
 def tripwire_ok(data: bytes) -> bool:
     """The check every one of the six assertions performs on bounded.py: ONE exact value, no prefix, regex or any-hash match."""
-    return sha(data) == NEW_SHA256
+    return sha(data) == CP2_SHA256
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------------------- inventory + crosswalk
 def test_e1_current_bounded_py_matches_the_new_pins_exactly():
+    """CP-2: the current file is pinned by the CP-2 value; undoing the CP-2 hunks reproduces the E-1 pins exactly."""
     data = BOUNDED.read_bytes()
-    assert sha(data) == NEW_SHA256 and blob_id(data) == NEW_BLOB
+    assert sha(data) == CP2_SHA256 and blob_id(data) == CP2_BLOB
+    e1 = cp2_reverse(data)
+    assert sha(e1) == NEW_SHA256 and blob_id(e1) == NEW_BLOB
+    assert len({CP2_SHA256, NEW_SHA256, OLD_SHA256}) == 3 and len({CP2_BLOB, NEW_BLOB, OLD_BLOB}) == 3
+
+
+def test_cp2_line_diff_over_e1_is_the_listed_hunks_only():
+    e1 = cp2_reverse(BOUNDED.read_bytes()).decode("utf-8").splitlines(keepends=True)
+    new = BOUNDED.read_text(encoding="utf-8").splitlines(keepends=True)
+    ops = [line for line in difflib.unified_diff(e1, new, n=0) if not line.startswith(("---", "+++", "@@"))]
+    assert len(CP2_HUNKS) == 13
+    assert (len([x for x in ops if x.startswith("+")]), len([x for x in ops if x.startswith("-")])) == (63, 10)
+    # only the strict-tenant generation machinery was touched: no E-1 symbol, no selection-evidence line changed
+    assert not any("selection_evidence" in x or "SelectionEvidence" in x for x in ops)
 
 
 def test_e1_reverse_applying_the_authorized_hunks_reproduces_the_old_pins():
@@ -94,7 +215,7 @@ def test_e1_reverse_applying_the_authorized_hunks_reproduces_the_old_pins():
 
 def test_e1_line_diff_is_six_additions_and_zero_removals():
     old = reverse_apply(BOUNDED.read_bytes()).decode("utf-8").splitlines(keepends=True)
-    new = BOUNDED.read_text(encoding="utf-8").splitlines(keepends=True)
+    new = cp2_reverse(BOUNDED.read_bytes()).decode("utf-8").splitlines(keepends=True)
     ops = [line for line in difflib.unified_diff(old, new, n=0) if not line.startswith(("---", "+++", "@@"))]
     assert [line for line in ops if line.startswith("-")] == []
     assert len([line for line in ops if line.startswith("+")]) == ADDED_LINES
@@ -111,21 +232,38 @@ def test_e1_only_the_authorized_symbols_were_added():
     ]
 
 
-@pytest.mark.parametrize("path,kind,old_name,new_name,old_value,new_value", CROSSWALK)
-def test_e1_crosswalk_every_pinned_assertion_keeps_its_old_value_and_pins_exactly_one_new_value(path, kind, old_name, new_name, old_value, new_value):
+CP2_CROSSWALK = tuple(
+    (path, kind, "BOUNDED_BLOB_RW01_F4_POC" if kind == "git-blob" else "BOUNDED_SHA256_RW01_F4_POC",
+     "BOUNDED_BLOB_CP2_STRICT_TENANT" if kind == "git-blob" else "BOUNDED_SHA256_CP2_STRICT_TENANT", NEW_BLOB if kind == "git-blob" else NEW_SHA256,
+     CP2_BLOB if kind == "git-blob" else CP2_SHA256)
+    for path, kind, *_ in CROSSWALK)
+
+
+@pytest.mark.parametrize("path,kind,old_name,new_name,old_value,new_value", CP2_CROSSWALK)
+def test_cp2_crosswalk_every_pinned_assertion_keeps_the_e1_value_as_history_and_pins_exactly_one_new_value(path, kind, old_name, new_name, old_value, new_value):
     text = (ROOT / path).read_text(encoding="utf-8")
-    assert re.search(rf'^{old_name} = "{old_value}"', text, re.M), (path, "old pin must stay as a named constant")
-    assert re.search(rf'^{new_name} = "{new_value}"', text, re.M), (path, "new pin must be a named constant")
-    assert text.count(old_value) == 1 and text.count(new_value) == 1  # the old value appears only as its named constant; the new one only as its definition
+    assert re.search(rf'^{old_name} = "{old_value}"', text, re.M), (path, "E-1 pin must stay as a named constant")
+    assert re.search(rf'^{new_name} = "{new_value}"', text, re.M), (path, "CP-2 pin must be a named constant")
+    assert text.count(old_value) == 1 and text.count(new_value) == 1
     assert new_name in text.replace(f'{new_name} = "{new_value}"', "")  # and it is actually used by an assertion/table
-    assert kind in ("sha256", "git-blob") and (len(new_value) == (64 if kind == "sha256" else 40))
+    assert len(new_value) == (64 if kind == "sha256" else 40)
     assert not re.search(r"startswith\(.*(BOUNDED|bounded)|re\.(match|search)\(.*BOUNDED", text), "the pin must not be loosened to a prefix or regex"
 
 
+@pytest.mark.parametrize("path,kind,old_name,new_name,old_value,new_value", CROSSWALK)
+def test_e1_crosswalk_old_and_e1_values_stay_as_named_history(path, kind, old_name, new_name, old_value, new_value):
+    text = (ROOT / path).read_text(encoding="utf-8")
+    assert re.search(rf'^{old_name} = "{old_value}"', text, re.M) and re.search(rf'^{new_name} = "{new_value}"', text, re.M), path
+    assert text.count(old_value) == 1 and text.count(new_value) == 1
+
+
 def test_e1_crosswalk_new_values_are_the_real_hashes_of_the_edited_file():
-    data = BOUNDED.read_bytes()
+    data = cp2_reverse(BOUNDED.read_bytes())  # the E-1 file, reconstructed from the current bytes
     for path, kind, _o, _n, _old, new_value in CROSSWALK:
         assert (sha(data) if kind == "sha256" else blob_id(data)) == new_value, path
+    cur = BOUNDED.read_bytes()
+    for path, kind, _o, _n, _old, new_value in CP2_CROSSWALK:
+        assert (sha(cur) if kind == "sha256" else blob_id(cur)) == new_value, path
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------------------- negative mutation tests
@@ -139,6 +277,8 @@ def _mutations(data: bytes):
     yield "an authorized hook call dropped", text.replace("            selection_evidence=self._decision_selection_evidence(reasons),\n", "", 1).encode()
     yield "the hook body changed to carry something else", text.replace("        return None\n\n    def decide(self, proposal: RuntimeProposal", "        return object()\n\n    def decide(self, proposal: RuntimeProposal", 1).encode()
     yield "a second authorized line duplicated", text.replace(HUNKS[0][1], HUNKS[0][1] * 2, 1).encode()
+    yield "a CP-2 strict-tenant line altered", text.replace("or not signed_ok):", "and not signed_ok):", 1).encode()
+    yield "a CP-2 hunk dropped (strict branch disabled)", text.replace("if current is not None and tenant_aware and strict_tenant:", "if False:", 1).encode()
     yield "the old file restored (edit reverted)", reverse_apply(data)
 
 
@@ -149,7 +289,7 @@ def test_e1_negative_mutation_the_updated_tripwire_detects_unrelated_modificatio
     for name, mutated in _mutations(data):
         assert mutated != data, name  # the mutation really changed something
         assert not tripwire_ok(mutated), name  # the pinned-hash check FAILS
-        assert blob_id(mutated) != NEW_BLOB, name
+        assert blob_id(mutated) != CP2_BLOB, name
         seen += 1
         if name != "the old file restored (edit reverted)":
             # and the diff-shape check also rejects it: it either cannot be reverse-applied or does not reproduce the OLD file
@@ -158,7 +298,7 @@ def test_e1_negative_mutation_the_updated_tripwire_detects_unrelated_modificatio
             except AssertionError:
                 reproduced = False
             assert not reproduced, name
-    assert seen == 9
+    assert seen == 11
 
 
 def _copy_tree(dest: Path, bounded_bytes: bytes) -> Path:
@@ -186,7 +326,7 @@ def _run_real_assertion(tree: Path, nodeid: str, env_extra: dict | None = None):
 def test_e1_negative_mutation_runs_the_real_git_blob_assertion_against_a_mutated_copy(tmp_path):
     """The real `test_v02_legacy_claim_vector.py::test_l05_...[bounded.py]` assertion (bytes + `git hash-object`, no Registry needed), run in a copy of the tree: it PASSES
     on the unmodified copy and FAILS when bounded.py differs by one byte."""
-    node = "tests/test_v02_legacy_claim_vector.py::test_l05_protected_sources_are_byte_identical_to_the_base[src/agent_control_plane/bounded.py-%s]" % NEW_BLOB
+    node = "tests/test_v02_legacy_claim_vector.py::test_l05_protected_sources_are_byte_identical_to_the_base[src/agent_control_plane/bounded.py-%s]" % CP2_BLOB
     good = _run_real_assertion(_copy_tree(tmp_path / "good", BOUNDED.read_bytes()), node)
     assert good.returncode == 0 and "1 passed" in good.stdout, good.stdout[-800:]
     mutated = BOUNDED.read_bytes().replace(b"execute one finite declared operation.", b"execute one finite declared operatiox.", 1)  # docstring byte: still importable

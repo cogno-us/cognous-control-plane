@@ -20,6 +20,7 @@ from agent_control_plane.bounded import (
     BoundedAuthorizationWorkflow,
     RuntimeDecision,
     RuntimeProposal,
+    TENANT_GENERATION_STRICT,
     TenantAuthorizationBinding,
     TenantRuntimeProposal,
     _iso,
@@ -375,6 +376,9 @@ def _validate_issuance_snapshot(
             or value.authority_domain != institution.get("authority_domain")
         ):
             raise PermissionError("evidence projection binding mismatch")
+        if (isinstance(current, TenantAuthorizationBinding) and current.generation == TENANT_GENERATION_STRICT
+                and (type(value.tenant_id) is not str or value.tenant_id != tenant_id)):
+            raise PermissionError("evidence projection tenant binding mismatch")  # strict generation: no tenantless wildcard
         if decision_critical and value.state != "current":
             raise PermissionError("evidence projection is not current")
         observed = _utc(value.observed_at)
@@ -433,6 +437,8 @@ def _materialize_under_handoff(
         raise PermissionError("decision is not the immutable persisted decision")
     if decision.result != "authorized" or decision.binding is None:
         raise PermissionError("decision is not authorized")
+    if persisted.effect_id != workflow._effect_id(persisted.binding):  # a stored generation flip/strip changes the strict effect identity
+        raise PermissionError("decision effect identity is invalid")
 
     resolver = workflow.resolver
     handoff = getattr(resolver, "authority_effect_handoff", None)
@@ -449,11 +455,12 @@ def _materialize_under_handoff(
         inputs = []
         check_ref: list[str] = []
         journal = workflow.runtime_authority_profile is not None
-        reasons, current = workflow._resolve(
-            proposal, now, inputs=inputs,
-            **({"stage": "claim", "decision": decision} if journal else {}),
-            **({"check_ref": check_ref} if (workflow._identity or workflow._freshness) else {}),
-        )
+        with workflow._generation_pin(decision):  # the claim is judged under the generation the decision persisted
+            reasons, current = workflow._resolve(
+                proposal, now, inputs=inputs,
+                **({"stage": "claim", "decision": decision} if journal else {}),
+                **({"check_ref": check_ref} if (workflow._identity or workflow._freshness) else {}),
+            )
         binding_reasons: list[str] = []
         binding_note = ""
         if policy_binding is not None or expected_consumer_id is not None or expected_operation is not None:

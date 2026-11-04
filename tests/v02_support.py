@@ -33,6 +33,7 @@ from tests.test_bounded_authorization import INSTITUTION, NOW as TENANT_NOW, PRO
 from tests.test_runtime_authority import MEMBERS, PUBLIC, bind_approval, sign_evidence
 
 LEGACY_NOW = legacy_mod.NOW
+LEGACY_WORKFLOW = {"tenant_binding_generation": "bounded-authorization-effect/0.2"}
 DOMAIN = "customer-refunds"
 CONSUMER = "runtime-emulator"
 OPERATION = "op-transfer"
@@ -87,14 +88,15 @@ def profile_for(binding: dict | None, *, generation: int = 1):
                          activation_ref=binding["activation_ref"], policy_generation=generation, disposition="selected")
 
 
-def tenant_flow(tmp_path, binding: dict | None = None, *, profile_binding="derive", generation: int = 1):
+def tenant_flow(tmp_path, binding: dict | None = None, *, profile_binding="derive", generation: int = 1, workflow_kwargs: dict | None = None,
+                evidence_tenant="same"):
     """Tenant-aware, journal-mode (runtime-authority profile) fixture whose approvals commit to the approval-side policy binding.
 
     `profile_binding`: "derive" builds the profile binding from `binding`; None gives a profile without one; a PolicyBinding is used as given.
     Returns (proposal, resolver, workflow, decision, profile).
     """
     p = tenant_proposal()
-    r = tenant_resolver_for(p)
+    r = tenant_resolver_for(p, evidence_tenant=evidence_tenant)
     pb = profile_for(binding, generation=generation) if profile_binding == "derive" else profile_binding
     cl = ActionClass(class_id="synthetic-irreversible", irreversible=True, max_status_age_seconds=60, on_unreadable="refuse")
     cfg = RuntimeAuthorityProfile(catalogue_version="synthetic-catalogue/1", actions={p.action_id: cl}, producer_keys={"synthetic-validator": PUBLIC},
@@ -114,7 +116,8 @@ def tenant_flow(tmp_path, binding: dict | None = None, *, profile_binding="deriv
     bind_approval(r, cfg)
     f = BoundedAuthorizationWorkflow(manifest=manifest(), resolver=r, destination=LocalRefundDestination(Path(tmp_path) / "destination.json"),
                                      records=BoundedRecordStore(Path(tmp_path) / "run.json", "run-1"),
-                                     observation_policy=ObservationPolicy(max_age_seconds=300), allow_test_time=True, runtime_authority_profile=cfg)
+                                     observation_policy=ObservationPolicy(max_age_seconds=300), allow_test_time=True, runtime_authority_profile=cfg,
+                                     **(workflow_kwargs or {}))
     d = f.decide(p, now=TENANT_NOW)
     assert d.result == "authorized", d.reasons
     return p, r, f, d, cfg
@@ -136,7 +139,8 @@ def build_legacy_vectors() -> dict:
                                               decision_input_profile_version="0.1.0-proposed")
         out["decision_input"] = _entry(c)
     with tempfile.TemporaryDirectory() as tmp, deterministic_uuids():
-        p, _, f, d, _cfg = tenant_flow(Path(tmp), None, profile_binding=None)
+        # The frozen tenant vector is a LEGACY (bounded-authorization-effect/0.2) claim: explicit legacy generation, tenantless evidence as at the base.
+        p, _, f, d, _cfg = tenant_flow(Path(tmp), None, profile_binding=None, workflow_kwargs=LEGACY_WORKFLOW, evidence_tenant=None)
         c = materialize_local_execution_claim(f, p, d, now=TENANT_NOW, claim_id="claim-v02-legacy-tenant")
         out["tenant"] = _entry(c)
     return out

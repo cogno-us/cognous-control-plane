@@ -115,6 +115,8 @@ def assess_authorization_pin(workflow: BoundedAuthorizationWorkflow, proposal: R
         raise PermissionError("decision is not the immutable persisted decision")
     if persisted.result != "authorized" or persisted.binding is None:
         raise PermissionError("decision is not authorized")
+    if persisted.effect_id != workflow._effect_id(persisted.binding):  # a stored generation flip/strip changes the strict effect identity
+        raise PermissionError("decision effect identity is invalid")
     current_binding = persisted.binding  # persisted object from here on; the caller's object is not read again
     decision_id = persisted.decision_id
     if not isinstance(current_binding, TenantAuthorizationBinding):

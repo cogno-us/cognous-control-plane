@@ -321,7 +321,7 @@ def test_claim_issuance_bytes_unchanged_by_the_module(tmp_path):
     vectors = json.loads(v02.VECTORS.read_text())
     with __import__("tempfile").TemporaryDirectory() as tmp, v02.deterministic_uuids():
         from agent_control_plane.local_authority_effect import materialize_local_execution_claim
-        pp, _, ff, dd, _cfg = v02.tenant_flow(Path(tmp), None, profile_binding=None)
+        pp, _, ff, dd, _cfg = v02.tenant_flow(Path(tmp), None, profile_binding=None, workflow_kwargs=v02.LEGACY_WORKFLOW, evidence_tenant=None)  # frozen vector = legacy 0.2 claim
         claim = materialize_local_execution_claim(ff, pp, dd, now=NOW, claim_id="claim-v02-legacy-tenant")
         assert claim.model_dump_json() == vectors["tenant"]["claim_json"]
         assert claim.claim_commitment == vectors["tenant"]["claim_commitment"]

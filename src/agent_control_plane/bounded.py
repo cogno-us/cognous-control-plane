@@ -49,6 +49,14 @@ from .freshness import (
 )
 
 MANIFEST_VERSION = "1.1"
+# Tenant-binding generations of a tenant-aware decision. LEGACY is the published bounded-authorization-effect/0.2 semantics, in which
+# tenantless evidence is accepted for a tenant proposal (legacy/deprecated for tenant-aware use, retained for compatibility and selected
+# only explicitly). STRICT requires evidence.tenant_id to equal proposal.tenant_id exactly; None is never a wildcard. The generation is
+# persisted in TenantAuthorizationBinding, so a decision keeps the generation it was made under at effect, claim and pin time.
+TENANT_GENERATION_LEGACY = "bounded-authorization-effect/0.2"
+TENANT_GENERATION_STRICT = "bounded-authorization-effect/0.3-strict-tenant"
+TENANT_GENERATIONS = (TENANT_GENERATION_LEGACY, TENANT_GENERATION_STRICT)
+_PINNED_GENERATION: ContextVar = ContextVar("bounded_pinned_tenant_generation", default=None)
 AUTHORITY_CONTEXT_VERSION = "0.1.0"
 # Governance Authority Context schema generations accepted by name. 0.2.0 adds requirement.consequence.delay_limit, which
 # is a declaration only here: it is neither read nor enforced and no default delay is applied to a 0.1.0 context.
@@ -292,9 +300,10 @@ class AuthorizationBinding(BaseModel):
 
 
 class TenantAuthorizationBinding(AuthorizationBinding):
-    """Tenant-aware bounded-authorization-effect/0.2 binding."""
+    """Tenant-aware binding. ``generation`` is the tenant-binding generation the decision was made under (legacy 0.2 by default so
+    previously persisted bindings keep their meaning; a workflow stamps the strict generation explicitly)."""
 
-    generation: Literal["bounded-authorization-effect/0.2"] = "bounded-authorization-effect/0.2"
+    generation: Literal["bounded-authorization-effect/0.2", "bounded-authorization-effect/0.3-strict-tenant"] = TENANT_GENERATION_LEGACY
     tenant_id: str = Field(min_length=1, max_length=128)
 
 
@@ -1279,7 +1288,12 @@ class BoundedAuthorizationWorkflow:
         allow_test_time: bool = False,
         runtime_authority_profile=None,
         rule_revision_profile=None,
+        tenant_binding_generation: str = TENANT_GENERATION_STRICT,
     ):
+        if type(tenant_binding_generation) is not str or tenant_binding_generation not in TENANT_GENERATIONS:
+            raise ValueError("tenant_binding_generation must be an exact supported generation string")
+        # Applies to NEW decisions of tenant-aware proposals only; a persisted decision is always judged under its own generation.
+        self.tenant_binding_generation = tenant_binding_generation
         self.allow_test_time = allow_test_time
         self._reaper = None  # the reaper this workflow handed out; a failed one makes decide/execute refuse
         self._mono_open: dict[str, tuple[float, int]] = {}  # check_id -> (monotonic at opening, age bound) under freshness/0.1
@@ -1688,8 +1702,9 @@ class BoundedAuthorizationWorkflow:
         frozen = proposal.model_copy(deep=True)
         inputs: list[ResolutionInput] = []
         check_ref: list[str] = []
-        reasons, current = self._resolve(frozen, now, inputs=inputs, **({"stage":"effect", "decision":persisted} if self.runtime_authority_profile else {}),
-                                         **({"check_ref": check_ref} if (self._identity or self._freshness) else {}))
+        with self._generation_pin(persisted):
+            reasons, current = self._resolve(frozen, now, inputs=inputs, **({"stage":"effect", "decision":persisted} if self.runtime_authority_profile else {}),
+                                             **({"check_ref": check_ref} if (self._identity or self._freshness) else {}))
         if self._identity and current is not None and not reasons:
             self._operation_gate(current, reasons)
         reasons = self._record_check(inputs, now, reasons, "effect", check_id=check_ref[0] if check_ref else None)
@@ -2014,11 +2029,14 @@ class BoundedAuthorizationWorkflow:
         return changed
 
     def _effect_id(self, binding: AuthorizationBinding) -> str:
-        return commitment({
+        identity = {
             "proposal": binding.proposal_commitment,
             "grant_id": binding.grant_id,
             "grant_revision": binding.grant_revision,
-        })
+        }
+        if getattr(binding, "generation", TENANT_GENERATION_LEGACY) == TENANT_GENERATION_STRICT:
+            identity["tenant_generation"] = TENANT_GENERATION_STRICT  # a stored strict<->legacy flip changes the identity and is refused
+        return commitment(identity)
 
     def _fresh(self, observed_at: str, now: datetime, max_age_seconds: int) -> bool:
         observed = _parse(observed_at)
@@ -2058,7 +2076,28 @@ class BoundedAuthorizationWorkflow:
             return None
         return canonical if canonical in required_roles else None
 
+    @staticmethod
+    def _persisted_generation(decision) -> str | None:
+        """The tenant-binding generation a persisted decision was made under (None for a tenantless or unauthorized one)."""
+        binding = getattr(decision, "binding", None)
+        return binding.generation if isinstance(binding, TenantAuthorizationBinding) else None
+
+    @contextmanager
+    def _generation_pin(self, decision):
+        """Evaluate the enclosed resolution under the generation persisted in ``decision`` (no upgrade, no downgrade)."""
+        token = _PINNED_GENERATION.set(self._persisted_generation(decision))
+        try:
+            yield
+        finally:
+            _PINNED_GENERATION.reset(token)
+
     def _resolve(self, proposal, now, *, inputs=None, stage="decision", decision=None, check_ref=None):
+        if decision is not None:
+            with self._generation_pin(decision):
+                return self._resolve_pinned(proposal, now, inputs=inputs, stage=stage, decision=decision, check_ref=check_ref)
+        return self._resolve_pinned(proposal, now, inputs=inputs, stage=stage, decision=decision, check_ref=check_ref)
+
+    def _resolve_pinned(self, proposal, now, *, inputs=None, stage="decision", decision=None, check_ref=None):
         if self.runtime_authority_profile is None:
             return self._resolve_inputs(proposal, now, inputs=inputs)
         check_id = str(uuid.uuid4())
@@ -2280,6 +2319,8 @@ class BoundedAuthorizationWorkflow:
         authority_domain = institution.get("authority_domain")
         tenant_id = getattr(proposal, "tenant_id", None)
         tenant_aware = isinstance(proposal, TenantRuntimeProposal)
+        generation = _PINNED_GENERATION.get() or self.tenant_binding_generation
+        strict_tenant = generation == TENANT_GENERATION_STRICT
         if tenant_aware and context.get("tenant_id") != tenant_id:
             reasons.append("tenant_context_mismatch")
         # A historical 0.1 proposal carries no tenant, so it cannot establish
@@ -2530,8 +2571,20 @@ class BoundedAuthorizationWorkflow:
             ):
                 reasons.append("evidence_binding_mismatch")
                 current = None
-            if current is not None:
-                # Compatibility: tenantless evidence is still accepted for a tenant-aware proposal (documented limit);
+            if current is not None and tenant_aware and strict_tenant:
+                # STRICT generation: the evidence must name exactly this proposal's tenant. Exact type and value (a str subclass, a
+                # padded or case-variant string is a different tenant); None is never a wildcard. A signed validation record that
+                # participates must carry the same exact tenant.
+                record = current.validation_record
+                statement = record.get("statement") if isinstance(record, dict) else None
+                signed_ok = (not isinstance(statement, dict) or "tenant_id" not in statement
+                             or (type(statement["tenant_id"]) is str and statement["tenant_id"] == tenant_id))
+                if (type(current.tenant_id) is not str or type(tenant_id) is not str or current.tenant_id != tenant_id
+                        or not signed_ok):
+                    reasons.append("evidence_binding_mismatch")
+                    current = None
+            elif current is not None:
+                # LEGACY 0.2 compatibility: tenantless evidence is still accepted for a tenant-aware proposal (documented limit);
                 # evidence that names a tenant must match, and a tenantless proposal cannot consume tenant-bearing evidence.
                 if tenant_aware and current.tenant_id is not None and current.tenant_id != tenant_id:
                     reasons.append("evidence_binding_mismatch")  # registered code; tenant is part of the binding
@@ -2580,7 +2633,7 @@ class BoundedAuthorizationWorkflow:
         )
 
         binding_type = TenantAuthorizationBinding if tenant_aware else AuthorizationBinding
-        binding_extra = {"tenant_id": tenant_id} if tenant_aware else {}
+        binding_extra = {"tenant_id": tenant_id, "generation": generation} if tenant_aware else {}
         return [], binding_type(
             **binding_extra,
             runtime_authority=extension,

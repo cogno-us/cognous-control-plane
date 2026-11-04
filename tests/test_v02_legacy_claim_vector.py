@@ -36,8 +36,10 @@ FROZEN = json.loads(VECTORS.read_text(encoding="utf-8"))
 # RW-01-F4-PoC E-1 (Architect-authorized 2026-11-02, narrow edit of bounded.py: +6 lines, 0 removed; see tests/test_rw01_f4_poc_bounded_diff.py). The OLD blob is kept as a named constant.
 BOUNDED_BLOB_BEFORE_RW01_F4_POC = "2cc8d998ff0a8fec3112a8b0634111fcf8fbef17"  # OLD git blob id (CP b19c47dd)
 BOUNDED_BLOB_RW01_F4_POC = "b5329804b05a83990af1a3ca17eb61c13080c12f"  # NEW git blob id of the edited bounded.py
+# P1 CP-2 (Architect-authorized strict tenant-binding generation, csf_4a764c7437e3bd47679c7b44): re-pinned deliberately; the E-1 blob above is kept as history
+BOUNDED_BLOB_CP2_STRICT_TENANT = "946109410c5cf662e1a97cb0db46c08f3644e08e"  # git blob id of bounded.py with the strict tenant-binding generation
 PROTECTED_BLOBS = {  # git blob ids at the base fff27ebf356007e1eb3bb24198efc7e3e3f0c5eb
-    "src/agent_control_plane/bounded.py": BOUNDED_BLOB_RW01_F4_POC,  # was BOUNDED_BLOB_BEFORE_RW01_F4_POC
+    "src/agent_control_plane/bounded.py": BOUNDED_BLOB_CP2_STRICT_TENANT,  # was BOUNDED_BLOB_RW01_F4_POC (E-1), before that BOUNDED_BLOB_BEFORE_RW01_F4_POC
     "src/agent_control_plane/policy_binding.py": "426d47797e92f19690a21b4e8b5dc1c35d1b579c",
     # D-07 Option A (Architect-authorized 2026-10-29): the ONLY protected-file change; previous git blob 0b2c5e49c0cd3e0738e5c4c9e9d4fc8590563fa2.
     # Chain: 0b2c5e49... -> D-07 head fb24ed0 blob f9bca4031858c25d6d57b2d0033483876f7a0f1b -> this blob (comment-only prose correction; code tokens identical).
